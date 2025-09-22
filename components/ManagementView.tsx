@@ -1,9 +1,14 @@
 
-import React, { useState, useMemo, Dispatch } from 'react';
-import { Agendamento, Medico, Procedimento, Action } from '../types';
+import React, { useState, useMemo } from 'react';
+import { Agendamento, Medico, Procedimento } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import { formatDate } from '../utils';
+import { 
+    medicoService,
+    procedimentoService,
+    agendamentoService
+} from '../services/supabase';
 
 type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos';
 
@@ -11,15 +16,17 @@ interface ManagementViewProps {
   agendamentos: Agendamento[];
   medicos: Medico[];
   procedimentos: Procedimento[];
-  dispatch: Dispatch<Action>;
+  onRefresh: () => void;
 }
 
-const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, dispatch }) => {
+const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, onRefresh }) => {
   const [activeTab, setActiveTab] = useState<ManagementTab>('agendamentos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Agendamento | Medico | Procedimento | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const openModal = (item: Agendamento | Medico | Procedimento | null = null) => {
     setEditingItem(item);
@@ -165,31 +172,82 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 medicos={medicos}
                 procedimentos={procedimentos}
                 allAgendamentos={agendamentos}
-                onSave={(data, id) => {
-                    dispatch({ type: id ? 'UPDATE_AGENDAMENTO' : 'ADD_AGENDAMENTO', payload: { ...data, id: id || '' } as any });
-                    closeModal();
+                onSave={async (data, id) => {
+                    try {
+                        setLoading(true);
+                        setError(null);
+                        
+                        if (id) {
+                            await agendamentoService.update(id, data);
+                        } else {
+                            await agendamentoService.create(data);
+                        }
+                        
+                        onRefresh();
+                        closeModal();
+                    } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Erro ao salvar agendamento');
+                    } finally {
+                        setLoading(false);
+                    }
                 }}
                 onCancel={closeModal}
+                loading={loading}
+                error={error}
             />
         }
         {activeTab === 'medicos' &&
             <DoctorForm 
                 medico={editingItem as Medico | undefined}
-                onSave={(data, id) => {
-                    dispatch({ type: id ? 'UPDATE_MEDICO' : 'ADD_MEDICO', payload: { ...data, id: id || '' } as any });
-                    closeModal();
+                onSave={async (data, id) => {
+                    try {
+                        setLoading(true);
+                        setError(null);
+                        
+                        if (id) {
+                            await medicoService.update(id, data);
+                        } else {
+                            await medicoService.create(data);
+                        }
+                        
+                        onRefresh();
+                        closeModal();
+                    } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Erro ao salvar médico');
+                    } finally {
+                        setLoading(false);
+                    }
                 }}
                 onCancel={closeModal}
+                loading={loading}
+                error={error}
             />
         }
         {activeTab === 'procedimentos' &&
             <ProcedureForm 
                 procedimento={editingItem as Procedimento | undefined}
-                onSave={(data, id) => {
-                    dispatch({ type: id ? 'UPDATE_PROCEDIMENTO' : 'ADD_PROCEDIMENTO', payload: { ...data, id: id || '' } as any });
-                    closeModal();
+                onSave={async (data, id) => {
+                    try {
+                        setLoading(true);
+                        setError(null);
+                        
+                        if (id) {
+                            await procedimentoService.update(id, data);
+                        } else {
+                            await procedimentoService.create(data);
+                        }
+                        
+                        onRefresh();
+                        closeModal();
+                    } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Erro ao salvar procedimento');
+                    } finally {
+                        setLoading(false);
+                    }
                 }}
                 onCancel={closeModal}
+                loading={loading}
+                error={error}
             />
         }
       </Modal>
@@ -201,19 +259,49 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         title="Confirmar Exclusão"
         footer={
             <>
-                <Button variant="secondary" onClick={() => setDeletingId(null)}>Cancelar</Button>
-                <Button variant="danger" onClick={() => {
-                    if (deletingId) {
-                        if (activeTab === 'agendamentos') dispatch({ type: 'DELETE_AGENDAMENTO', payload: deletingId });
-                        if (activeTab === 'medicos') dispatch({ type: 'DELETE_MEDICO', payload: deletingId });
-                        if (activeTab === 'procedimentos') dispatch({ type: 'DELETE_PROCEDIMENTO', payload: deletingId });
-                    }
-                    setDeletingId(null);
-                }}>Excluir</Button>
+                <Button variant="secondary" onClick={() => setDeletingId(null)} disabled={loading}>
+                    Cancelar
+                </Button>
+                <Button 
+                    variant="danger" 
+                    disabled={loading}
+                    onClick={async () => {
+                        if (!deletingId) return;
+                        
+                        try {
+                            setLoading(true);
+                            setError(null);
+                            
+                            if (activeTab === 'agendamentos') {
+                                await agendamentoService.delete(deletingId);
+                            } else if (activeTab === 'medicos') {
+                                await medicoService.delete(deletingId);
+                            } else if (activeTab === 'procedimentos') {
+                                await procedimentoService.delete(deletingId);
+                            }
+                            
+                            onRefresh();
+                            setDeletingId(null);
+                        } catch (err) {
+                            setError(err instanceof Error ? err.message : 'Erro ao excluir item');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }}
+                >
+                    {loading ? 'Excluindo...' : 'Excluir'}
+                </Button>
             </>
         }
       >
-        <p>Você tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+        <div>
+            <p>Você tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+            {error && (
+                <div className="mt-3 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                    {error}
+                </div>
+            )}
+        </div>
       </Modal>
     </div>
   );

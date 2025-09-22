@@ -1,96 +1,123 @@
 
-import React, { useReducer, useState } from 'react';
-import { AppState, Action, Agendamento, Medico, Procedimento, View } from './types';
-import { AGENDAMENTOS, MEDICOS, PROCEDIMENTOS } from './data';
+import React, { useState, useEffect } from 'react';
+import { View, Agendamento, Medico, Procedimento } from './types';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
 import ManagementView from './components/ManagementView';
-import { generateUUID, calculateAge } from './utils';
-
-const initialState: AppState = {
-    agendamentos: AGENDAMENTOS,
-    medicos: MEDICOS,
-    procedimentos: PROCEDIMENTOS,
-};
-
-function appReducer(state: AppState, action: Action): AppState {
-    switch (action.type) {
-        // Agendamento
-        case 'ADD_AGENDAMENTO':
-            const newAgendamento: Agendamento = {
-                ...(action.payload as Omit<Agendamento, 'id'>),
-                id: generateUUID(),
-                idade: calculateAge(action.payload.dataNascimento),
-            };
-            return { ...state, agendamentos: [...state.agendamentos, newAgendamento] };
-        case 'UPDATE_AGENDAMENTO':
-            const updatedAgendamento = {
-                ...action.payload,
-                idade: calculateAge(action.payload.dataNascimento),
-            };
-            return {
-                ...state,
-                agendamentos: state.agendamentos.map(a => a.id === action.payload.id ? updatedAgendamento : a),
-            };
-        case 'DELETE_AGENDAMENTO':
-            return { ...state, agendamentos: state.agendamentos.filter(a => a.id !== action.payload) };
-
-        // Medico
-        case 'ADD_MEDICO':
-            const newMedico: Medico = {
-                ...(action.payload as Omit<Medico, 'id'>),
-                id: generateUUID(),
-            };
-            return { ...state, medicos: [...state.medicos, newMedico] };
-        case 'UPDATE_MEDICO':
-            return {
-                ...state,
-                medicos: state.medicos.map(m => m.id === action.payload.id ? action.payload : m),
-            };
-        case 'DELETE_MEDICO':
-            return { ...state, medicos: state.medicos.filter(m => m.id !== action.payload) };
-
-        // Procedimento
-        case 'ADD_PROCEDIMENTO':
-             const newProcedimento: Procedimento = {
-                ...(action.payload as Omit<Procedimento, 'id'>),
-                id: generateUUID(),
-            };
-            return { ...state, procedimentos: [...state.procedimentos, newProcedimento] };
-        case 'UPDATE_PROCEDIMENTO':
-            return {
-                ...state,
-                procedimentos: state.procedimentos.map(p => p.id === action.payload.id ? action.payload : p),
-            };
-        case 'DELETE_PROCEDIMENTO':
-            return { ...state, procedimentos: state.procedimentos.filter(p => p.id !== action.payload) };
-            
-        default:
-            return state;
-    }
-}
-
+import { 
+    medicoService,
+    procedimentoService,
+    agendamentoService,
+    testSupabaseConnection
+} from './services/supabase';
 
 const App: React.FC = () => {
-    const [state, dispatch] = useReducer(appReducer, initialState);
     const [currentView, setCurrentView] = useState<View>('dashboard');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    
+    // Estado dos dados
+    const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+    const [medicos, setMedicos] = useState<Medico[]>([]);
+    const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
+
+    // Função para carregar todos os dados
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Verificar se Supabase está disponível
+            const isHealthy = await testSupabaseConnection();
+            if (!isHealthy) {
+                throw new Error('Erro de conexão com Supabase. Verifique as credenciais em services/supabase.ts');
+            }
+
+            // Carregar dados em paralelo
+            const [agendamentosData, medicosData, procedimentosData] = await Promise.all([
+                agendamentoService.getAll(),
+                medicoService.getAll(),
+                procedimentoService.getAll()
+            ]);
+
+            // Dados já vêm no formato correto do Supabase
+            setAgendamentos(agendamentosData);
+            setMedicos(medicosData);
+            setProcedimentos(procedimentosData);
+
+        } catch (err) {
+            console.error('Erro ao carregar dados:', err);
+            setError(err instanceof Error ? err.message : 'Erro desconhecido ao carregar dados');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Carregar dados na inicialização
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    // Função para recarregar dados (será passada para componentes filhos)
+    const refreshData = () => {
+        loadData();
+    };
 
     const renderView = () => {
+        if (loading) {
+            return (
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-slate-600">Carregando dados...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="text-center max-w-md">
+                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                            <strong className="font-bold">Erro!</strong>
+                            <span className="block sm:inline"> {error}</span>
+                        </div>
+                        <button 
+                            onClick={refreshData}
+                            className="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded"
+                        >
+                            Tentar Novamente
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
         switch (currentView) {
             case 'dashboard':
-                return <Dashboard agendamentos={state.agendamentos} />;
+                return <Dashboard agendamentos={agendamentos} onRefresh={refreshData} />;
             case 'calendar':
-                return <CalendarView agendamentos={state.agendamentos} medicos={state.medicos} procedimentos={state.procedimentos}/>;
+                return (
+                    <CalendarView 
+                        agendamentos={agendamentos} 
+                        medicos={medicos} 
+                        procedimentos={procedimentos}
+                        onRefresh={refreshData}
+                    />
+                );
             case 'management':
-                return <ManagementView 
-                            agendamentos={state.agendamentos} 
-                            medicos={state.medicos} 
-                            procedimentos={state.procedimentos} 
-                            dispatch={dispatch} 
-                        />;
+                return (
+                    <ManagementView 
+                        agendamentos={agendamentos} 
+                        medicos={medicos} 
+                        procedimentos={procedimentos} 
+                        onRefresh={refreshData}
+                    />
+                );
             default:
-                return <Dashboard agendamentos={state.agendamentos} />;
+                return <Dashboard agendamentos={agendamentos} onRefresh={refreshData} />;
         }
     };
     

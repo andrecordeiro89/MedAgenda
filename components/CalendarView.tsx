@@ -8,6 +8,7 @@ interface CalendarViewProps {
   agendamentos: Agendamento[];
   medicos: Medico[];
   procedimentos: Procedimento[];
+  onRefresh?: () => void;
 }
 
 const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, procedimentos }) => {

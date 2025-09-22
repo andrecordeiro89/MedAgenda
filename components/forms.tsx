@@ -10,11 +10,13 @@ interface AppointmentFormProps {
     medicos: Medico[];
     procedimentos: Procedimento[];
     allAgendamentos: Agendamento[];
-    onSave: (agendamento: Omit<Agendamento, 'id' | 'idade'>, id?: string) => void;
+    onSave: (agendamento: Omit<Agendamento, 'id' | 'idade'>, id?: string) => Promise<void>;
     onCancel: () => void;
+    loading?: boolean;
+    error?: string | null;
 }
 
-export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, medicos, procedimentos, allAgendamentos, onSave, onCancel }) => {
+export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, medicos, procedimentos, allAgendamentos, onSave, onCancel, loading = false, error }) => {
     const [formData, setFormData] = useState({
         nome: agendamento?.nome || '',
         dataNascimento: agendamento?.dataNascimento || '',
@@ -61,11 +63,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, m
         return Object.keys(newErrors).length === 0;
     }, [formData, allAgendamentos, agendamento?.id, procedimentos]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
             const tipo = procedimentos.find(p => p.id === formData.procedimentoId)?.tipo || 'ambulatorial';
-            onSave({ ...formData, tipo }, agendamento?.id);
+            await onSave({ ...formData, tipo }, agendamento?.id);
         }
     };
 
@@ -124,8 +126,17 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, m
                 </FormField>
             </div>
              <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
-                <Button type="submit">Salvar Agendamento</Button>
+                {error && (
+                    <div className="w-full p-3 bg-red-100 border border-red-400 text-red-700 rounded mb-3">
+                        {error}
+                    </div>
+                )}
+                <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
+                    Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                    {loading ? 'Salvando...' : 'Salvar Agendamento'}
+                </Button>
             </div>
         </form>
     );
@@ -134,11 +145,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, m
 // --- Doctor Form ---
 interface DoctorFormProps {
     medico?: Medico;
-    onSave: (medico: Omit<Medico, 'id'>, id?: string) => void;
+    onSave: (medico: Omit<Medico, 'id'>, id?: string) => Promise<void>;
     onCancel: () => void;
+    loading?: boolean;
+    error?: string | null;
 }
 
-export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel }) => {
+export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel, loading = false, error }) => {
     const [formData, setFormData] = useState({
         nome: medico?.nome || '',
         especialidade: medico?.especialidade || '',
@@ -147,9 +160,9 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel
         email: medico?.email || '',
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData, medico?.id);
+        await onSave(formData, medico?.id);
     };
 
      const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -175,8 +188,17 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel
                 <Input name="email" type="email" value={formData.email} onChange={handleChange} required />
             </FormField>
             <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
-                <Button type="submit">Salvar Médico</Button>
+                {error && (
+                    <div className="w-full p-3 bg-red-100 border border-red-400 text-red-700 rounded mb-3">
+                        {error}
+                    </div>
+                )}
+                <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
+                    Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                    {loading ? 'Salvando...' : 'Salvar Médico'}
+                </Button>
             </div>
         </form>
     );
@@ -186,20 +208,22 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel
 // --- Procedure Form ---
 interface ProcedureFormProps {
     procedimento?: Procedimento;
-    onSave: (procedimento: Omit<Procedimento, 'id'>, id?: string) => void;
+    onSave: (procedimento: Omit<Procedimento, 'id'>, id?: string) => Promise<void>;
     onCancel: () => void;
+    loading?: boolean;
+    error?: string | null;
 }
 
-export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, onSave, onCancel }) => {
+export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, onSave, onCancel, loading = false, error }) => {
     const [formData, setFormData] = useState({
         nome: procedimento?.nome || '',
         tipo: procedimento?.tipo || 'ambulatorial',
         duracaoEstimada: procedimento?.duracaoEstimada || 30,
         descricao: procedimento?.descricao || '',
     });
-     const handleSubmit = (e: React.FormEvent) => {
+     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData, procedimento?.id);
+        await onSave(formData, procedimento?.id);
     };
      const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -224,8 +248,17 @@ export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, onSa
                 <Input name="descricao" value={formData.descricao} onChange={handleChange} />
             </FormField>
             <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
-                <Button type="submit">Salvar Procedimento</Button>
+                {error && (
+                    <div className="w-full p-3 bg-red-100 border border-red-400 text-red-700 rounded mb-3">
+                        {error}
+                    </div>
+                )}
+                <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
+                    Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                    {loading ? 'Salvando...' : 'Salvar Procedimento'}
+                </Button>
             </div>
         </form>
     );

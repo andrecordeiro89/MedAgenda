@@ -5,6 +5,7 @@ import { Card } from './ui';
 
 interface DashboardProps {
     agendamentos: Agendamento[];
+    onRefresh?: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ agendamentos }) => {
