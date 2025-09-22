@@ -1,0 +1,5 @@
+{
+  "name": "Sistema de Agendamento Hospitalar",
+  "description": "Uma aplicação web completa para agendamento hospitalar com uma interface moderna e responsiva, incluindo um calendário interativo e gerenciamento de pacientes, médicos e procedimentos.",
+  "requestFramePermissions": []
+}
