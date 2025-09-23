@@ -10,8 +10,12 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) => {
-    const { hospital, logout } = useAuth();
+    const { usuario, hospitalSelecionado, logout } = useAuth();
     const [isMenuOpen, setMenuOpen] = useState(false);
+    
+    // Debug: verificar se os dados estão chegando
+    console.log('Layout - usuario:', usuario);
+    console.log('Layout - hospitalSelecionado:', hospitalSelecionado);
     
     const handleNavClick = (view: View) => {
         onViewChange(view);
@@ -56,14 +60,16 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                             ))}
                         </nav>
 
-                        {/* Hospital e botão sair - lado direito */}
+                        {/* Usuário, Hospital e botão sair - lado direito */}
                         <div className="hidden md:flex items-center gap-4">
-                            {hospital && (
-                                <div className="text-right">
-                                    <div className="text-white font-medium text-sm">{hospital.nome}</div>
-                                    <div className="text-white/70 text-xs">{hospital.cidade}</div>
+                            <div className="text-right">
+                                <div className="text-white font-medium text-sm">
+                                    {usuario?.email || 'Usuário não logado'}
                                 </div>
-                            )}
+                                <div className="text-white/70 text-xs">
+                                    {hospitalSelecionado?.nome || 'Hospital não selecionado'} • {hospitalSelecionado?.cidade || ''}
+                                </div>
+                            </div>
                             <button
                                 onClick={logout}
                                 className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg text-white transition-all duration-200 border border-white/20 hover:border-white/30 text-sm font-medium"
@@ -105,14 +111,15 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                             </button>
                         ))}
                         
-                        {/* Hospital e sair no mobile */}
+                        {/* Usuário, Hospital e sair no mobile */}
                         <div className="border-t border-white/20 pt-4 mt-2">
-                            {hospital && (
-                                <div className="px-3 py-2 text-white/80 text-sm">
-                                    <div className="font-medium">{hospital.nome}</div>
-                                    <div className="text-white/60">{hospital.cidade}</div>
+                            <div className="px-3 py-2 text-white/80 text-sm">
+                                <div className="font-medium">{usuario?.email || 'Usuário não logado'}</div>
+                                <div className="text-white/60">
+                                    {hospitalSelecionado?.nome || 'Hospital não selecionado'}
+                                    {hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
-                            )}
+                            </div>
                             <button
                                 onClick={logout}
                                 className="w-full mt-2 px-3 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all duration-200 border border-white/20 text-base font-medium"
