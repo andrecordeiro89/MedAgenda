@@ -69,6 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Sistema simples sem autenticação real - apenas mapear email para hospital
       const emailHospitalMap: { [key: string]: { id: string; nome: string; cidade: string; cnpj: string } } = {
+        // Hospitais de exemplo (manter para compatibilidade)
         'admin@hospitalsaopaulo.com': {
           id: '550e8400-e29b-41d4-a716-446655440001',
           nome: 'Hospital São Paulo',
@@ -86,6 +87,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           nome: 'Hospital Brasília',
           cidade: 'Brasília',
           cnpj: '11.222.333/0001-44'
+        },
+        // Hospitais reais com IDs do banco
+        'agendamento.sm@medagenda.com': {
+          id: '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba',
+          nome: 'Hospital Municipal Santa Alice',
+          cidade: 'Santa Mariana',
+          cnpj: '14.736.446/0001-93'
+        },
+        'agendamento.fax@medagenda.com': {
+          id: '4111b99d-8b4a-4b51-9561-a2fbd14e776e',
+          nome: 'Hospital Municipal Juarez Barreto de Macedo',
+          cidade: 'Faxinal',
+          cnpj: '14.736.446/0006-06'
+        },
+        'agendamento.car@medagenda.com': {
+          id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da',
+          nome: 'Hospital Municipal São José',
+          cidade: 'Carlópolis',
+          cnpj: '14.736.446/0007-89'
+        },
+        'agendamento.ara@medagenda.com': {
+          id: '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a',
+          nome: 'Hospital Municipal 18 de Dezembro',
+          cidade: 'Arapoti',
+          cnpj: '14.736.446/0008-60'
+        },
+        'agendamento.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40'
+        },
+        'agendamento.frg@medagenda.com': {
+          id: '933de4fb-ebfd-4838-bb43-153a7354d333',
+          nome: 'Hospital Maternidade Nossa Senhora Aparecida',
+          cidade: 'Fazenda Rio Grande',
+          cnpj: '14.736.446/0010-84'
+        },
+        'agendamento.rbs@medagenda.com': {
+          id: '4a2527c1-df09-4a36-a08f-adc63f555123',
+          nome: 'Hospital Maternidade Rio Branco do Sul',
+          cidade: 'Rio Branco do Sul',
+          cnpj: '14.736.446/0012-46'
+        },
+        'agendamento.apu@medagenda.com': {
+          id: '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7',
+          nome: 'Hospital Torao Tokuda',
+          cidade: 'Apucarana',
+          cnpj: '08325231001400'
         }
       };
 

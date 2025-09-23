@@ -13,10 +13,6 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
     const { usuario, hospitalSelecionado, logout } = useAuth();
     const [isMenuOpen, setMenuOpen] = useState(false);
     
-    // Debug: verificar se os dados estão chegando
-    console.log('Layout - usuario:', usuario);
-    console.log('Layout - hospitalSelecionado:', hospitalSelecionado);
-    
     const handleNavClick = (view: View) => {
         onViewChange(view);
         setMenuOpen(false);
