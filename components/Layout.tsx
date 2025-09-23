@@ -127,7 +127,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                 </div>
             </header>
 
-            <main className="p-4 md:p-8 container mx-auto">
+            <main className="p-3 md:p-6 lg:p-8 container mx-auto max-w-7xl">
                 {children}
             </main>
         </div>

@@ -30,8 +30,8 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos, medicos, procedimen
 
     return (
         <div>
-            <h2 className="text-3xl font-bold text-slate-800 mb-6">Dashboard</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4 md:mb-6">Dashboard</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
                 <StatCard title="Total de Agendamentos" value={totalAgendamentos} color="border-primary" />
                 <StatCard title="Agendamentos Liberados" value={liberados} color="border-success" />
                 <StatCard title="Agendamentos Pendentes" value={pendentes} color="border-danger" />
@@ -45,11 +45,11 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos, medicos, procedimen
                         <table className="w-full text-sm text-left text-slate-500">
                             <thead className="text-xs text-slate-700 uppercase bg-slate-100">
                                 <tr>
-                                    <th scope="col" className="px-6 py-3">Paciente</th>
-                                    <th scope="col" className="px-6 py-3">Data</th>
-                                    <th scope="col" className="px-6 py-3">Médico</th>
-                                    <th scope="col" className="px-6 py-3">Especialidade</th>
-                                    <th scope="col" className="px-6 py-3">Status</th>
+                                    <th scope="col" className="px-3 md:px-4 lg:px-6 py-2 md:py-3">Paciente</th>
+                                    <th scope="col" className="px-3 md:px-4 lg:px-6 py-2 md:py-3">Data</th>
+                                    <th scope="col" className="px-3 md:px-4 lg:px-6 py-2 md:py-3 hidden md:table-cell">Médico</th>
+                                    <th scope="col" className="px-3 md:px-4 lg:px-6 py-2 md:py-3 hidden lg:table-cell">Especialidade</th>
+                                    <th scope="col" className="px-3 md:px-4 lg:px-6 py-2 md:py-3">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -59,15 +59,15 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos, medicos, procedimen
                                     .slice(0, 5)
                                     .map(a => (
                                         <tr key={a.id} className="bg-white border-b">
-                                            <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">{a.nome}</td>
-                                            <td className="px-6 py-4">{new Date(a.dataAgendamento).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4">{getMedicoName(a.medicoId)}</td>
-                                            <td className="px-6 py-4">
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{a.nome}</td>
+                                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{new Date(a.dataAgendamento).toLocaleDateString()}</td>
+                                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 hidden md:table-cell">{getMedicoName(a.medicoId)}</td>
+                                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 hidden lg:table-cell">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                                     {getMedicoEspecialidade(a.medicoId)}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
                                                 <span className={`px-2 py-1 text-xs rounded-full ${a.statusLiberacao === 'v' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                     {a.statusLiberacao === 'v' ? 'Liberado' : 'Pendente'}
                                                 </span>

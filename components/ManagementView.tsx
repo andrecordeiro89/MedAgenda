@@ -122,21 +122,21 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 data={filteredAgendamentos}
                 renderRow={(item: Agendamento) => (
                     <>
-                        <td className="px-6 py-4 font-medium text-slate-900">{item.nome}</td>
-                        <td className="px-6 py-4">{formatDate(item.dataAgendamento)}</td>
-                        <td className="px-6 py-4">{getMedicoName(item.medicoId)}</td>
-                        <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{item.nome}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{formatDate(item.dataAgendamento)}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{getMedicoName(item.medicoId)}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                 {getMedicoEspecialidade(item.medicoId)}
                             </span>
                         </td>
-                        <td className="px-6 py-4">{getProcedimentoName(item.procedimentoId)}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{getProcedimentoName(item.procedimentoId)}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
                             <Badge color={item.statusLiberacao === 'v' ? 'green' : 'red'}>
                                 {item.statusLiberacao === 'v' ? 'Liberado' : 'Pendente'}
                             </Badge>
                         </td>
-                        <td className="px-6 py-4 flex gap-2">
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">
                             <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700"><EditIcon className="w-5 h-5" /></button>
                             <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-5 h-5"/></button>
                         </td>
@@ -150,12 +150,12 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 data={filteredMedicos}
                 renderRow={(item: Medico) => (
                     <>
-                        <td className="px-6 py-4 font-medium text-slate-900">{item.nome}</td>
-                        <td className="px-6 py-4">{item.especialidade}</td>
-                        <td className="px-6 py-4">{item.crm}</td>
-                        <td className="px-6 py-4">{item.telefone}</td>
-                        <td className="px-6 py-4">{item.email}</td>
-                        <td className="px-6 py-4 flex gap-2">
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{item.nome}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{item.especialidade}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{item.crm}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 hidden md:table-cell">{item.telefone}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 hidden lg:table-cell">{item.email}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">
                            <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700"><EditIcon className="w-5 h-5" /></button>
                            <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-5 h-5"/></button>
                         </td>
@@ -169,14 +169,14 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 data={filteredProcedimentos}
                 renderRow={(item: Procedimento) => (
                     <>
-                        <td className="px-6 py-4 font-medium text-slate-900">{item.nome}</td>
-                        <td className="px-6 py-4 capitalize">{item.tipo}</td>
-                        <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{item.nome}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 capitalize">{item.tipo}</td>
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 {getProcedimentoEspecialidade(item)}
                             </span>
                         </td>
-                        <td className="px-6 py-4 flex gap-2">
+                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">
                             <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700"><EditIcon className="w-5 h-5" /></button>
                             <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-5 h-5"/></button>
                         </td>
@@ -390,11 +390,30 @@ interface DataTableProps<T> {
 }
 
 const DataTable = <T extends {id: string}, >({ headers, data, renderRow }: DataTableProps<T>) => {
+    // Headers responsivos para médicos
+    const getHeaderClass = (index: number, header: string) => {
+        const baseClass = "px-3 md:px-4 lg:px-6 py-2 md:py-3";
+        
+        // Para tabela de médicos - esconder telefone e email em telas pequenas
+        if (headers.includes('Telefone') && header === 'Telefone') {
+            return `${baseClass} hidden md:table-cell`;
+        }
+        if (headers.includes('Email') && header === 'Email') {
+            return `${baseClass} hidden lg:table-cell`;
+        }
+        
+        return baseClass;
+    };
+
     return (
         <table className="w-full text-sm text-left text-slate-500">
             <thead className="text-xs text-slate-700 uppercase bg-slate-50">
                 <tr>
-                    {headers.map(h => <th key={h} scope="col" className="px-6 py-3">{h}</th>)}
+                    {headers.map((h, index) => (
+                        <th key={h} scope="col" className={getHeaderClass(index, h)}>
+                            {h}
+                        </th>
+                    ))}
                 </tr>
             </thead>
             <tbody>
@@ -404,7 +423,7 @@ const DataTable = <T extends {id: string}, >({ headers, data, renderRow }: DataT
                     </tr>
                 )) : (
                     <tr>
-                        <td colSpan={headers.length} className="text-center py-8 text-slate-500">
+                        <td colSpan={headers.length} className="text-center py-6 md:py-8 text-slate-500">
                             Nenhum dado encontrado.
                         </td>
                     </tr>
