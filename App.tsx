@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Agendamento, Medico, Procedimento } from './types';
+import { View, Agendamento, Medico, Procedimento, Especialidade } from './types';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
@@ -11,9 +11,11 @@ import {
   useHospitalFilter 
 } from './components/PremiumLogin';
 import { 
-    simpleMedicoService,
+    simpleMedicoService, 
     simpleProcedimentoService,
-    simpleAgendamentoService
+    simpleAgendamentoService,
+    simpleEspecialidadeService,
+    simpleMedicoHospitalService
 } from './services/api-simple';
 import { testSupabaseConnection } from './services/supabase';
 
@@ -24,7 +26,11 @@ const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
     const { hospitalSelecionado, addHospitalFilter } = useHospitalFilter();
     
-    const [currentView, setCurrentView] = useState<View>('dashboard');
+    // PERSISTÊNCIA: Carregar tela atual do localStorage
+    const [currentView, setCurrentView] = useState<View>(() => {
+        const savedView = localStorage.getItem('medagenda-current-view');
+        return (savedView as View) || 'dashboard';
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
@@ -32,14 +38,25 @@ const AppContent: React.FC = () => {
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
     const [medicos, setMedicos] = useState<Medico[]>([]);
     const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
+    const [especialidades, setEspecialidades] = useState<Especialidade[]>([]);
+
+    // PERSISTÊNCIA: Salvar tela atual no localStorage quando muda
+    const changeView = (newView: View) => {
+        setCurrentView(newView);
+        localStorage.setItem('medagenda-current-view', newView);
+        console.log('📱 Tela salva no localStorage:', newView);
+    };
 
     // Função para carregar dados filtrados por hospital
-    const loadData = async () => {
+    const loadData = async (showGlobalLoading = true) => {
         if (!hospitalSelecionado) return;
 
         try {
-            setLoading(true);
-            setError(null);
+            // Só mostra loading global se for o carregamento inicial
+            if (showGlobalLoading) {
+                setLoading(true);
+                setError(null);
+            }
 
             console.log('🏥 Carregando dados do hospital:', hospitalSelecionado.nome);
 
@@ -51,28 +68,40 @@ const AppContent: React.FC = () => {
 
             // Carregar dados filtrados por hospital usando serviços simplificados
             const hospitalId = hospitalSelecionado.id;
-            const [agendamentosData, medicosData, procedimentosData] = await Promise.all([
+            const [agendamentosData, medicosData, procedimentosData, especialidadesData] = await Promise.all([
                 simpleAgendamentoService.getAll(hospitalId),
                 simpleMedicoService.getAll(hospitalId),
-                simpleProcedimentoService.getAll(hospitalId)
+                simpleProcedimentoService.getAll(hospitalId),
+                simpleEspecialidadeService.getAll() // Especialidades são globais, não por hospital
             ]);
 
             setAgendamentos(agendamentosData);
             setMedicos(medicosData);
             setProcedimentos(procedimentosData);
+            setEspecialidades(especialidadesData);
 
             console.log('✅ Dados carregados:', {
                 hospital: hospitalSelecionado.nome,
                 agendamentos: agendamentosData.length,
                 medicos: medicosData.length,
-                procedimentos: procedimentosData.length
+                procedimentos: procedimentosData.length,
+                especialidades: especialidadesData.length
             });
+
+            // Verificar se especialidades foram carregadas
+            if (especialidadesData.length === 0) {
+                console.warn('⚠️ Nenhuma especialidade encontrada. Verifique se a tabela foi criada no banco.');
+            }
 
         } catch (err) {
             console.error('❌ Erro ao carregar dados:', err);
-            setError(err instanceof Error ? err.message : 'Erro desconhecido ao carregar dados');
+            if (showGlobalLoading) {
+                setError(err instanceof Error ? err.message : 'Erro desconhecido ao carregar dados');
+            }
         } finally {
-            setLoading(false);
+            if (showGlobalLoading) {
+                setLoading(false);
+            }
         }
     };
 
@@ -145,7 +174,7 @@ const AppContent: React.FC = () => {
                         agendamentos={agendamentos}
                         medicos={medicos}
                         procedimentos={procedimentos}
-                        onRefresh={loadData}
+                        onRefresh={() => loadData(false)}
                     />
                 );
             case 'calendar':
@@ -154,7 +183,7 @@ const AppContent: React.FC = () => {
                         agendamentos={agendamentos}
                         medicos={medicos}
                         procedimentos={procedimentos}
-                        onRefresh={loadData}
+                        onRefresh={() => loadData(false)}
                     />
                 );
             case 'management':
@@ -163,7 +192,8 @@ const AppContent: React.FC = () => {
                         agendamentos={agendamentos}
                         medicos={medicos}
                         procedimentos={procedimentos}
-                        onRefresh={loadData}
+                        especialidades={especialidades}
+                        onRefresh={() => loadData(false)}
                     />
                 );
             default:
@@ -175,7 +205,7 @@ const AppContent: React.FC = () => {
         <div>
             <Layout 
                 currentView={currentView} 
-                onViewChange={setCurrentView}
+                onViewChange={changeView}
             >
                 <div className="animate-fadeIn">
                     {renderContent()}

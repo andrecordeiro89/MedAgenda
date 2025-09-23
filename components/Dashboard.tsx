@@ -1,19 +1,25 @@
 
 import React from 'react';
-import { Agendamento } from '../types';
+import { Agendamento, Medico, Procedimento } from '../types';
 import { Card } from './ui';
 
 interface DashboardProps {
     agendamentos: Agendamento[];
+    medicos: Medico[];
+    procedimentos: Procedimento[];
     onRefresh?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ agendamentos }) => {
+const Dashboard: React.FC<DashboardProps> = ({ agendamentos, medicos, procedimentos }) => {
     const totalAgendamentos = agendamentos.length;
     const pendentes = agendamentos.filter(a => a.statusLiberacao === 'x').length;
     const liberados = agendamentos.filter(a => a.statusLiberacao === 'v').length;
     const cirurgicos = agendamentos.filter(a => a.tipo === 'cirurgico').length;
     const ambulatoriais = agendamentos.filter(a => a.tipo === 'ambulatorial').length;
+
+    // Funções auxiliares para buscar dados relacionados
+    const getMedicoName = (id: string) => medicos.find(m => m.id === id)?.nome || 'Médico não encontrado';
+    const getMedicoEspecialidade = (id: string) => medicos.find(m => m.id === id)?.especialidade || 'N/A';
 
     const StatCard: React.FC<{ title: string; value: number; color: string }> = ({ title, value, color }) => (
         <Card className={`border-l-4 ${color}`}>
@@ -42,6 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos }) => {
                                     <th scope="col" className="px-6 py-3">Paciente</th>
                                     <th scope="col" className="px-6 py-3">Data</th>
                                     <th scope="col" className="px-6 py-3">Médico</th>
+                                    <th scope="col" className="px-6 py-3">Especialidade</th>
                                     <th scope="col" className="px-6 py-3">Status</th>
                                 </tr>
                             </thead>
@@ -54,7 +61,12 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos }) => {
                                         <tr key={a.id} className="bg-white border-b">
                                             <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">{a.nome}</td>
                                             <td className="px-6 py-4">{new Date(a.dataAgendamento).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4">{a.medicoId}</td>
+                                            <td className="px-6 py-4">{getMedicoName(a.medicoId)}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                    {getMedicoEspecialidade(a.medicoId)}
+                                                </span>
+                                            </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 text-xs rounded-full ${a.statusLiberacao === 'v' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                     {a.statusLiberacao === 'v' ? 'Liberado' : 'Pendente'}

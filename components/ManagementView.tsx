@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { Agendamento, Medico, Procedimento } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Agendamento, Medico, Procedimento, Especialidade } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import { formatDate } from '../utils';
@@ -17,11 +17,15 @@ interface ManagementViewProps {
   agendamentos: Agendamento[];
   medicos: Medico[];
   procedimentos: Procedimento[];
+  especialidades: Especialidade[];
   onRefresh: () => void;
 }
 
-const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, onRefresh }) => {
-  const { hospital } = useAuth();
+const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, onRefresh }) => {
+  const { hospitalSelecionado } = useAuth();
+  
+  // Debug: verificar se especialidades estão chegando no ManagementView
+  console.log('🏥 ManagementView - Especialidades recebidas:', especialidades?.length || 0, especialidades);
   const [activeTab, setActiveTab] = useState<ManagementTab>('agendamentos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Agendamento | Medico | Procedimento | null>(null);
@@ -29,6 +33,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
 
   const openModal = (item: Agendamento | Medico | Procedimento | null = null) => {
     setEditingItem(item);
@@ -41,13 +46,22 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   };
   
   const getMedicoName = (id: string) => medicos.find(m => m.id === id)?.nome || 'N/A';
+  const getMedicoEspecialidade = (id: string) => medicos.find(m => m.id === id)?.especialidade || 'N/A';
   const getProcedimentoName = (id: string) => procedimentos.find(p => p.id === id)?.nome || 'N/A';
+  const getProcedimentoEspecialidade = (procedimento: Procedimento) => {
+    // Usar a coluna física especialidade se disponível, senão usar o JOIN
+    if (procedimento.especialidade) return procedimento.especialidade;
+    if (!procedimento.especialidadeId) return 'N/A';
+    return especialidades.find(e => e.id === procedimento.especialidadeId)?.nome || 'N/A';
+  };
 
   const filteredAgendamentos = useMemo(() =>
     agendamentos.filter(a =>
       a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getMedicoName(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase())
-    ), [agendamentos, searchTerm, medicos]);
+      getMedicoName(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getMedicoEspecialidade(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getProcedimentoName(a.procedimentoId).toLowerCase().includes(searchTerm.toLowerCase())
+    ), [agendamentos, searchTerm, medicos, procedimentos]);
 
   const filteredMedicos = useMemo(() =>
     medicos.filter(m =>
@@ -57,8 +71,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
 
   const filteredProcedimentos = useMemo(() =>
     procedimentos.filter(p =>
-      p.nome.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [procedimentos, searchTerm]);
+      p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getProcedimentoEspecialidade(p).toLowerCase().includes(searchTerm.toLowerCase())
+    ), [procedimentos, searchTerm, especialidades]);
 
   const TabButton: React.FC<{ tab: ManagementTab; label: string }> = ({ tab, label }) => (
     <button
@@ -102,13 +118,18 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         <div className="overflow-x-auto">
           {activeTab === 'agendamentos' && (
              <DataTable 
-                headers={['Paciente', 'Data', 'Médico', 'Procedimento', 'Status', 'Ações']}
+                headers={['Paciente', 'Data', 'Médico', 'Especialidade', 'Procedimento', 'Status', 'Ações']}
                 data={filteredAgendamentos}
                 renderRow={(item: Agendamento) => (
                     <>
                         <td className="px-6 py-4 font-medium text-slate-900">{item.nome}</td>
                         <td className="px-6 py-4">{formatDate(item.dataAgendamento)}</td>
                         <td className="px-6 py-4">{getMedicoName(item.medicoId)}</td>
+                        <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {getMedicoEspecialidade(item.medicoId)}
+                            </span>
+                        </td>
                         <td className="px-6 py-4">{getProcedimentoName(item.procedimentoId)}</td>
                         <td className="px-6 py-4">
                             <Badge color={item.statusLiberacao === 'v' ? 'green' : 'red'}>
@@ -144,13 +165,17 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
           )}
            {activeTab === 'procedimentos' && (
               <DataTable
-                headers={['Nome', 'Tipo', 'Duração (min)', 'Ações']}
+                headers={['Nome', 'Tipo', 'Especialidade', 'Ações']}
                 data={filteredProcedimentos}
                 renderRow={(item: Procedimento) => (
                     <>
                         <td className="px-6 py-4 font-medium text-slate-900">{item.nome}</td>
                         <td className="px-6 py-4 capitalize">{item.tipo}</td>
-                        <td className="px-6 py-4">{item.duracaoEstimada}</td>
+                        <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {getProcedimentoEspecialidade(item)}
+                            </span>
+                        </td>
                         <td className="px-6 py-4 flex gap-2">
                             <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700"><EditIcon className="w-5 h-5" /></button>
                             <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-5 h-5"/></button>
@@ -182,7 +207,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         if (id) {
                             await simpleAgendamentoService.update(id, data);
                         } else {
-                            const dataWithHospital = { ...data, hospitalId: hospital?.id };
+                            const dataWithHospital = { ...data, hospitalId: hospitalSelecionado?.id };
                             await simpleAgendamentoService.create(dataWithHospital);
                         }
                         
@@ -202,6 +227,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         {activeTab === 'medicos' &&
             <DoctorForm 
                 medico={editingItem as Medico | undefined}
+                especialidades={especialidades}
                 onSave={async (data, id) => {
                     try {
                         setLoading(true);
@@ -210,8 +236,9 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         if (id) {
                             await simpleMedicoService.update(id, data);
                         } else {
-                            const dataWithHospital = { ...data, hospitalId: hospital?.id };
-                            await simpleMedicoService.create(dataWithHospital);
+                            // VOLTA AO MODELO SIMPLES - incluir hospitalId no objeto
+                            const dataWithHospital = { ...data, hospitalId: hospitalSelecionado?.id };
+                            await simpleMedicoService.create(dataWithHospital, hospitalSelecionado?.id || '');
                         }
                         
                         onRefresh();
@@ -230,6 +257,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         {activeTab === 'procedimentos' &&
             <ProcedureForm 
                 procedimento={editingItem as Procedimento | undefined}
+                especialidades={especialidades}
                 onSave={async (data, id) => {
                     try {
                         setLoading(true);
@@ -238,7 +266,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         if (id) {
                             await simpleProcedimentoService.update(id, data);
                         } else {
-                            const dataWithHospital = { ...data, hospitalId: hospital?.id };
+                            const dataWithHospital = { ...data, hospitalId: hospitalSelecionado?.id };
                             await simpleProcedimentoService.create(dataWithHospital);
                         }
                         
@@ -261,10 +289,13 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       <Modal 
         isOpen={!!deletingId}
         onClose={() => setDeletingId(null)}
-        title="Confirmar Exclusão"
+        title="Atenção"
         footer={
             <>
                 <Button variant="secondary" onClick={() => setDeletingId(null)} disabled={loading}>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                     Cancelar
                 </Button>
                 <Button 
@@ -288,22 +319,61 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                             onRefresh();
                             setDeletingId(null);
                         } catch (err) {
-                            setError(err instanceof Error ? err.message : 'Erro ao excluir item');
+                            const errorMessage = err instanceof Error ? err.message : 'Erro ao excluir item';
+                            console.error('Erro ao excluir:', err);
+                            setError(errorMessage);
                         } finally {
                             setLoading(false);
                         }
                     }}
                 >
-                    {loading ? 'Excluindo...' : 'Excluir'}
+                    {loading ? (
+                        <>
+                            <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Excluindo...
+                        </>
+                    ) : (
+                        <>
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Excluir
+                        </>
+                    )}
                 </Button>
             </>
         }
       >
-        <div>
-            <p>Você tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+        <div className="space-y-4">
+            <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                </div>
+                <div className="flex-1">
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        Confirmar Exclusão
+                    </h3>
+                    <p className="text-gray-600">
+                        Você tem certeza que deseja excluir este {
+                            activeTab === 'medicos' ? 'médico' : 
+                            activeTab === 'procedimentos' ? 'procedimento' : 
+                            'agendamento'
+                        }? Esta ação não pode ser desfeita.
+                    </p>
+                </div>
+            </div>
             {error && (
-                <div className="mt-3 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                    {error}
+                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                    <div className="flex">
+                        <svg className="w-5 h-5 text-red-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm">{error}</span>
+                    </div>
                 </div>
             )}
         </div>

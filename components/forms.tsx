@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Agendamento, Medico, Procedimento, TipoAgendamento } from '../types';
+import { Agendamento, Medico, Procedimento, Especialidade, TipoAgendamento } from '../types';
 import { Button, FormField, Input, Select } from './ui';
 import { calculateAge, hasScheduleConflict, getTodayDateString } from '../utils';
 
@@ -142,7 +142,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, m
                         </option>
                         {procedimentosFiltrados.map(p => (
                             <option key={p.id} value={p.id}>
-                                {p.nome} ({p.tipo}) - {p.duracaoEstimada} min
+                                {p.nome} ({p.tipo})
                             </option>
                         ))}
                     </Select>
@@ -177,13 +177,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ agendamento, m
 // --- Doctor Form ---
 interface DoctorFormProps {
     medico?: Medico;
+    especialidades: Especialidade[];
     onSave: (medico: Omit<Medico, 'id'>, id?: string) => Promise<void>;
     onCancel: () => void;
     loading?: boolean;
     error?: string | null;
 }
 
-export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel, loading = false, error }) => {
+export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, especialidades, onSave, onCancel, loading = false, error }) => {
     const [formData, setFormData] = useState({
         nome: medico?.nome || '',
         especialidade: medico?.especialidade || '',
@@ -192,12 +193,15 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel
         email: medico?.email || '',
     });
 
+    // Debug: verificar se especialidades estão chegando
+    console.log('🏥 DoctorForm - Especialidades recebidas:', especialidades?.length || 0, especialidades);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await onSave(formData, medico?.id);
     };
 
-     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -208,7 +212,21 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel
                 <Input name="nome" value={formData.nome} onChange={handleChange} required />
             </FormField>
             <FormField label="Especialidade">
-                <Input name="especialidade" value={formData.especialidade} onChange={handleChange} required />
+                <Select name="especialidade" value={formData.especialidade} onChange={handleChange} required>
+                    <option value="">
+                        {especialidades?.length > 0 ? 'Selecione uma especialidade' : 'Carregando especialidades...'}
+                    </option>
+                    {especialidades?.map(esp => (
+                        <option key={esp.id} value={esp.nome}>
+                            {esp.nome}
+                        </option>
+                    )) || []}
+                </Select>
+                {especialidades?.length === 0 && (
+                    <p className="text-sm text-red-600 mt-1">
+                        ⚠️ Nenhuma especialidade encontrada. Execute o script SQL primeiro.
+                    </p>
+                )}
             </FormField>
              <FormField label="CRM">
                 <Input name="crm" value={formData.crm} onChange={handleChange} required />
@@ -240,22 +258,39 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({ medico, onSave, onCancel
 // --- Procedure Form ---
 interface ProcedureFormProps {
     procedimento?: Procedimento;
+    especialidades: Especialidade[];
     onSave: (procedimento: Omit<Procedimento, 'id'>, id?: string) => Promise<void>;
     onCancel: () => void;
     loading?: boolean;
     error?: string | null;
 }
 
-export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, onSave, onCancel, loading = false, error }) => {
+export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, especialidades, onSave, onCancel, loading = false, error }) => {
     const [formData, setFormData] = useState({
         nome: procedimento?.nome || '',
         tipo: procedimento?.tipo || 'ambulatorial',
         duracaoEstimada: procedimento?.duracaoEstimada || 30,
         descricao: procedimento?.descricao || '',
+        especialidade: procedimento?.especialidade || 
+            (procedimento?.especialidadeId ? 
+                especialidades.find(e => e.id === procedimento.especialidadeId)?.nome || '' : '')
     });
      const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onSave(formData, procedimento?.id);
+        
+        // Converter nome da especialidade para ID
+        const especialidadeId = especialidades.find(e => e.nome === formData.especialidade)?.id;
+        
+        const dataToSave = {
+            nome: formData.nome,
+            tipo: formData.tipo,
+            duracaoEstimada: formData.duracaoEstimada,
+            descricao: formData.descricao,
+            especialidade: formData.especialidade, // Salvar nome na coluna física
+            especialidadeId: especialidadeId // Salvar ID para relacionamento
+        };
+        
+        await onSave(dataToSave, procedimento?.id);
     };
      const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -271,6 +306,16 @@ export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, onSa
                 <Select name="tipo" value={formData.tipo} onChange={handleChange}>
                     <option value="ambulatorial">Ambulatorial</option>
                     <option value="cirurgico">Cirúrgico</option>
+                </Select>
+            </FormField>
+            <FormField label="Especialidade">
+                <Select name="especialidade" value={formData.especialidade} onChange={handleChange} required>
+                    <option value="">Selecione uma especialidade</option>
+                    {especialidades.map(esp => (
+                        <option key={esp.id} value={esp.nome}>
+                            {esp.nome}
+                        </option>
+                    ))}
                 </Select>
             </FormField>
             <FormField label="Duração Estimada (minutos)">

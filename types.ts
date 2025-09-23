@@ -22,11 +22,37 @@ export interface Agendamento {
 export interface Medico {
     id: string;
     nome: string;
-    especialidade: string;
+    especialidade: string; // Manter para compatibilidade temporária
+    especialidadeId?: string; // Nova referência para tabela especialidades
     crm: string;
     telefone: string;
     email: string;
-    hospitalId?: string; // ID do hospital
+    hospitalId?: string; // VOLTA AO MODELO SIMPLES
+}
+
+// Nova interface para relacionamento N:N
+export interface MedicoHospital {
+    id: string;
+    medicoId: string;
+    hospitalId: string;
+    ativo: boolean;
+    dataInicio: string; // YYYY-MM-DD
+    dataFim?: string; // YYYY-MM-DD
+    observacoes?: string;
+}
+
+// Interface para hospital
+export interface Hospital {
+    id: string;
+    nome: string;
+    cidade: string;
+    cnpj: string;
+}
+
+export interface Especialidade {
+    id: string;
+    nome: string;
+    descricao?: string;
 }
 
 export interface Procedimento {
@@ -35,6 +61,8 @@ export interface Procedimento {
     tipo: TipoAgendamento;
     duracaoEstimada: number; // in minutes
     descricao: string;
+    especialidade?: string; // Nome da especialidade (coluna física)
+    especialidadeId?: string; // ID da especialidade (relacionamento)
     hospitalId?: string; // ID do hospital
 }
 

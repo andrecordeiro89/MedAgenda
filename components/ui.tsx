@@ -104,7 +104,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           {children}
         </div>
         {footer && (
-          <div className="flex justify-end items-center p-4 border-t bg-slate-50 rounded-b-lg">
+          <div className="flex justify-end items-center gap-3 p-4 border-t bg-slate-50 rounded-b-lg">
             {footer}
           </div>
         )}

@@ -64,6 +64,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // PERSISTÊNCIA: Carregar dados do localStorage ao inicializar
+  useEffect(() => {
+    const savedAuth = localStorage.getItem('medagenda-auth');
+    if (savedAuth) {
+      try {
+        const authData = JSON.parse(savedAuth);
+        setUsuario(authData.usuario);
+        setHospitalSelecionado(authData.hospital);
+        setIsAuthenticated(true);
+        console.log('🔄 Login restaurado do localStorage:', authData.hospital.nome);
+      } catch (error) {
+        console.error('Erro ao restaurar login:', error);
+        localStorage.removeItem('medagenda-auth');
+      }
+    }
+  }, []);
+
   const login = async (email: string): Promise<void> => {
     setIsLoading(true);
     try {
@@ -156,6 +173,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUsuario(usuario);
       setHospitalSelecionado(hospitalData);
       setIsAuthenticated(true);
+
+      // PERSISTÊNCIA: Salvar no localStorage
+      localStorage.setItem('medagenda-auth', JSON.stringify({
+        usuario: usuario,
+        hospital: hospitalData
+      }));
+      console.log('💾 Login salvo no localStorage:', hospitalData.nome);
       
     } catch (error) {
       console.error('Erro no login:', error);
@@ -174,6 +198,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUsuario(null);
     setHospitalSelecionado(null);
     setIsAuthenticated(false);
+    
+    // PERSISTÊNCIA: Limpar localStorage
+    localStorage.removeItem('medagenda-auth');
+    console.log('🚪 Logout - localStorage limpo');
   };
 
   return (
@@ -243,38 +271,76 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
       {/* Background com gradiente animado */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50">
         <div className="absolute inset-0 opacity-20">
           {/* Padrão de pontos decorativo */}
           <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
         </div>
         
-        {/* Efeitos de luz animados */}
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
-        <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-4000"></div>
+        {/* Bolinhas de tinta guache espalhadas por todo o fundo */}
+        {/* Linha 1 - Top */}
+        <div className="absolute top-8 left-12 w-16 h-16 bg-sky-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
+        <div className="absolute top-12 left-32 w-12 h-12 bg-yellow-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute top-16 left-52 w-20 h-20 bg-emerald-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        <div className="absolute top-6 right-16 w-14 h-14 bg-cyan-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute top-20 right-32 w-18 h-18 bg-blue-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        <div className="absolute top-10 right-52 w-16 h-16 bg-indigo-200 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
+        
+        {/* Linha 2 - Upper Middle */}
+        <div className="absolute top-24 left-8 w-22 h-22 bg-teal-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute top-32 left-28 w-14 h-14 bg-lime-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        <div className="absolute top-28 left-48 w-16 h-16 bg-rose-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute top-36 right-12 w-20 h-20 bg-amber-200 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
+        <div className="absolute top-24 right-36 w-12 h-12 bg-violet-200 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
+        <div className="absolute top-40 right-56 w-18 h-18 bg-pink-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        
+        {/* Linha 3 - Center */}
+        <div className="absolute top-1/2 left-16 w-24 h-24 bg-sky-300 rounded-full mix-blend-multiply filter blur-sm opacity-45"></div>
+        <div className="absolute top-1/2 left-40 w-14 h-14 bg-yellow-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
+        <div className="absolute top-1/2 right-20 w-16 h-16 bg-emerald-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute top-1/2 right-44 w-20 h-20 bg-cyan-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
+        
+        {/* Linha 4 - Lower Middle */}
+        <div className="absolute bottom-32 left-12 w-18 h-18 bg-blue-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute bottom-28 left-36 w-16 h-16 bg-indigo-300 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        <div className="absolute bottom-36 left-56 w-14 h-14 bg-teal-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute bottom-40 right-8 w-22 h-22 bg-lime-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
+        <div className="absolute bottom-32 right-32 w-12 h-12 bg-rose-300 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
+        <div className="absolute bottom-28 right-52 w-20 h-20 bg-amber-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        
+        {/* Linha 5 - Bottom */}
+        <div className="absolute bottom-16 left-20 w-16 h-16 bg-violet-300 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        <div className="absolute bottom-12 left-44 w-18 h-18 bg-pink-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute bottom-8 right-16 w-14 h-14 bg-sky-400 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
+        <div className="absolute bottom-20 right-40 w-16 h-16 bg-yellow-400 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        
+        {/* Bolinhas extras para preenchimento */}
+        <div className="absolute top-1/4 left-1/4 w-12 h-12 bg-emerald-400 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
+        <div className="absolute top-1/3 right-1/3 w-16 h-16 bg-cyan-400 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
+        <div className="absolute bottom-1/4 left-1/3 w-14 h-14 bg-blue-400 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
+        <div className="absolute bottom-1/3 right-1/4 w-18 h-18 bg-indigo-400 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
       </div>
 
       {/* Container principal */}
       <div className="relative z-10 w-full max-w-md px-6">
         {/* Logo e título */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-md rounded-2xl mb-4 shadow-2xl">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl mb-4 shadow-2xl">
+            <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">MedAgenda</h1>
-          <p className="text-blue-100 text-lg">Sistema Multi-Hospitalar</p>
-          <div className="w-24 h-1 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full mx-auto mt-4"></div>
+          <h1 className="text-3xl font-bold text-slate-700 mb-2">MedAgenda</h1>
+          <p className="text-slate-600 text-lg">Sistema Multi-Hospitalar</p>
+          <div className="w-24 h-1 bg-gradient-to-r from-sky-300 to-cyan-300 rounded-full mx-auto mt-4"></div>
         </div>
 
         {/* Card de login */}
-        <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-white/20">
+        <div className="bg-white/90 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-gray-200">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Campo de email */}
             <div className="space-y-2">
-              <label className="text-white font-medium text-sm">Email Corporativo</label>
+              <label className="text-slate-700 font-medium text-sm">Email Corporativo</label>
               <div className="relative">
                 <input
                   type="email"
@@ -282,7 +348,7 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
-                  className={`w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300 ${
+                  className={`w-full px-4 py-4 bg-white border border-gray-300 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all duration-300 ${
                     isTyping ? 'ring-2 ring-blue-400/50' : ''
                   } ${error ? 'ring-2 ring-red-400/50 border-red-400/50' : ''}`}
                   required
@@ -294,7 +360,7 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
                 </div>
               </div>
               {error && (
-                <div className="flex items-center space-x-2 text-red-300 text-sm animate-shake">
+                <div className="flex items-center space-x-2 text-red-600 text-sm animate-shake">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -310,7 +376,7 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
               className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-300 transform ${
                 isLoading || !email.trim()
                   ? 'bg-gray-500/50 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
+                  : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
               }`}
             >
               {isLoading ? (
@@ -334,7 +400,7 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
 
           {/* Footer */}
           <div className="mt-8 text-center">
-            <p className="text-white/40 text-xs">
+            <p className="text-slate-600 text-sm mb-2">
               Sistema seguro e confiável para gestão hospitalar
             </p>
             <div className="flex items-center justify-center space-x-4 mt-4">
@@ -342,19 +408,19 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
                 <svg className="w-3 h-3 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span className="text-white/60 text-xs">Seguro</span>
+                <span className="text-slate-600 text-sm">Seguro</span>
               </div>
               <div className="flex items-center space-x-1">
                 <svg className="w-3 h-3 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
                 </svg>
-                <span className="text-white/60 text-xs">Multi-Hospital</span>
+                <span className="text-slate-600 text-sm">Multi-Hospital</span>
               </div>
               <div className="flex items-center space-x-1">
                 <svg className="w-3 h-3 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                 </svg>
-                <span className="text-white/60 text-xs">Rápido</span>
+                <span className="text-slate-600 text-sm">Rápido</span>
               </div>
             </div>
           </div>
@@ -399,7 +465,7 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
       {/* Background similar ao login */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50">
         <div className="absolute inset-0 opacity-20">
           {/* Padrão de pontos decorativo */}
           <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
@@ -420,19 +486,19 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
             <button
               key={hospital.id}
               onClick={() => onSelect(hospital)}
-              className="w-full p-6 text-left bg-white/10 backdrop-blur-md hover:bg-white/20 rounded-2xl border border-white/20 hover:border-white/40 transition-all duration-300 transform hover:scale-[1.02] group"
+              className="w-full p-6 text-left bg-white/90 backdrop-blur-md hover:bg-white/95 rounded-2xl border border-gray-200 hover:border-gray-300 transition-all duration-300 transform hover:scale-[1.02] group"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-2">
-                    <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full"></div>
-                    <h3 className="text-white font-semibold text-lg">{hospital.nome}</h3>
+                    <div className="w-3 h-3 bg-gradient-to-r from-sky-300 to-emerald-300 rounded-full"></div>
+                    <h3 className="text-slate-700 font-semibold text-lg">{hospital.nome}</h3>
                   </div>
-                  <p className="text-blue-100 text-sm mb-1">{hospital.cidade}</p>
-                  <p className="text-white/60 text-xs">CNPJ: {hospital.cnpj}</p>
+                  <p className="text-slate-600 text-sm mb-1">{hospital.cidade}</p>
+                  <p className="text-slate-500 text-xs">CNPJ: {hospital.cnpj}</p>
                 </div>
-                <svg className="w-6 h-6 text-white/40 group-hover:text-white group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </div>
@@ -443,7 +509,7 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
         {/* Botão voltar */}
         <button
           onClick={onBack}
-          className="w-full mt-6 py-3 px-6 bg-white/5 hover:bg-white/10 rounded-xl border border-white/20 hover:border-white/30 text-white transition-all duration-200"
+          className="w-full mt-6 py-3 px-6 bg-gray-100 hover:bg-gray-200 rounded-xl border border-gray-300 hover:border-gray-400 text-slate-700 transition-all duration-200"
         >
           ← Voltar ao Login
         </button>
@@ -502,7 +568,7 @@ export const PremiumHospitalHeader: React.FC = () => {
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
+    <div className="bg-gradient-to-r from-sky-300 to-blue-400 shadow-lg">
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
