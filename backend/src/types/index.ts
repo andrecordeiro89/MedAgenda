@@ -1,6 +1,20 @@
 export type StatusLiberacao = 'pendente' | 'liberado';
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
 
+export interface Hospital {
+  id: string;
+  nome: string;
+  cidade: string;
+  cnpj: string;
+}
+
+export interface Usuario {
+  id: string;
+  email: string;
+  hospital_id: string;
+  hospital?: Hospital;
+}
+
 export interface Medico {
   id: string;
   nome: string;
@@ -8,6 +22,8 @@ export interface Medico {
   crm: string;
   telefone: string;
   email: string;
+  hospital_id: string;
+  hospital?: Hospital;
 }
 
 export interface Procedimento {
@@ -16,6 +32,8 @@ export interface Procedimento {
   tipo: TipoAgendamento;
   duracao_estimada_min: number;
   descricao?: string;
+  hospital_id: string;
+  hospital?: Hospital;
 }
 
 export interface Agendamento {
@@ -26,19 +44,36 @@ export interface Agendamento {
   telefone?: string;
   whatsapp?: string;
   data_agendamento: string; // YYYY-MM-DD
-  horario: string; // HH:MM
   status_liberacao: StatusLiberacao;
   medico_id: string;
   procedimento_id: string;
+  hospital_id: string;
+  hospital?: Hospital;
 }
 
 // DTOs para requests
+export interface CreateHospitalDTO {
+  nome: string;
+  cidade: string;
+  cnpj: string;
+}
+
+export interface UpdateHospitalDTO extends Partial<CreateHospitalDTO> {}
+
+export interface CreateUsuarioDTO {
+  email: string;
+  hospital_id: string;
+}
+
+export interface UpdateUsuarioDTO extends Partial<CreateUsuarioDTO> {}
+
 export interface CreateMedicoDTO {
   nome: string;
   especialidade: string;
   crm: string;
   telefone: string;
   email: string;
+  hospital_id: string;
 }
 
 export interface UpdateMedicoDTO extends Partial<CreateMedicoDTO> {}
@@ -48,6 +83,7 @@ export interface CreateProcedimentoDTO {
   tipo: TipoAgendamento;
   duracao_estimada_min: number;
   descricao?: string;
+  hospital_id: string;
 }
 
 export interface UpdateProcedimentoDTO extends Partial<CreateProcedimentoDTO> {}
@@ -59,10 +95,10 @@ export interface CreateAgendamentoDTO {
   telefone?: string;
   whatsapp?: string;
   data_agendamento: string;
-  horario: string;
   status_liberacao: StatusLiberacao;
   medico_id: string;
   procedimento_id: string;
+  hospital_id: string;
 }
 
 export interface UpdateAgendamentoDTO extends Partial<CreateAgendamentoDTO> {}

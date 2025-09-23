@@ -160,18 +160,17 @@ router.post('/', validateCreateAgendamento, handleValidationErrors, async (req: 
       return;
     }
 
-    // Verificar conflito de horário
+    // Verificar conflito de data
     const hasConflict = await AgendamentoModel.checkConflict(
       req.body.medico_id,
-      req.body.data_agendamento,
-      req.body.horario
+      req.body.data_agendamento
     );
 
     if (hasConflict) {
       const response: ApiResponse<null> = {
         success: false,
-        error: 'Conflito de horário',
-        message: 'Já existe um agendamento para este médico nesta data e horário'
+        error: 'Conflito de data',
+        message: 'Já existe um agendamento para este médico nesta data'
       };
       res.status(409).json(response);
       return;
@@ -233,25 +232,23 @@ router.put('/:id',
         }
       }
 
-      // Verificar conflito de horário (se data, horário ou médico foram alterados)
-      if (req.body.medico_id || req.body.data_agendamento || req.body.horario) {
+      // Verificar conflito de data (se data ou médico foram alterados)
+      if (req.body.medico_id || req.body.data_agendamento) {
         const currentAgendamento = req.resource;
         const medicoId = req.body.medico_id || currentAgendamento.medico_id;
         const dataAgendamento = req.body.data_agendamento || currentAgendamento.data_agendamento;
-        const horario = req.body.horario || currentAgendamento.horario;
 
         const hasConflict = await AgendamentoModel.checkConflict(
           medicoId,
           dataAgendamento,
-          horario,
           id
         );
 
         if (hasConflict) {
           const response: ApiResponse<null> = {
             success: false,
-            error: 'Conflito de horário',
-            message: 'Já existe um agendamento para este médico nesta data e horário'
+            error: 'Conflito de data',
+            message: 'Já existe um agendamento para este médico nesta data'
           };
           res.status(409).json(response);
           return;

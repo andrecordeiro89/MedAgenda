@@ -15,7 +15,7 @@ export class AgendamentoModel {
       FROM agendamentos a
       JOIN medicos m ON a.medico_id = m.id
       JOIN procedimentos p ON a.procedimento_id = p.id
-      ORDER BY a.data_agendamento ASC, a.horario ASC
+      ORDER BY a.data_agendamento ASC
     `);
     
     return result.rows.map(row => ({
@@ -26,7 +26,6 @@ export class AgendamentoModel {
       telefone: row.telefone,
       whatsapp: row.whatsapp,
       data_agendamento: row.data_agendamento,
-      horario: row.horario,
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
@@ -75,7 +74,6 @@ export class AgendamentoModel {
       telefone: row.telefone,
       whatsapp: row.whatsapp,
       data_agendamento: row.data_agendamento,
-      horario: row.horario,
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
@@ -110,8 +108,8 @@ export class AgendamentoModel {
       FROM agendamentos a
       JOIN medicos m ON a.medico_id = m.id
       JOIN procedimentos p ON a.procedimento_id = p.id
-      WHERE a.data_agendamento = $1
-      ORDER BY a.horario ASC
+        WHERE a.data_agendamento = $1
+      ORDER BY a.data_agendamento ASC
     `, [date]);
     
     return result.rows.map(row => ({
@@ -122,7 +120,6 @@ export class AgendamentoModel {
       telefone: row.telefone,
       whatsapp: row.whatsapp,
       data_agendamento: row.data_agendamento,
-      horario: row.horario,
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
@@ -158,7 +155,7 @@ export class AgendamentoModel {
       JOIN medicos m ON a.medico_id = m.id
       JOIN procedimentos p ON a.procedimento_id = p.id
       WHERE a.medico_id = $1
-      ORDER BY a.data_agendamento ASC, a.horario ASC
+      ORDER BY a.data_agendamento ASC
     `, [medicoId]);
     
     return result.rows.map(row => ({
@@ -169,7 +166,6 @@ export class AgendamentoModel {
       telefone: row.telefone,
       whatsapp: row.whatsapp,
       data_agendamento: row.data_agendamento,
-      horario: row.horario,
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
@@ -197,12 +193,12 @@ export class AgendamentoModel {
     
     await query(
       `INSERT INTO agendamentos (id, nome_paciente, data_nascimento, cidade_natal, telefone, whatsapp, 
-       data_agendamento, horario, status_liberacao, medico_id, procedimento_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+       data_agendamento, status_liberacao, medico_id, procedimento_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         id, agendamentoData.nome_paciente, agendamentoData.data_nascimento,
         agendamentoData.cidade_natal, agendamentoData.telefone, agendamentoData.whatsapp,
-        agendamentoData.data_agendamento, agendamentoData.horario, agendamentoData.status_liberacao,
+        agendamentoData.data_agendamento, agendamentoData.status_liberacao,
         agendamentoData.medico_id, agendamentoData.procedimento_id
       ]
     );
@@ -238,10 +234,6 @@ export class AgendamentoModel {
     if (agendamentoData.data_agendamento !== undefined) {
       fields.push(`data_agendamento = $${paramIndex++}`);
       values.push(agendamentoData.data_agendamento);
-    }
-    if (agendamentoData.horario !== undefined) {
-      fields.push(`horario = $${paramIndex++}`);
-      values.push(agendamentoData.horario);
     }
     if (agendamentoData.status_liberacao !== undefined) {
       fields.push(`status_liberacao = $${paramIndex++}`);
@@ -291,7 +283,7 @@ export class AgendamentoModel {
       JOIN procedimentos p ON a.procedimento_id = p.id
       WHERE LOWER(a.nome_paciente) LIKE LOWER($1) 
       OR LOWER(m.nome) LIKE LOWER($1)
-      ORDER BY a.data_agendamento ASC, a.horario ASC
+      ORDER BY a.data_agendamento ASC
     `, [`%${term}%`]);
     
     return result.rows.map(row => ({
@@ -302,7 +294,6 @@ export class AgendamentoModel {
       telefone: row.telefone,
       whatsapp: row.whatsapp,
       data_agendamento: row.data_agendamento,
-      horario: row.horario,
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
@@ -325,16 +316,16 @@ export class AgendamentoModel {
     }));
   }
 
-  static async checkConflict(medicoId: string, dataAgendamento: string, horario: string, excludeId?: string): Promise<boolean> {
+  static async checkConflict(medicoId: string, dataAgendamento: string, excludeId?: string): Promise<boolean> {
     let queryText = `
       SELECT COUNT(*) as count 
       FROM agendamentos 
-      WHERE medico_id = $1 AND data_agendamento = $2 AND horario = $3
+      WHERE medico_id = $1 AND data_agendamento = $2
     `;
-    const params = [medicoId, dataAgendamento, horario];
+    const params = [medicoId, dataAgendamento];
 
     if (excludeId) {
-      queryText += ' AND id != $4';
+      queryText += ' AND id != $3';
       params.push(excludeId);
     }
 
@@ -375,7 +366,7 @@ export class AgendamentoModel {
       JOIN medicos m ON a.medico_id = m.id
       JOIN procedimentos p ON a.procedimento_id = p.id
       WHERE a.data_agendamento >= CURRENT_DATE
-      ORDER BY a.data_agendamento ASC, a.horario ASC
+      ORDER BY a.data_agendamento ASC
       LIMIT 5
     `);
 
@@ -388,7 +379,6 @@ export class AgendamentoModel {
       telefone: row.telefone,
       whatsapp: row.whatsapp,
       data_agendamento: row.data_agendamento,
-      horario: row.horario,
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,

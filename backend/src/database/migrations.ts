@@ -7,34 +7,62 @@ export const createTables = async (): Promise<void> => {
     // Criar extensão UUID se não existir
     await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
 
-    // 1. Criar tabela medicos
+    // 1. Criar tabela hospitais
+    await query(`
+      CREATE TABLE IF NOT EXISTS hospitais (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        nome VARCHAR(255) NOT NULL,
+        cidade VARCHAR(255) NOT NULL,
+        cnpj VARCHAR(18) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 2. Criar tabela usuarios
+    await query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email VARCHAR(255) NOT NULL UNIQUE,
+        hospital_id UUID NOT NULL REFERENCES hospitais(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 3. Criar tabela medicos
     await query(`
       CREATE TABLE IF NOT EXISTS medicos (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         nome VARCHAR(255) NOT NULL,
         especialidade VARCHAR(255) NOT NULL,
-        crm VARCHAR(50) NOT NULL UNIQUE,
+        crm VARCHAR(50) NOT NULL,
         telefone VARCHAR(20) NOT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
+        email VARCHAR(255) NOT NULL,
+        hospital_id UUID NOT NULL REFERENCES hospitais(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(crm, hospital_id),
+        UNIQUE(email, hospital_id)
       );
     `);
 
-    // 2. Criar tabela procedimentos
+    // 4. Criar tabela procedimentos
     await query(`
       CREATE TABLE IF NOT EXISTS procedimentos (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        nome VARCHAR(255) NOT NULL UNIQUE,
+        nome VARCHAR(255) NOT NULL,
         tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('cirurgico', 'ambulatorial')),
         duracao_estimada_min INTEGER NOT NULL CHECK (duracao_estimada_min > 0),
         descricao TEXT,
+        hospital_id UUID NOT NULL REFERENCES hospitais(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(nome, hospital_id)
       );
     `);
 
-    // 3. Criar tabela agendamentos
+    // 5. Criar tabela agendamentos
     await query(`
       CREATE TABLE IF NOT EXISTS agendamentos (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -44,17 +72,41 @@ export const createTables = async (): Promise<void> => {
         telefone VARCHAR(20),
         whatsapp VARCHAR(20),
         data_agendamento DATE NOT NULL,
-        horario TIME NOT NULL,
         status_liberacao VARCHAR(20) NOT NULL DEFAULT 'pendente' CHECK (status_liberacao IN ('pendente', 'liberado')),
         medico_id UUID NOT NULL REFERENCES medicos(id) ON DELETE CASCADE,
         procedimento_id UUID NOT NULL REFERENCES procedimentos(id) ON DELETE CASCADE,
+        hospital_id UUID NOT NULL REFERENCES hospitais(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(medico_id, data_agendamento, horario)
+        UNIQUE(medico_id, data_agendamento)
       );
     `);
 
     // Criar índices para otimização
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_hospitais_cnpj ON hospitais(cnpj);
+    `);
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
+    `);
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_usuarios_hospital_id ON usuarios(hospital_id);
+    `);
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_medicos_hospital_id ON medicos(hospital_id);
+    `);
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_procedimentos_hospital_id ON procedimentos(hospital_id);
+    `);
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_agendamentos_hospital_id ON agendamentos(hospital_id);
+    `);
+    
     await query(`
       CREATE INDEX IF NOT EXISTS idx_agendamentos_data_agendamento ON agendamentos(data_agendamento);
     `);
@@ -83,6 +135,16 @@ export const createTables = async (): Promise<void> => {
     `);
 
     // Criar triggers para updated_at
+    await query(`
+      CREATE TRIGGER update_hospitais_updated_at BEFORE UPDATE ON hospitais
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    `);
+
+    await query(`
+      CREATE TRIGGER update_usuarios_updated_at BEFORE UPDATE ON usuarios
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    `);
+
     await query(`
       CREATE TRIGGER update_medicos_updated_at BEFORE UPDATE ON medicos
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

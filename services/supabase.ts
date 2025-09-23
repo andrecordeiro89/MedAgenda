@@ -26,6 +26,7 @@ interface SupabaseMedico {
   crm: string
   telefone: string
   email: string
+  hospital_id?: string
   created_at?: string
   updated_at?: string
 }
@@ -36,6 +37,7 @@ interface SupabaseProcedimento {
   tipo: 'cirurgico' | 'ambulatorial'
   duracao_estimada_min: number
   descricao?: string
+  hospital_id?: string
   created_at?: string
   updated_at?: string
 }
@@ -48,10 +50,10 @@ interface SupabaseAgendamento {
   telefone?: string
   whatsapp?: string
   data_agendamento: string
-  horario: string
   status_liberacao: 'pendente' | 'liberado'
   medico_id: string
   procedimento_id: string
+  hospital_id?: string
   created_at?: string
   updated_at?: string
 }
@@ -74,6 +76,7 @@ export const convertMedicoFromSupabase = (medico: SupabaseMedico): Medico => ({
   crm: medico.crm,
   telefone: medico.telefone,
   email: medico.email,
+  hospitalId: medico.hospital_id,
 })
 
 export const convertMedicoToSupabase = (medico: Omit<Medico, 'id'>): Omit<SupabaseMedico, 'id' | 'created_at' | 'updated_at'> => ({
@@ -90,6 +93,7 @@ export const convertProcedimentoFromSupabase = (procedimento: SupabaseProcedimen
   tipo: procedimento.tipo,
   duracaoEstimada: procedimento.duracao_estimada_min,
   descricao: procedimento.descricao || '',
+  hospitalId: procedimento.hospital_id,
 })
 
 export const convertProcedimentoToSupabase = (procedimento: Omit<Procedimento, 'id'>): Omit<SupabaseProcedimento, 'id' | 'created_at' | 'updated_at'> => ({
@@ -111,8 +115,8 @@ export const convertAgendamentoFromSupabase = (agendamento: AgendamentoCompleto)
   telefone: agendamento.telefone || '',
   whatsapp: agendamento.whatsapp || '',
   dataAgendamento: agendamento.data_agendamento,
-  horario: agendamento.horario,
   tipo: agendamento.procedimento_tipo || 'ambulatorial',
+  hospitalId: agendamento.hospital_id,
 })
 
 export const convertAgendamentoToSupabase = (agendamento: Omit<Agendamento, 'id' | 'idade' | 'tipo'>): Omit<SupabaseAgendamento, 'id' | 'created_at' | 'updated_at'> => ({
@@ -122,7 +126,6 @@ export const convertAgendamentoToSupabase = (agendamento: Omit<Agendamento, 'id'
   telefone: agendamento.telefone || null,
   whatsapp: agendamento.whatsapp || null,
   data_agendamento: agendamento.dataAgendamento,
-  horario: agendamento.horario,
   status_liberacao: agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente',
   medico_id: agendamento.medicoId,
   procedimento_id: agendamento.procedimentoId,
@@ -294,7 +297,6 @@ export const agendamentoService = {
       .from('agendamentos_completos')
       .select('*')
       .order('data_agendamento')
-      .order('horario')
     
     if (error) throw new Error(error.message)
     
@@ -347,7 +349,6 @@ export const agendamentoService = {
       .from('agendamentos_completos')
       .select('*')
       .eq('data_agendamento', date)
-      .order('horario')
     
     if (error) throw new Error(error.message)
     
@@ -376,7 +377,6 @@ export const agendamentoService = {
     if (agendamento.telefone !== undefined) updateData.telefone = agendamento.telefone
     if (agendamento.whatsapp !== undefined) updateData.whatsapp = agendamento.whatsapp
     if (agendamento.dataAgendamento !== undefined) updateData.data_agendamento = agendamento.dataAgendamento
-    if (agendamento.horario !== undefined) updateData.horario = agendamento.horario
     if (agendamento.statusLiberacao !== undefined) updateData.status_liberacao = agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente'
     if (agendamento.medicoId !== undefined) updateData.medico_id = agendamento.medicoId
     if (agendamento.procedimentoId !== undefined) updateData.procedimento_id = agendamento.procedimentoId
@@ -404,13 +404,12 @@ export const agendamentoService = {
     if (error) throw new Error(error.message)
   },
 
-  async checkConflict(medicoId: string, dataAgendamento: string, horario: string, excludeId?: string): Promise<boolean> {
+  async checkConflict(medicoId: string, dataAgendamento: string, excludeId?: string): Promise<boolean> {
     let query = supabase
       .from('agendamentos')
       .select('id')
       .eq('medico_id', medicoId)
       .eq('data_agendamento', dataAgendamento)
-      .eq('horario', horario)
     
     if (excludeId) {
       query = query.neq('id', excludeId)
@@ -449,7 +448,6 @@ export const estatisticasService = {
       .select('*')
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento')
-      .order('horario')
       .limit(5)
     
     if (proximosError) throw new Error(proximosError.message)

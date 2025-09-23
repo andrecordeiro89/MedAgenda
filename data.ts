@@ -26,7 +26,6 @@ const generateRandomDate = (start: Date, end: Date): string => {
 
 const randomItem = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-const HORARIOS_DISPONIVEIS = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
 
 const NOMES_PACIENTES = ['Ana Silva', 'Bruno Souza', 'Carla Dias', 'Diego Rocha', 'Elisa Ferreira', 'Fábio Lima', 'Gabriela Alves', 'Hugo Mendes', 'Isabela Santos', 'Jorge Costa'];
 const CIDADES_NATAL = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Salvador', 'Curitiba', 'Porto Alegre'];
@@ -47,7 +46,6 @@ export const AGENDAMENTOS: Agendamento[] = Array.from({ length: 25 }, (_, i) => 
         telefone: `(11) 9${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
         whatsapp: `(11) 9${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
         dataAgendamento,
-        horario: randomItem(HORARIOS_DISPONIVEIS),
         tipo: procedimento.tipo,
     };
 });

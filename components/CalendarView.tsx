@@ -111,7 +111,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
                 <ul className="space-y-4">
                 {selectedDateAppointments.map(a => (
                     <li key={a.id} className="p-3 bg-slate-50 rounded-md border-l-4 border-primary">
-                        <p className="font-semibold">{a.nome} - {a.horario}</p>
+                        <p className="font-semibold">{a.nome}</p>
                         <p className="text-sm text-slate-600">Procedimento: {getProcedimentoName(a.procedimentoId)}</p>
                         <p className="text-sm text-slate-600">Médico: {getMedicoName(a.medicoId)}</p>
                     </li>

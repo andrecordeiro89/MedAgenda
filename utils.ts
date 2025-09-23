@@ -37,8 +37,7 @@ export const hasScheduleConflict = (
         (existing) =>
             existing.id !== (newAppointment as Agendamento).id &&
             existing.medicoId === newAppointment.medicoId &&
-            existing.dataAgendamento === newAppointment.dataAgendamento &&
-            existing.horario === newAppointment.horario
+            existing.dataAgendamento === newAppointment.dataAgendamento
     );
 };
 

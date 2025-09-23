@@ -46,7 +46,6 @@ export interface AgendamentoAPI {
   telefone?: string;
   whatsapp?: string;
   data_agendamento: string;
-  horario: string;
   status_liberacao: 'pendente' | 'liberado';
   medico_id: string;
   procedimento_id: string;
@@ -340,7 +339,6 @@ export const convertAgendamentoFromAPI = (agendamento: AgendamentoAPI) => ({
   telefone: agendamento.telefone || '',
   whatsapp: agendamento.whatsapp || '',
   dataAgendamento: agendamento.data_agendamento,
-  horario: agendamento.horario,
   tipo: agendamento.procedimento?.tipo || 'ambulatorial' as const,
 });
 
@@ -351,7 +349,6 @@ export const convertAgendamentoToAPI = (agendamento: any): Omit<AgendamentoAPI, 
   telefone: agendamento.telefone || undefined,
   whatsapp: agendamento.whatsapp || undefined,
   data_agendamento: agendamento.dataAgendamento,
-  horario: agendamento.horario,
   status_liberacao: agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente',
   medico_id: agendamento.medicoId,
   procedimento_id: agendamento.procedimentoId,

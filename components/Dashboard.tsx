@@ -40,7 +40,7 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos }) => {
                             <thead className="text-xs text-slate-700 uppercase bg-slate-100">
                                 <tr>
                                     <th scope="col" className="px-6 py-3">Paciente</th>
-                                    <th scope="col" className="px-6 py-3">Data e Hora</th>
+                                    <th scope="col" className="px-6 py-3">Data</th>
                                     <th scope="col" className="px-6 py-3">Médico</th>
                                     <th scope="col" className="px-6 py-3">Status</th>
                                 </tr>
@@ -53,7 +53,7 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos }) => {
                                     .map(a => (
                                         <tr key={a.id} className="bg-white border-b">
                                             <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">{a.nome}</td>
-                                            <td className="px-6 py-4">{new Date(a.dataAgendamento).toLocaleDateString()} {a.horario}</td>
+                                            <td className="px-6 py-4">{new Date(a.dataAgendamento).toLocaleDateString()}</td>
                                             <td className="px-6 py-4">{a.medicoId}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 text-xs rounded-full ${a.statusLiberacao === 'v' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>

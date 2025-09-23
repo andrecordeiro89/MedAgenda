@@ -1,6 +1,7 @@
 import React, { useState, ReactNode } from 'react';
 import { View } from '../types';
 import { HomeIcon, CalendarIcon, ListIcon, XIcon } from './ui';
+import { useAuth } from './PremiumLogin';
 
 interface LayoutProps {
   currentView: View;
@@ -9,11 +10,12 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) => {
+    const { hospital, logout } = useAuth();
     const [isMenuOpen, setMenuOpen] = useState(false);
     
     const handleNavClick = (view: View) => {
         onViewChange(view);
-        setMenuOpen(false); // Always close mobile menu on navigation
+        setMenuOpen(false);
     };
 
     const navLinks = [
@@ -24,37 +26,58 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="bg-white shadow-md sticky top-0 z-30">
+            {/* Barra unificada colorida */}
+            <header className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg sticky top-0 z-30">
                 <div className="container mx-auto px-4">
                     <div className="flex justify-between items-center h-16">
-                        {/* Logo */}
+                        {/* Logo e nome - lado esquerdo */}
                         <div className="flex items-center gap-3">
-                            <div className="bg-primary p-2 rounded-lg">
-                                <CalendarIcon className="w-6 h-6 text-white"/>
+                            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center">
+                                <CalendarIcon className="w-5 h-5 text-white"/>
                             </div>
-                            <h1 className="text-xl font-bold text-slate-800">AgendaMed</h1>
+                            <h1 className="text-xl font-bold text-white">MedAgenda</h1>
                         </div>
 
-                        {/* Desktop Navigation */}
+                        {/* Navegação central - Desktop */}
                         <nav className="hidden md:flex items-center gap-2">
                             {navLinks.map(link => (
-                                <a 
+                                <button 
                                     key={link.view}
                                     onClick={() => handleNavClick(link.view)}
-                                    className={`flex items-center px-3 py-2 rounded-md cursor-pointer transition-colors duration-200 text-sm font-medium ${
+                                    className={`flex items-center px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 text-sm font-medium ${
                                         currentView === link.view
-                                        ? 'bg-primary text-white shadow-sm'
-                                        : 'text-slate-600 hover:bg-blue-100 hover:text-primary'
+                                        ? 'bg-white/20 text-white shadow-sm backdrop-blur-md border border-white/30'
+                                        : 'text-white/80 hover:bg-white/10 hover:text-white'
                                     }`}
                                 >
                                     {link.icon}
                                     <span className="ml-2">{link.label}</span>
-                                </a>
+                                </button>
                             ))}
                         </nav>
 
-                        {/* Mobile Hamburger Button */}
-                        <button className="md:hidden text-slate-600" onClick={() => setMenuOpen(!isMenuOpen)} aria-label="Abrir menu" aria-expanded={isMenuOpen}>
+                        {/* Hospital e botão sair - lado direito */}
+                        <div className="hidden md:flex items-center gap-4">
+                            {hospital && (
+                                <div className="text-right">
+                                    <div className="text-white font-medium text-sm">{hospital.nome}</div>
+                                    <div className="text-white/70 text-xs">{hospital.cidade}</div>
+                                </div>
+                            )}
+                            <button
+                                onClick={logout}
+                                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg text-white transition-all duration-200 border border-white/20 hover:border-white/30 text-sm font-medium"
+                            >
+                                Sair
+                            </button>
+                        </div>
+
+                        {/* Botão mobile */}
+                        <button 
+                            className="md:hidden text-white" 
+                            onClick={() => setMenuOpen(!isMenuOpen)} 
+                            aria-label="Abrir menu"
+                        >
                              {isMenuOpen ? <XIcon className="h-6 w-6" /> : (
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
@@ -64,23 +87,39 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                     </div>
                 </div>
 
-                 {/* Mobile Navigation Menu */}
+                {/* Menu mobile */}
                 <div className={`transition-all duration-300 ease-in-out md:hidden ${isMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                    <nav className="bg-white border-t border-slate-200 p-4 flex flex-col gap-2">
+                    <nav className="bg-white/10 backdrop-blur-md border-t border-white/20 p-4 flex flex-col gap-2">
                         {navLinks.map(link => (
-                             <a 
+                             <button 
                                 key={link.view}
                                 onClick={() => handleNavClick(link.view)}
-                                className={`flex items-center px-3 py-3 rounded-md cursor-pointer transition-colors duration-200 text-base font-medium ${
+                                className={`flex items-center px-3 py-3 rounded-lg cursor-pointer transition-colors duration-200 text-base font-medium ${
                                     currentView === link.view
-                                    ? 'bg-primary text-white shadow-sm'
-                                    : 'text-slate-600 hover:bg-blue-100 hover:text-primary'
+                                    ? 'bg-white/20 text-white shadow-sm'
+                                    : 'text-white/80 hover:bg-white/10 hover:text-white'
                                 }`}
                             >
                                 {link.icon}
                                 <span className="ml-3">{link.label}</span>
-                            </a>
+                            </button>
                         ))}
+                        
+                        {/* Hospital e sair no mobile */}
+                        <div className="border-t border-white/20 pt-4 mt-2">
+                            {hospital && (
+                                <div className="px-3 py-2 text-white/80 text-sm">
+                                    <div className="font-medium">{hospital.nome}</div>
+                                    <div className="text-white/60">{hospital.cidade}</div>
+                                </div>
+                            )}
+                            <button
+                                onClick={logout}
+                                className="w-full mt-2 px-3 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all duration-200 border border-white/20 text-base font-medium"
+                            >
+                                Sair
+                            </button>
+                        </div>
                     </nav>
                 </div>
             </header>

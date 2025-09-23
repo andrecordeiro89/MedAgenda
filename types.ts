@@ -15,8 +15,8 @@ export interface Agendamento {
   telefone: string;
   whatsapp: string;
   dataAgendamento: string; // YYYY-MM-DD
-  horario: string; // HH:MM
   tipo: TipoAgendamento;
+  hospitalId?: string; // ID do hospital
 }
 
 export interface Medico {
@@ -26,6 +26,7 @@ export interface Medico {
     crm: string;
     telefone: string;
     email: string;
+    hospitalId?: string; // ID do hospital
 }
 
 export interface Procedimento {
@@ -34,6 +35,7 @@ export interface Procedimento {
     tipo: TipoAgendamento;
     duracaoEstimada: number; // in minutes
     descricao: string;
+    hospitalId?: string; // ID do hospital
 }
 
 export interface AppState {

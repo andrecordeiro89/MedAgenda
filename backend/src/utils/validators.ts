@@ -164,16 +164,6 @@ export const validateCreateAgendamento = [
       return true;
     }),
   
-  body('horario')
-    .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage('Horário deve estar no formato HH:MM')
-    .custom((value) => {
-      const allowedTimes = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
-      if (!allowedTimes.includes(value)) {
-        throw new Error('Horário deve ser um dos horários disponíveis: ' + allowedTimes.join(', '));
-      }
-      return true;
-    }),
   
   body('status_liberacao')
     .isIn(['pendente', 'liberado'])
@@ -246,17 +236,6 @@ export const validateUpdateAgendamento = [
       return true;
     }),
   
-  body('horario')
-    .optional()
-    .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage('Horário deve estar no formato HH:MM')
-    .custom((value) => {
-      const allowedTimes = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
-      if (!allowedTimes.includes(value)) {
-        throw new Error('Horário deve ser um dos horários disponíveis: ' + allowedTimes.join(', '));
-      }
-      return true;
-    }),
   
   body('status_liberacao')
     .optional()
@@ -272,6 +251,79 @@ export const validateUpdateAgendamento = [
     .optional()
     .isUUID()
     .withMessage('ID do procedimento deve ser um UUID válido')
+];
+
+// Validadores para Hospital
+export const validateCreateHospital = [
+  body('nome')
+    .trim()
+    .isLength({ min: 2, max: 255 })
+    .withMessage('Nome deve ter entre 2 e 255 caracteres'),
+  
+  body('cidade')
+    .trim()
+    .isLength({ min: 2, max: 255 })
+    .withMessage('Cidade deve ter entre 2 e 255 caracteres'),
+  
+  body('cnpj')
+    .trim()
+    .matches(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/)
+    .withMessage('CNPJ deve estar no formato XX.XXX.XXX/XXXX-XX')
+];
+
+export const validateUpdateHospital = [
+  body('nome')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 255 })
+    .withMessage('Nome deve ter entre 2 e 255 caracteres'),
+  
+  body('cidade')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 255 })
+    .withMessage('Cidade deve ter entre 2 e 255 caracteres'),
+  
+  body('cnpj')
+    .optional()
+    .trim()
+    .matches(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/)
+    .withMessage('CNPJ deve estar no formato XX.XXX.XXX/XXXX-XX')
+];
+
+// Validadores para Usuario
+export const validateCreateUsuario = [
+  body('email')
+    .trim()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Email deve ser válido'),
+  
+  body('hospital_id')
+    .isUUID()
+    .withMessage('ID do hospital deve ser um UUID válido')
+];
+
+export const validateUpdateUsuario = [
+  body('email')
+    .optional()
+    .trim()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Email deve ser válido'),
+  
+  body('hospital_id')
+    .optional()
+    .isUUID()
+    .withMessage('ID do hospital deve ser um UUID válido')
+];
+
+export const validateEmail = [
+  body('email')
+    .trim()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Email deve ser válido')
 ];
 
 // Validadores comuns

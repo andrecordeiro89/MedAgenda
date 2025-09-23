@@ -5,10 +5,11 @@ import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input } from './ui
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import { formatDate } from '../utils';
 import { 
-    medicoService,
-    procedimentoService,
-    agendamentoService
-} from '../services/supabase';
+    simpleMedicoService,
+    simpleProcedimentoService,
+    simpleAgendamentoService
+} from '../services/api-simple';
+import { useAuth } from './PremiumLogin';
 
 type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos';
 
@@ -20,6 +21,7 @@ interface ManagementViewProps {
 }
 
 const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, onRefresh }) => {
+  const { hospital } = useAuth();
   const [activeTab, setActiveTab] = useState<ManagementTab>('agendamentos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Agendamento | Medico | Procedimento | null>(null);
@@ -105,7 +107,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 renderRow={(item: Agendamento) => (
                     <>
                         <td className="px-6 py-4 font-medium text-slate-900">{item.nome}</td>
-                        <td className="px-6 py-4">{formatDate(item.dataAgendamento)} {item.horario}</td>
+                        <td className="px-6 py-4">{formatDate(item.dataAgendamento)}</td>
                         <td className="px-6 py-4">{getMedicoName(item.medicoId)}</td>
                         <td className="px-6 py-4">{getProcedimentoName(item.procedimentoId)}</td>
                         <td className="px-6 py-4">
@@ -178,9 +180,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         setError(null);
                         
                         if (id) {
-                            await agendamentoService.update(id, data);
+                            await simpleAgendamentoService.update(id, data);
                         } else {
-                            await agendamentoService.create(data);
+                            const dataWithHospital = { ...data, hospitalId: hospital?.id };
+                            await simpleAgendamentoService.create(dataWithHospital);
                         }
                         
                         onRefresh();
@@ -205,9 +208,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         setError(null);
                         
                         if (id) {
-                            await medicoService.update(id, data);
+                            await simpleMedicoService.update(id, data);
                         } else {
-                            await medicoService.create(data);
+                            const dataWithHospital = { ...data, hospitalId: hospital?.id };
+                            await simpleMedicoService.create(dataWithHospital);
                         }
                         
                         onRefresh();
@@ -232,9 +236,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         setError(null);
                         
                         if (id) {
-                            await procedimentoService.update(id, data);
+                            await simpleProcedimentoService.update(id, data);
                         } else {
-                            await procedimentoService.create(data);
+                            const dataWithHospital = { ...data, hospitalId: hospital?.id };
+                            await simpleProcedimentoService.create(dataWithHospital);
                         }
                         
                         onRefresh();
@@ -273,11 +278,11 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                             setError(null);
                             
                             if (activeTab === 'agendamentos') {
-                                await agendamentoService.delete(deletingId);
+                                await simpleAgendamentoService.delete(deletingId);
                             } else if (activeTab === 'medicos') {
-                                await medicoService.delete(deletingId);
+                                await simpleMedicoService.delete(deletingId);
                             } else if (activeTab === 'procedimentos') {
-                                await procedimentoService.delete(deletingId);
+                                await simpleProcedimentoService.delete(deletingId);
                             }
                             
                             onRefresh();
