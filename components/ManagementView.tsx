@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Agendamento, Medico, Procedimento, Especialidade } from '../types';
-import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input } from './ui';
+import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input, Select } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import { formatDate } from '../utils';
 import { 
@@ -33,6 +33,14 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estados dos filtros para agendamentos
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'liberado' | 'pendente'>('todos');
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | 'cirurgico' | 'ambulatorial'>('todos');
+  const [filtroMedico, setFiltroMedico] = useState<string>('todos');
+  const [filtroEspecialidade, setFiltroEspecialidade] = useState<string>('todos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
+  const [filtroDataFim, setFiltroDataFim] = useState<string>('');
 
 
   const openModal = (item: Agendamento | Medico | Procedimento | null = null) => {
@@ -56,12 +64,38 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   };
 
   const filteredAgendamentos = useMemo(() =>
-    agendamentos.filter(a =>
-      a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getMedicoName(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getMedicoEspecialidade(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getProcedimentoName(a.procedimentoId).toLowerCase().includes(searchTerm.toLowerCase())
-    ), [agendamentos, searchTerm, medicos, procedimentos]);
+    agendamentos.filter(a => {
+      // Filtro de busca textual
+      const matchesSearch = searchTerm === '' || 
+        a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getMedicoName(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getMedicoEspecialidade(a.medicoId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getProcedimentoName(a.procedimentoId).toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Filtro de status
+      const matchesStatus = filtroStatus === 'todos' || 
+        (filtroStatus === 'liberado' && a.statusLiberacao === 'v') ||
+        (filtroStatus === 'pendente' && a.statusLiberacao === 'x');
+      
+      // Filtro de tipo (baseado no procedimento)
+      const procedimento = procedimentos.find(p => p.id === a.procedimentoId);
+      const tipoReal = procedimento?.tipo || a.tipo || 'ambulatorial';
+      const matchesTipo = filtroTipo === 'todos' || tipoReal === filtroTipo;
+      
+      // Filtro de médico
+      const matchesMedico = filtroMedico === 'todos' || a.medicoId === filtroMedico;
+      
+      // Filtro de especialidade
+      const especialidadeMedico = getMedicoEspecialidade(a.medicoId);
+      const matchesEspecialidade = filtroEspecialidade === 'todos' || especialidadeMedico === filtroEspecialidade;
+      
+      // Filtro de data
+      const dataAgendamento = new Date(a.dataAgendamento);
+      const matchesDataInicio = !filtroDataInicio || dataAgendamento >= new Date(filtroDataInicio);
+      const matchesDataFim = !filtroDataFim || dataAgendamento <= new Date(filtroDataFim);
+      
+      return matchesSearch && matchesStatus && matchesTipo && matchesMedico && matchesEspecialidade && matchesDataInicio && matchesDataFim;
+    }), [agendamentos, searchTerm, filtroStatus, filtroTipo, filtroMedico, filtroEspecialidade, filtroDataInicio, filtroDataFim, medicos, procedimentos]);
 
   const filteredMedicos = useMemo(() =>
     medicos.filter(m =>
@@ -90,6 +124,16 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     </button>
   );
 
+  const limparFiltros = () => {
+    setSearchTerm('');
+    setFiltroStatus('todos');
+    setFiltroTipo('todos');
+    setFiltroMedico('todos');
+    setFiltroEspecialidade('todos');
+    setFiltroDataInicio('');
+    setFiltroDataFim('');
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -107,15 +151,147 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       </div>
 
       <div className="bg-white p-4 rounded-b-lg shadow-md">
-        <div className="mb-4">
+        {/* Filtros para Agendamentos */}
+        {activeTab === 'agendamentos' && (
+          <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-semibold text-slate-700 flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                Filtros de Agendamentos
+              </h4>
+              <button
+                onClick={limparFiltros}
+                className="text-xs text-slate-500 hover:text-slate-700 underline"
+              >
+                Limpar Filtros
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Primeira linha: Busca e Status */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Busca Textual */}
+                <div className="lg:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Buscar</label>
+                  <Input 
+                    type="text" 
+                    placeholder="Nome, médico, procedimento..." 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                
+                {/* Filtro Status */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+                  <Select 
+                    value={filtroStatus} 
+                    onChange={(e) => setFiltroStatus(e.target.value as 'todos' | 'liberado' | 'pendente')}
+                    className="text-sm"
+                  >
+                    <option value="todos">Todos os Status</option>
+                    <option value="liberado">Liberado</option>
+                    <option value="pendente">Pendente</option>
+                  </Select>
+                </div>
+                
+                {/* Filtro Tipo */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Tipo</label>
+                  <Select 
+                    value={filtroTipo} 
+                    onChange={(e) => setFiltroTipo(e.target.value as 'todos' | 'cirurgico' | 'ambulatorial')}
+                    className="text-sm"
+                  >
+                    <option value="todos">Todos os Tipos</option>
+                    <option value="cirurgico">Cirúrgico</option>
+                    <option value="ambulatorial">Ambulatorial</option>
+                  </Select>
+                </div>
+              </div>
+              
+              {/* Segunda linha: Médico, Especialidade e Datas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Filtro Médico */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Médico</label>
+                  <Select 
+                    value={filtroMedico} 
+                    onChange={(e) => setFiltroMedico(e.target.value)}
+                    className="text-sm"
+                  >
+                    <option value="todos">Todos os Médicos</option>
+                    {medicos.map(medico => (
+                      <option key={medico.id} value={medico.id}>
+                        {medico.nome}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                
+                {/* Filtro Especialidade */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Especialidade</label>
+                  <Select 
+                    value={filtroEspecialidade} 
+                    onChange={(e) => setFiltroEspecialidade(e.target.value)}
+                    className="text-sm"
+                  >
+                    <option value="todos">Todas as Especialidades</option>
+                    {[...new Set(medicos.map(m => m.especialidade))].sort().map(especialidade => (
+                      <option key={especialidade} value={especialidade}>
+                        {especialidade}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                
+                {/* Filtro Data Início */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Data Início</label>
+                  <Input 
+                    type="date" 
+                    value={filtroDataInicio} 
+                    onChange={(e) => setFiltroDataInicio(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                
+                {/* Filtro Data Fim */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Data Fim</label>
+                  <Input 
+                    type="date" 
+                    value={filtroDataFim} 
+                    onChange={(e) => setFiltroDataFim(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Contador de resultados */}
+            <div className="mt-4 text-xs text-slate-600">
+              Mostrando {filteredAgendamentos.length} de {agendamentos.length} agendamentos
+            </div>
+          </div>
+        )}
+        
+        {/* Filtros simples para outras abas */}
+        {activeTab !== 'agendamentos' && (
+          <div className="mb-4">
             <Input 
-                type="text" 
-                placeholder="Buscar..." 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
+              type="text" 
+              placeholder="Buscar..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
             />
-        </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           {activeTab === 'agendamentos' && (
              <DataTable 
