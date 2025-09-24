@@ -37,11 +37,17 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos, medicos, procedimen
     const dataHoje = getDataAtualBrasilia();
     const agendamentosHoje = agendamentos.filter(a => a.dataAgendamento === dataHoje);
     
+    // Função para obter o tipo correto do agendamento baseado no procedimento
+    const getAgendamentoTipo = (agendamento: Agendamento) => {
+        const procedimento = procedimentos.find(p => p.id === agendamento.procedimentoId);
+        return procedimento?.tipo || agendamento.tipo || 'ambulatorial';
+    };
+    
     const totalAgendamentos = agendamentos.length;
     const pendentes = agendamentos.filter(a => a.statusLiberacao === 'x').length;
     const liberados = agendamentos.filter(a => a.statusLiberacao === 'v').length;
-    const cirurgicos = agendamentos.filter(a => a.tipo === 'cirurgico').length;
-    const ambulatoriais = agendamentos.filter(a => a.tipo === 'ambulatorial').length;
+    const cirurgicos = agendamentos.filter(a => getAgendamentoTipo(a) === 'cirurgico').length;
+    const ambulatoriais = agendamentos.filter(a => getAgendamentoTipo(a) === 'ambulatorial').length;
 
     // Funções auxiliares para buscar dados relacionados
     const getMedicoName = (id: string) => medicos.find(m => m.id === id)?.nome || 'Médico não encontrado';
@@ -115,10 +121,11 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos, medicos, procedimen
                         {/* KPI 4: Procedimentos Cirúrgicos */}
                         <div className="text-center p-3 bg-white/60 rounded-lg border border-white/40">
                             <div className="flex items-center justify-center mb-2">
-                                <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 20l16-16M8 4l8 8M4 8l8 8" />
+                                    <circle cx="18" cy="6" r="2" strokeWidth={2} />
                                 </svg>
-                                <p className="text-lg font-bold text-yellow-600">{cirurgicos}</p>
+                                <p className="text-lg font-bold text-red-600">{cirurgicos}</p>
                             </div>
                             <p className="text-xs text-slate-600 font-medium">Procedimentos Cirúrgicos</p>
                         </div>
