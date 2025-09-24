@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Agendamento, Medico, Procedimento, Especialidade } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input, Select } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
+import SigtapProceduresView from './SigtapProceduresView';
 import { formatDate } from '../utils';
 import { 
     simpleMedicoService,
@@ -11,7 +12,7 @@ import {
 } from '../services/api-simple';
 import { useAuth } from './PremiumLogin';
 
-type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos';
+type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap';
 
 interface ManagementViewProps {
   agendamentos: Agendamento[];
@@ -138,16 +139,19 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-slate-800">Gerenciamento</h2>
-        <Button onClick={() => openModal()} data-new-appointment={activeTab === 'agendamentos' ? 'true' : undefined}>
-          <PlusIcon className="w-5 h-5"/>
-          Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
-        </Button>
+        {activeTab !== 'sigtap' && (
+          <Button onClick={() => openModal()} data-new-appointment={activeTab === 'agendamentos' ? 'true' : undefined}>
+            <PlusIcon className="w-5 h-5"/>
+            Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
+          </Button>
+        )}
       </div>
 
       <div className="border-b border-slate-200">
         <TabButton tab="agendamentos" label="Agendamentos" />
         <TabButton tab="medicos" label="Médicos" />
         <TabButton tab="procedimentos" label="Procedimentos" />
+        <TabButton tab="sigtap" label="Procedimentos SIGTAP" />
       </div>
 
       <div className="bg-white p-4 rounded-b-lg shadow-md">
@@ -281,7 +285,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         )}
         
         {/* Filtros simples para outras abas */}
-        {activeTab !== 'agendamentos' && (
+        {activeTab !== 'agendamentos' && activeTab !== 'sigtap' && (
           <div className="mb-4">
             <Input 
               type="text" 
@@ -360,6 +364,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                     </>
                 )}
               />
+          )}
+
+          {activeTab === 'sigtap' && (
+            <SigtapProceduresView />
           )}
         </div>
       </div>

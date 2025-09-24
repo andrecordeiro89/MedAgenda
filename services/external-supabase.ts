@@ -1,0 +1,610 @@
+import { createClient } from '@supabase/supabase-js'
+
+// ============================================
+// CONFIGURAÇÃO DO SUPABASE EXTERNO
+// ============================================
+const externalSupabaseUrl = 'https://fvtfxunakabdrlkocdme.supabase.co'
+const externalSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2dGZ4dW5ha2FiZHJsa29jZG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5MzU2NDUsImV4cCI6MjA2NjUxMTY0NX0.sclE7gxen5qG5GMeyyAM_9tHR2iAlk1F1SyLeXBKvXc'
+
+export const externalSupabase = createClient(externalSupabaseUrl, externalSupabaseAnonKey, {
+  auth: {
+    storageKey: 'sb-sigtap-external-auth', // Chave mais específica
+    persistSession: false, // Não persistir sessão para projeto externo
+    autoRefreshToken: false, // Não renovar tokens automaticamente
+    detectSessionInUrl: false // Não detectar sessão na URL
+  },
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'sigtap-external-client'
+    }
+  }
+})
+
+// ============================================
+// SERVIÇOS PARA CONSUMIR DADOS EXTERNOS
+// ============================================
+export const externalDataService = {
+  // Função genérica para buscar dados de qualquer tabela
+  async getFromTable(tableName: string, options?: {
+    select?: string
+    filter?: Record<string, any>
+    order?: string
+    limit?: number
+  }) {
+    try {
+      console.log(`🔄 Buscando dados da tabela: ${tableName}`)
+      
+      let query = externalSupabase.from(tableName)
+      
+      // Select (campos a buscar)
+      if (options?.select) {
+        query = query.select(options.select)
+      } else {
+        query = query.select('*')
+      }
+      
+      // Filtros
+      if (options?.filter) {
+        Object.entries(options.filter).forEach(([key, value]) => {
+          query = query.eq(key, value)
+        })
+      }
+      
+      // Ordenação
+      if (options?.order) {
+        query = query.order(options.order)
+      }
+      
+      // Limite
+      if (options?.limit) {
+        query = query.limit(options.limit)
+      }
+      
+      const { data, error } = await query
+      
+      if (error) {
+        console.error(`❌ Erro ao buscar ${tableName}:`, error)
+        throw new Error(`Erro na tabela ${tableName}: ${error.message}`)
+      }
+      
+      console.log(`✅ Dados de ${tableName} carregados:`, data?.length || 0, 'registros')
+      return data || []
+    } catch (error) {
+      console.error(`❌ Erro na conexão com ${tableName}:`, error)
+      throw error
+    }
+  },
+
+  // Função para listar todas as tabelas disponíveis (para debug)
+  async listTables() {
+    try {
+      const { data, error } = await externalSupabase
+        .from('information_schema.tables')
+        .select('table_name')
+        .eq('table_schema', 'public')
+      
+      if (error) throw new Error(error.message)
+      return data || []
+    } catch (error) {
+      console.error('Erro ao listar tabelas:', error)
+      return []
+    }
+  },
+
+  // Função para testar a conexão
+  async testConnection() {
+    try {
+      console.log('🔄 Testando conexão SIGTAP...')
+      
+      // Testar com a tabela sigtap_procedures diretamente
+      const { data, error } = await externalSupabase
+        .from('sigtap_procedures')
+        .select('code')
+        .limit(1)
+      
+      if (error) {
+        console.error('❌ Erro na conexão SIGTAP:', error.message)
+        console.error('❌ Detalhes do erro:', error)
+        return false
+      }
+      
+      console.log('✅ Conexão com SIGTAP testada com sucesso')
+      console.log('✅ Dados de teste:', data)
+      return true
+    } catch (error) {
+      console.error('❌ Erro ao testar conexão externa:', error)
+      return false
+    }
+  },
+
+  // Função de diagnóstico para verificar o status da tabela
+  async diagnoseSigtapTable() {
+    console.log('🔍 Iniciando diagnóstico da tabela SIGTAP...')
+    console.log('📋 URL do projeto:', externalSupabaseUrl)
+    console.log('🔑 Chave API (primeiros 20 chars):', externalSupabaseAnonKey.substring(0, 20) + '...')
+    
+    try {
+      // Teste 1: Verificar se a conexão básica funciona
+      console.log('🧪 Teste 1: Conexão básica')
+      const testResult = await this.testConnection()
+      console.log('📊 Resultado do teste básico:', testResult ? '✅ Sucesso' : '❌ Falhou')
+      
+      // Teste 2: Tentar contar registros
+      console.log('🧪 Teste 2: Contagem de registros')
+      const { count, error: countError } = await externalSupabase
+        .from('sigtap_procedures')
+        .select('*', { count: 'exact', head: true })
+      
+      if (countError) {
+        console.error('❌ Erro na contagem:', countError)
+      } else {
+        console.log('📊 Total de registros na tabela:', count)
+      }
+      
+      // Teste 3: Buscar uma amostra pequena
+      console.log('🧪 Teste 3: Amostra de dados')
+      const { data: sampleData, error: sampleError } = await externalSupabase
+        .from('sigtap_procedures')
+        .select('*')
+        .limit(3)
+      
+      if (sampleError) {
+        console.error('❌ Erro na amostra:', sampleError)
+      } else {
+        console.log('📊 Amostra de dados:', sampleData)
+        if (sampleData && sampleData.length > 0) {
+          console.log('📋 Campos disponíveis:', Object.keys(sampleData[0]))
+        }
+      }
+      
+      return {
+        connectionTest: testResult,
+        recordCount: count,
+        sampleData: sampleData || [],
+        hasData: (sampleData?.length || 0) > 0
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro no diagnóstico:', error)
+      return {
+        connectionTest: false,
+        recordCount: 0,
+        sampleData: [],
+        hasData: false,
+        error: error
+      }
+    }
+  },
+
+  // Exemplos de funções específicas (adapte conforme suas necessidades)
+  
+  // Buscar hospitais do projeto externo
+  async getHospitais() {
+    return this.getFromTable('hospitais', {
+      order: 'nome'
+    })
+  },
+
+  // Buscar usuários do projeto externo
+  async getUsuarios() {
+    return this.getFromTable('usuarios', {
+      order: 'nome'
+    })
+  },
+
+  // Buscar médicos do projeto externo
+  async getMedicosExternos() {
+    return this.getFromTable('medicos', {
+      order: 'nome'
+    })
+  },
+
+  // Buscar procedimentos do projeto externo
+  async getProcedimentosExternos() {
+    return this.getFromTable('procedimentos', {
+      order: 'nome'
+    })
+  },
+
+  // Buscar agendamentos do projeto externo
+  async getAgendamentosExternos() {
+    return this.getFromTable('agendamentos', {
+      order: 'data_agendamento'
+    })
+  },
+
+  // Buscar procedimentos SIGTAP
+  async getSigtapProcedures() {
+    return this.getFromTable('sigtap_procedures', {
+      order: 'code'
+    })
+  },
+
+  // Buscar códigos únicos da tabela SIGTAP
+  async getSigtapUniquesCodes() {
+    try {
+      console.log('🔄 Buscando códigos únicos SIGTAP...')
+      
+      const { data, error } = await externalSupabase
+        .from('sigtap_procedures')
+        .select('code')
+        .order('code')
+      
+      if (error) {
+        console.error('❌ Erro ao buscar códigos SIGTAP:', error)
+        throw new Error(`Erro ao buscar códigos: ${error.message}`)
+      }
+      
+      if (!data || !Array.isArray(data)) {
+        console.warn('⚠️ Nenhum dado retornado da tabela sigtap_procedures')
+        return []
+      }
+      
+      // Filtrar códigos únicos
+      const uniqueCodes = [...new Set(data.map(item => item.code).filter(code => code))]
+      
+      console.log('✅ Códigos SIGTAP únicos encontrados:', uniqueCodes.length)
+      return uniqueCodes
+    } catch (error) {
+      console.error('❌ Erro ao buscar códigos únicos SIGTAP:', error)
+      throw error
+    }
+  },
+
+  // Buscar procedimento SIGTAP completo por código
+  async getSigtapProcedureByCode(code: string) {
+    try {
+      const { data, error } = await externalSupabase
+        .from('sigtap_procedures')
+        .select('*')
+        .eq('code', code)
+        .limit(1)
+        .single()
+      
+      if (error) {
+        console.error(`Erro ao buscar procedimento SIGTAP ${code}:`, error)
+        throw new Error(error.message)
+      }
+      
+      console.log(`✅ Procedimento SIGTAP ${code} encontrado`)
+      return data
+    } catch (error) {
+      console.error(`Erro ao buscar procedimento SIGTAP ${code}:`, error)
+      throw error
+    }
+  },
+
+  // Buscar tabela completa SIGTAP com códigos únicos (OTIMIZADO PARA +100K REGISTROS)
+  async getSigtapCompleteTable(options?: {
+    page?: number
+    pageSize?: number
+    searchTerm?: string
+  }) {
+    try {
+      const { page = 1, pageSize = 100, searchTerm } = options || {}
+      console.log(`🔄 Buscando registros únicos SIGTAP - Página ${page}, Tamanho: ${pageSize}`)
+      console.log(`📊 Base de dados: +100k registros, buscando ~4900 únicos por código`)
+      
+      // USAR MÉTODO MANUAL COMO PADRÃO (mais confiável para grandes volumes)
+      console.log('🔧 Usando método manual otimizado como padrão')
+      return await this.getSigtapUniqueManual(options)
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar tabela SIGTAP:', error)
+      throw error
+    }
+  },
+
+  // Método manual otimizado para garantir registros únicos
+  async getSigtapUniqueManual(options?: {
+    page?: number
+    pageSize?: number
+    searchTerm?: string
+  }) {
+    try {
+      const { page = 1, pageSize = 50, searchTerm } = options || {}
+      console.log('🔄 Usando método manual otimizado para registros únicos...')
+      
+      // ETAPA 1: Buscar TODOS os códigos únicos em lotes para não ter limitação
+      console.log('📊 Etapa 1: Carregando todos os códigos únicos...')
+      
+      let allCodes = []
+      let currentPage = 0
+      let hasMore = true
+      const batchSize = 1000 // Buscar em lotes de 1000
+      
+      while (hasMore) {
+        let codesQuery = externalSupabase
+          .from('sigtap_procedures')
+          .select('code')
+          .order('code')
+          .range(currentPage * batchSize, (currentPage + 1) * batchSize - 1)
+        
+        if (searchTerm && searchTerm.trim()) {
+          const term = `%${searchTerm.trim()}%`
+          codesQuery = codesQuery.or(`code.ilike.${term},name.ilike.${term},description.ilike.${term}`)
+        }
+        
+        const { data: codesData, error: codesError } = await codesQuery
+        
+        if (codesError) {
+          console.error('❌ Erro ao buscar códigos lote', currentPage, ':', codesError)
+          break
+        }
+        
+        if (!codesData || codesData.length === 0) {
+          hasMore = false
+          break
+        }
+        
+        allCodes = [...allCodes, ...codesData]
+        currentPage++
+        
+        console.log(`📦 Lote ${currentPage} carregado: ${codesData.length} códigos (total: ${allCodes.length})`)
+        
+        // Se retornou menos que o batch size, não há mais dados
+        if (codesData.length < batchSize) {
+          hasMore = false
+        }
+        
+        // Limite de segurança para evitar loops infinitos
+        if (currentPage > 200) { // Máximo 200k registros
+          console.warn('⚠️ Limite de segurança atingido, parando busca')
+          hasMore = false
+        }
+      }
+      
+      // ETAPA 2: Extrair códigos únicos
+      const uniqueCodes = [...new Set(allCodes.map(item => item.code).filter(code => code && code.trim()))]
+      console.log('✅ Total de códigos únicos encontrados:', uniqueCodes.length)
+      console.log('📊 Amostra de códigos:', uniqueCodes.slice(0, 10))
+      
+      // ETAPA 3: Aplicar paginação nos códigos únicos
+      const from = (page - 1) * pageSize
+      const to = from + pageSize
+      const pageCodes = uniqueCodes.slice(from, to)
+      
+      console.log(`📄 Página ${page}: Buscando registros para ${pageCodes.length} códigos únicos`)
+      
+      // ETAPA 4: Buscar o registro mais recente de cada código da página
+      const promises = pageCodes.map(async (code, index) => {
+        try {
+          const { data, error } = await externalSupabase
+            .from('sigtap_procedures')
+            .select('*')
+            .eq('code', code)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+          
+          if (error) {
+            console.warn(`⚠️ Erro no código ${code} (${index + 1}/${pageCodes.length}):`, error.message)
+            return null
+          }
+          
+          if (index % 5 === 0 && index > 0) {
+            console.log(`🔄 Progresso: ${index + 1}/${pageCodes.length} códigos processados`)
+          }
+          
+          return data
+        } catch (err) {
+          console.warn(`⚠️ Exceção no código ${code}:`, err)
+          return null
+        }
+      })
+      
+      const results = await Promise.all(promises)
+      const validResults = results.filter(item => item !== null)
+      
+      console.log(`✅ Método manual concluído:`)
+      console.log(`   📊 Códigos únicos totais: ${uniqueCodes.length}`)
+      console.log(`   📄 Registros da página ${page}: ${validResults.length}`)
+      console.log(`   🎯 Taxa de sucesso: ${((validResults.length / pageCodes.length) * 100).toFixed(1)}%`)
+      
+      return {
+        data: validResults,
+        totalCount: uniqueCodes.length,
+        page,
+        pageSize,
+        totalPages: Math.ceil(uniqueCodes.length / pageSize)
+      }
+    } catch (error) {
+      console.error('❌ Erro no método manual otimizado:', error)
+      throw error
+    }
+  },
+
+  // Função auxiliar para remover duplicatas por código
+  removeDuplicatesByCode(data: any[]) {
+    const seen = new Set()
+    return data.filter(item => {
+      if (seen.has(item.code)) {
+        return false
+      }
+      seen.add(item.code)
+      return true
+    })
+  },
+
+  // Buscar contagem total de códigos únicos (OTIMIZADO)
+  async getSigtapTotalUniqueCount() {
+    try {
+      console.log('🔄 Contando códigos únicos SIGTAP (método otimizado)...')
+      
+      // Buscar TODOS os códigos em lotes para não ter limitação
+      let allCodes = []
+      let currentPage = 0
+      let hasMore = true
+      const batchSize = 1000
+      
+      while (hasMore) {
+        const { data, error } = await externalSupabase
+          .from('sigtap_procedures')
+          .select('code')
+          .order('code')
+          .range(currentPage * batchSize, (currentPage + 1) * batchSize - 1)
+        
+        if (error) {
+          console.error('❌ Erro ao contar códigos lote', currentPage, ':', error)
+          break
+        }
+        
+        if (!data || data.length === 0) {
+          hasMore = false
+          break
+        }
+        
+        allCodes = [...allCodes, ...data]
+        currentPage++
+        
+        console.log(`📦 Contagem lote ${currentPage}: ${data.length} códigos (total: ${allCodes.length})`)
+        
+        if (data.length < batchSize) {
+          hasMore = false
+        }
+        
+        // Limite de segurança
+        if (currentPage > 200) {
+          console.warn('⚠️ Limite de segurança atingido na contagem')
+          hasMore = false
+        }
+      }
+      
+      // Contar únicos
+      const uniqueCodes = [...new Set(allCodes.map(item => item.code).filter(code => code && code.trim()))]
+      const count = uniqueCodes.length
+      
+      console.log('✅ Total de códigos únicos SIGTAP:', count)
+      console.log('📊 Total de registros processados:', allCodes.length)
+      console.log('🎯 Taxa de duplicação:', ((allCodes.length - count) / allCodes.length * 100).toFixed(1) + '%')
+      
+      return count
+    } catch (error) {
+      console.error('❌ Erro ao contar códigos únicos:', error)
+      throw error
+    }
+  },
+
+  // Versão antiga mantida para compatibilidade
+  async getSigtapCompleteTableLegacy() {
+    try {
+      console.log('🔄 Buscando tabela completa SIGTAP (método legado)...')
+      
+      // Primeiro buscar códigos únicos
+      const uniqueCodes = await this.getSigtapUniquesCodes()
+      console.log('📊 Códigos únicos encontrados:', uniqueCodes.length)
+      
+      // Limitar a 100 códigos por vez para evitar sobrecarga
+      const batchSize = 50
+      const batches = []
+      
+      for (let i = 0; i < uniqueCodes.length; i += batchSize) {
+        batches.push(uniqueCodes.slice(i, i + batchSize))
+      }
+      
+      console.log(`📦 Processando ${batches.length} lotes de ${batchSize} códigos cada`)
+      
+      let allResults = []
+      
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex]
+        console.log(`🔄 Processando lote ${batchIndex + 1}/${batches.length}`)
+        
+        const promises = batch.map(code => 
+          externalSupabase
+            .from('sigtap_procedures')
+            .select('*')
+            .eq('code', code)
+            .limit(1)
+            .single()
+            .then(({ data, error }) => {
+              if (error) {
+                console.warn(`⚠️ Erro no código ${code}:`, error.message)
+                return null
+              }
+              return data
+            })
+        )
+        
+        const batchResults = await Promise.all(promises)
+        const validResults = batchResults.filter(item => item !== null)
+        allResults = [...allResults, ...validResults]
+        
+        // Pequena pausa entre lotes para não sobrecarregar
+        if (batchIndex < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+      
+      console.log('✅ Tabela SIGTAP completa carregada (legado):', allResults.length, 'registros únicos')
+      return allResults
+    } catch (error) {
+      console.error('❌ Erro ao carregar tabela SIGTAP completa (legado):', error)
+      throw error
+    }
+  },
+
+  // Função para buscar dados específicos por ID
+  async getById(tableName: string, id: string) {
+    try {
+      const { data, error } = await externalSupabase
+        .from(tableName)
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (error) throw new Error(error.message)
+      return data
+    } catch (error) {
+      console.error(`Erro ao buscar ${tableName} por ID:`, error)
+      throw error
+    }
+  },
+
+  // Função para buscar dados com filtros personalizados
+  async getWithCustomFilter(tableName: string, customQuery: (query: any) => any) {
+    try {
+      let query = externalSupabase.from(tableName).select('*')
+      query = customQuery(query)
+      
+      const { data, error } = await query
+      if (error) throw new Error(error.message)
+      
+      return data || []
+    } catch (error) {
+      console.error(`Erro ao buscar ${tableName} com filtro customizado:`, error)
+      throw error
+    }
+  }
+}
+
+// ============================================
+// FUNÇÕES UTILITÁRIAS
+// ============================================
+
+// Função para sincronizar dados entre os dois projetos (se necessário)
+export const syncDataBetweenProjects = {
+  // Exemplo: copiar hospitais do projeto externo para o atual
+  async syncHospitais() {
+    try {
+      const hospitaisExternos = await externalDataService.getHospitais()
+      console.log('Hospitais encontrados no projeto externo:', hospitaisExternos.length)
+      
+      // Aqui você pode implementar a lógica para sincronizar os dados
+      // com o projeto atual, se necessário
+      
+      return hospitaisExternos
+    } catch (error) {
+      console.error('Erro ao sincronizar hospitais:', error)
+      throw error
+    }
+  }
+}
+
+// ============================================
+// EXPORT DEFAULT
+// ============================================
+export default externalDataService

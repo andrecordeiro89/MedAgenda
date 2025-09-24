@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
 import ManagementView from './components/ManagementView';
+import ExternalDataView from './components/ExternalDataView';
 import { 
   AuthProvider, 
   useAuth, 
@@ -204,6 +205,8 @@ const AppContent: React.FC = () => {
                         onRefresh={() => loadData(false)}
                     />
                 );
+            case 'external':
+                return <ExternalDataView />;
             default:
                 return <div>View não encontrada</div>;
         }
