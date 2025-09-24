@@ -286,20 +286,76 @@ const SigtapProceduresView: React.FC = () => {
                     {/* Linha de Detalhes Expandida */}
                     {showDetails === (procedure.id || procedure.code || index.toString()) && (
                       <tr className="bg-slate-50">
-                        <td colSpan={3} className="py-4 px-2">
-                          <div className="bg-white rounded-lg p-4 border border-slate-200">
-                            <h4 className="font-medium text-slate-800 mb-3">Detalhes Completos</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                              {Object.entries(procedure).map(([key, value]) => (
-                                <div key={key} className="flex flex-col">
-                                  <span className="font-medium text-slate-600 capitalize">
-                                    {key.replace(/_/g, ' ')}:
-                                  </span>
-                                  <span className="text-slate-800 mt-1">
-                                    {value !== null && value !== undefined ? String(value) : 'N/A'}
-                                  </span>
-                                </div>
-                              ))}
+                        <td colSpan={3} className="py-4 px-4">
+                          <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-blue-500">
+                            {/* Cabeçalho Minimalista */}
+                            <div className="mb-4 pb-3 border-b border-slate-200">
+                              <h4 className="text-base font-medium text-slate-700">Detalhes do Procedimento</h4>
+                            </div>
+
+                            {/* Grid de Detalhes em 3 Colunas */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {Object.entries(procedure)
+                                .filter(([key]) => key !== 'id' && key !== 'version_id') // Ocultar campos técnicos
+                                .map(([key, value]) => {
+                                  // Traduzir labels para português
+                                  const getPortugueseLabel = (key: string) => {
+                                    const translations: { [key: string]: string } = {
+                                      'code': 'Código',
+                                      'description': 'Descrição',
+                                      'name': 'Nome',
+                                      'complexity': 'Complexidade',
+                                      'value': 'Valor',
+                                      'created_at': 'Data de Criação',
+                                      'updated_at': 'Última Atualização',
+                                      'category': 'Categoria',
+                                      'subcategory': 'Subcategoria',
+                                      'type': 'Tipo',
+                                      'status': 'Status',
+                                      'active': 'Ativo',
+                                      'specialty': 'Especialidade',
+                                      'procedure_type': 'Tipo de Procedimento',
+                                      'authorization': 'Autorização',
+                                      'classification': 'Classificação'
+                                    }
+                                    return translations[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                  }
+
+                                  // Formatar valores especiais
+                                  const formatValue = (key: string, value: any) => {
+                                    if (value === null || value === undefined || value === '') return 'Não informado'
+                                    
+                                    // Formatação específica por tipo de campo
+                                    if (key === 'value' && typeof value === 'number') {
+                                      return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                    }
+                                    
+                                    if (key === 'created_at' || key === 'updated_at') {
+                                      try {
+                                        return new Date(value).toLocaleString('pt-BR')
+                                      } catch {
+                                        return String(value)
+                                      }
+                                    }
+                                    
+                                    if (typeof value === 'boolean') {
+                                      return value ? 'Sim' : 'Não'
+                                    }
+                                    
+                                    return String(value)
+                                  }
+
+                                  return (
+                                    <div key={key} className="flex flex-col space-y-1">
+                                      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                                        {getPortugueseLabel(key)}
+                                      </span>
+                                      <span className="text-sm text-slate-800 break-words leading-relaxed">
+                                        {formatValue(key, value)}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
                             </div>
                           </div>
                         </td>
