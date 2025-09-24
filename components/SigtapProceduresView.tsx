@@ -49,6 +49,40 @@ const SigtapProceduresView: React.FC = () => {
   const [localSearchTerm, setLocalSearchTerm] = useState('')
   const [showDetails, setShowDetails] = useState<string | null>(null)
 
+  // Função para formatar valores monetários
+  const formatCurrency = (value: number | string): string => {
+    const numericValue = parseFloat(String(value))
+    if (isNaN(numericValue)) return 'R$ 0,00'
+    
+    // Valores do SIGTAP estão em centavos, dividir por 100
+    const realValue = numericValue / 100
+    return `R$ ${realValue.toLocaleString('pt-BR', { 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    })}`
+  }
+
+  // Debug: mostrar estrutura dos dados quando carregados
+  useEffect(() => {
+    if (procedures.length > 0) {
+      console.log('📊 Estrutura dos dados SIGTAP:')
+      console.log('🔑 Campos disponíveis:', Object.keys(procedures[0]))
+      console.log('📝 Primeiro procedimento:', procedures[0])
+      
+      // Buscar campos que podem conter valores monetários
+      const firstProcedure = procedures[0]
+      const valueFields = Object.keys(firstProcedure).filter(key => 
+        key.toLowerCase().includes('value') || 
+        key.toLowerCase().includes('valor') ||
+        key.toLowerCase().includes('hosp') ||
+        key.toLowerCase().includes('prof') ||
+        key.toLowerCase().includes('price') ||
+        key.toLowerCase().includes('cost')
+      )
+      console.log('💰 Campos de valor encontrados:', valueFields)
+    }
+  }, [procedures])
+
   // Busca instantânea com debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -247,6 +281,9 @@ const SigtapProceduresView: React.FC = () => {
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-3 px-2 font-medium text-slate-700 w-32">Código</th>
                   <th className="text-left py-3 px-2 font-medium text-slate-700">Descrição</th>
+                  <th className="text-right py-3 px-2 font-medium text-slate-700 w-24">Valor Hosp</th>
+                  <th className="text-right py-3 px-2 font-medium text-slate-700 w-24">Valor Prof</th>
+                  <th className="text-right py-3 px-2 font-medium text-slate-700 w-24">Valor Total</th>
                   <th className="text-center py-3 px-2 font-medium text-slate-700 w-20">Detalhes</th>
                 </tr>
               </thead>
@@ -263,6 +300,24 @@ const SigtapProceduresView: React.FC = () => {
                         <div className="truncate" title={procedure.description}>
                           {procedure.description || 'Sem descrição'}
                         </div>
+                      </td>
+                      <td className="py-3 px-2 text-right w-24">
+                        <span className="text-slate-600 font-medium">
+                          {formatCurrency(procedure.valor_hospitalar || procedure.value_hosp || procedure.hosp_value || 0)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-right w-24">
+                        <span className="text-slate-600 font-medium">
+                          {formatCurrency(procedure.valor_profissional || procedure.value_prof || procedure.prof_value || 0)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-right w-24">
+                        <span className="text-slate-700 font-semibold">
+                          {formatCurrency(
+                            (procedure.valor_hospitalar || procedure.value_hosp || procedure.hosp_value || 0) + 
+                            (procedure.valor_profissional || procedure.value_prof || procedure.prof_value || 0)
+                          )}
+                        </span>
                       </td>
                       <td className="py-3 px-2 text-center w-20">
                         <button
@@ -285,9 +340,9 @@ const SigtapProceduresView: React.FC = () => {
                     
                     {/* Linha de Detalhes Expandida */}
                     {showDetails === (procedure.id || procedure.code || index.toString()) && (
-                      <tr className="bg-slate-50">
-                        <td colSpan={3} className="py-4 px-4">
-                          <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-blue-500">
+                      <tr className="bg-white">
+                        <td colSpan={6} className="py-4 px-4">
+                          <div className="bg-white rounded-lg p-4 border-l-4 border-blue-500">
                             {/* Cabeçalho Minimalista */}
                             <div className="mb-4 pb-3 border-b border-slate-200">
                               <h4 className="text-base font-medium text-slate-700">Detalhes do Procedimento</h4>
@@ -325,9 +380,34 @@ const SigtapProceduresView: React.FC = () => {
                                   const formatValue = (key: string, value: any) => {
                                     if (value === null || value === undefined || value === '') return 'Não informado'
                                     
-                                    // Formatação específica por tipo de campo
-                                    if (key === 'value' && typeof value === 'number') {
-                                      return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                    // Formatação para campos monetários (qualquer campo com 'value' no nome)
+                                    if (key.toLowerCase().includes('value') || key.toLowerCase().includes('valor')) {
+                                      const numericValue = parseFloat(value)
+                                      if (!isNaN(numericValue)) {
+                                        // Valores do SIGTAP geralmente estão em centavos, então dividimos por 100
+                                        const realValue = numericValue / 100
+                                        return `R$ ${realValue.toLocaleString('pt-BR', { 
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2 
+                                        })}`
+                                      }
+                                    }
+                                    
+                                    // Formatação para campos de preço/custo
+                                    if (key.toLowerCase().includes('price') || 
+                                        key.toLowerCase().includes('cost') || 
+                                        key.toLowerCase().includes('amount') ||
+                                        key.toLowerCase().includes('preco') ||
+                                        key.toLowerCase().includes('custo')) {
+                                      const numericValue = parseFloat(value)
+                                      if (!isNaN(numericValue)) {
+                                        // Também dividir por 100 para outros campos monetários
+                                        const realValue = numericValue / 100
+                                        return `R$ ${realValue.toLocaleString('pt-BR', { 
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2 
+                                        })}`
+                                      }
                                     }
                                     
                                     if (key === 'created_at' || key === 'updated_at') {
