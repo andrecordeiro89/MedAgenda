@@ -25,6 +25,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
 
   const getMedicoName = (id: string) => medicos.find(m => m.id === id)?.nome || 'N/A';
   const getProcedimentoName = (id: string) => procedimentos.find(p => p.id === id)?.nome || 'N/A';
+  
+  // Função para obter o tipo correto do agendamento baseado no procedimento
+  const getAgendamentoTipo = (agendamento: Agendamento) => {
+    const procedimento = procedimentos.find(p => p.id === agendamento.procedimentoId);
+    return procedimento?.tipo || agendamento.tipo || 'ambulatorial';
+  };
 
   const handleDayClick = (day: number) => {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
@@ -59,8 +65,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
       >
         <div className={`flex justify-center items-center w-8 h-8 rounded-full ${isToday ? 'bg-primary text-white' : ''}`}>{day}</div>
         <div className="flex flex-wrap gap-1 mt-2 justify-center">
-            {dayAppointments.some(a => a.tipo === 'ambulatorial') && <div className="w-2 h-2 rounded-full bg-blue-500" title="Ambulatorial"></div>}
-            {dayAppointments.some(a => a.tipo === 'cirurgico') && <div className="w-2 h-2 rounded-full bg-red-500" title="Cirúrgico"></div>}
+            {dayAppointments.some(a => getAgendamentoTipo(a) === 'ambulatorial') && <div className="w-2 h-2 rounded-full bg-blue-500" title="Ambulatorial"></div>}
+            {dayAppointments.some(a => getAgendamentoTipo(a) === 'cirurgico') && <div className="w-2 h-2 rounded-full bg-red-500" title="Cirúrgico"></div>}
             {dayAppointments.some(a => a.statusLiberacao === 'v') && <div className="w-2 h-2 rounded-full bg-green-500" title="Liberado"></div>}
             {dayAppointments.some(a => a.statusLiberacao === 'x') && <div className="w-2 h-2 rounded-full bg-orange-500" title="Pendente"></div>}
         </div>

@@ -24,6 +24,22 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
         { view: 'management' as View, label: 'Gerenciamento', icon: <ListIcon className="w-5 h-5"/> }
     ];
 
+    const handleNewAppointment = () => {
+        onViewChange('management');
+        // Garantir que a aba agendamentos seja selecionada e abrir modal
+        setTimeout(() => {
+            // Primeiro clicar na aba agendamentos
+            const agendamentosTab = document.querySelector('[data-tab="agendamentos"]') as HTMLButtonElement;
+            if (agendamentosTab) agendamentosTab.click();
+            
+            // Depois clicar no botão novo
+            setTimeout(() => {
+                const newButton = document.querySelector('[data-new-appointment="true"]') as HTMLButtonElement;
+                if (newButton) newButton.click();
+            }, 50);
+        }, 100);
+    };
+
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Barra unificada colorida */}
@@ -54,6 +70,17 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     <span className="ml-2">{link.label}</span>
                                 </button>
                             ))}
+                            
+                            {/* Botão Novo Agendamento */}
+                            <button 
+                                onClick={handleNewAppointment}
+                                className="flex items-center px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 text-sm font-medium bg-white/10 text-white hover:bg-white/20 border border-white/20 hover:border-white/40 ml-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                <span className="ml-2">Novo Agendamento</span>
+                            </button>
                         </nav>
 
                         {/* Usuário, Hospital e botão sair - lado direito */}
@@ -106,6 +133,17 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                 <span className="ml-3">{link.label}</span>
                             </button>
                         ))}
+                        
+                        {/* Botão Novo Agendamento - Mobile */}
+                        <button 
+                            onClick={handleNewAppointment}
+                            className="flex items-center px-3 py-3 rounded-lg cursor-pointer transition-colors duration-200 text-base font-medium bg-white/10 text-white hover:bg-white/20 border border-white/20 hover:border-white/40 mt-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                            </svg>
+                            <span className="ml-3">Novo Agendamento</span>
+                        </button>
                         
                         {/* Usuário, Hospital e sair no mobile */}
                         <div className="border-t border-white/20 pt-4 mt-2">

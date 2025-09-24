@@ -79,6 +79,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const TabButton: React.FC<{ tab: ManagementTab; label: string }> = ({ tab, label }) => (
     <button
       onClick={() => setActiveTab(tab)}
+      data-tab={tab}
       className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
         activeTab === tab
           ? 'bg-white border-b-2 border-primary text-primary'
@@ -93,7 +94,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-slate-800">Gerenciamento</h2>
-        <Button onClick={() => openModal()}>
+        <Button onClick={() => openModal()} data-new-appointment={activeTab === 'agendamentos' ? 'true' : undefined}>
           <PlusIcon className="w-5 h-5"/>
           Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
         </Button>
