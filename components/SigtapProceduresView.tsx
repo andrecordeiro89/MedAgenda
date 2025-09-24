@@ -52,13 +52,15 @@ const SigtapProceduresView: React.FC = () => {
   // Busca instantânea com debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
+      console.log(`🔍 Debounce: localSearchTerm="${localSearchTerm}", hookSearchTerm="${hookSearchTerm}"`)
       if (localSearchTerm !== hookSearchTerm) {
+        console.log(`🚀 Executando busca: "${localSearchTerm}"`)
         searchProcedures(localSearchTerm)
       }
     }, 500) // 500ms de delay para evitar muitas requisições
 
     return () => clearTimeout(timeoutId)
-  }, [localSearchTerm]) // Executa quando localSearchTerm muda
+  }, [localSearchTerm, hookSearchTerm, searchProcedures]) // Incluir dependências necessárias
 
   const toggleDetails = (procedureId: string) => {
     setShowDetails(showDetails === procedureId ? null : procedureId)
