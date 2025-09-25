@@ -475,9 +475,18 @@ export const externalDataService = {
     page?: number
     pageSize?: number
     searchTerm?: string
+    onProgress?: (progress: { current: number; total: number; percentage: number; message?: string }) => void
   }) {
     try {
-      const { page = 1, pageSize = 50, searchTerm } = options || {}
+      const { page = 1, pageSize = 50, searchTerm, onProgress } = options || {}
+
+      // Callback de progresso inicial
+      onProgress?.({
+        current: 0,
+        total: 100,
+        percentage: 0,
+        message: 'Iniciando carregamento dos procedimentos mais usados...'
+      })
 
       // 1) Carregar TODOS os códigos únicos (sem filtros específicos)
       // Aplicamos apenas o searchTerm se fornecido
@@ -485,6 +494,13 @@ export const externalDataService = {
       let currentPage = 0
       let hasMore = true
       const batchSize = 1000
+
+      onProgress?.({
+        current: 10,
+        total: 100,
+        percentage: 10,
+        message: 'Buscando códigos únicos...'
+      })
 
       while (hasMore) {
         let q = externalSupabase
@@ -513,6 +529,15 @@ export const externalDataService = {
         allRows = allRows.concat(data as any)
         currentPage++
 
+        // Atualizar progresso durante a busca de códigos
+        const progressPercentage = Math.min(10 + (currentPage * 30 / 200), 40)
+        onProgress?.({
+          current: progressPercentage,
+          total: 100,
+          percentage: progressPercentage,
+          message: `Carregando lote ${currentPage} de códigos...`
+        })
+
         if (data.length < batchSize) {
           hasMore = false
         }
@@ -522,6 +547,13 @@ export const externalDataService = {
           hasMore = false
         }
       }
+
+      onProgress?.({
+        current: 50,
+        total: 100,
+        percentage: 50,
+        message: 'Processando códigos únicos...'
+      })
 
       // 2) Extrair códigos únicos não vazios e ordenar
       const uniqueCodes = [...new Set(
@@ -538,6 +570,13 @@ export const externalDataService = {
       const to = Math.min(from + pageSize, totalCount)
       const pageCodes = uniqueCodes.slice(from, to)
 
+      onProgress?.({
+        current: 60,
+        total: 100,
+        percentage: 60,
+        message: `Carregando detalhes dos procedimentos (${pageCodes.length} itens)...`
+      })
+
       // 4) Para cada código da página, buscar uma linha representativa (código + descrição + complexidade)
       const promises = pageCodes.map(async (code, index) => {
         try {
@@ -553,7 +592,15 @@ export const externalDataService = {
             return null
           }
 
+          // Atualizar progresso durante o carregamento dos detalhes
           if (index % 10 === 0 && index > 0) {
+            const detailProgress = 60 + ((index / pageCodes.length) * 35)
+            onProgress?.({
+              current: detailProgress,
+              total: 100,
+              percentage: detailProgress,
+              message: `Carregando detalhes: ${index + 1}/${pageCodes.length} procedimentos`
+            })
             console.log(`🔄 procedure_records: ${index + 1}/${pageCodes.length} registros carregados`)
           }
 
@@ -565,6 +612,14 @@ export const externalDataService = {
       })
 
       const pageResults = (await Promise.all(promises)).filter(Boolean) as { codigo_procedimento_original: string; procedure_description: string; complexity?: string }[]
+
+      // Progresso final
+      onProgress?.({
+        current: 100,
+        total: 100,
+        percentage: 100,
+        message: `Carregamento concluído! ${pageResults.length} procedimentos carregados.`
+      })
 
       console.log(`✅ Página ${page} concluída. Itens: ${pageResults.length} / ${pageCodes.length}. Total únicos: ${totalCount}`)
 
@@ -730,6 +785,120 @@ export const externalDataService = {
       console.error(`Erro ao buscar ${tableName} com filtro customizado:`, error)
       throw error
     }
+  },
+
+  // ================= NOVA FUNÇÃO PARA VIRTUALIZAÇÃO SIGTAP =================
+  // Carregar TODOS os procedimentos SIGTAP únicos de uma vez (para virtualização)
+  async getAllSigtapProceduresUnique(onProgress?: (progress: { current: number; total: number; percentage: number; message?: string }) => void) {
+    try {
+      console.log('🚀 Iniciando carregamento completo de procedimentos SIGTAP únicos...')
+      const startTime = Date.now()
+      
+      // Primeiro, buscar todos os códigos únicos
+      console.log('📋 Buscando códigos únicos...')
+      onProgress?.({ current: 0, total: 100, percentage: 5, message: 'Buscando códigos únicos...' })
+      
+      const uniqueCodes = await this.getSigtapUniquesCodes()
+      
+      if (!uniqueCodes || uniqueCodes.length === 0) {
+        console.log('⚠️ Nenhum código único encontrado')
+        return []
+      }
+      
+      console.log(`📊 Total de códigos únicos encontrados: ${uniqueCodes.length}`)
+      onProgress?.({ current: 0, total: uniqueCodes.length, percentage: 10, message: `Carregando ${uniqueCodes.length} procedimentos...` })
+      
+      // Dividir em lotes para evitar sobrecarga
+      const batchSize = 50
+      const batches = []
+      for (let i = 0; i < uniqueCodes.length; i += batchSize) {
+        batches.push(uniqueCodes.slice(i, i + batchSize))
+      }
+      
+      console.log(`📦 Dividido em ${batches.length} lotes de até ${batchSize} códigos cada`)
+      
+      // Limite de segurança
+      const maxBatches = 200
+      if (batches.length > maxBatches) {
+        console.warn(`⚠️ Limitando a ${maxBatches} lotes por segurança (de ${batches.length} total)`)
+        batches.splice(maxBatches)
+      }
+      
+      let allResults = []
+      
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex]
+        console.log(`🔄 Processando lote ${batchIndex + 1}/${batches.length} (${batch.length} códigos)`)
+        
+        const promises = batch.map(async (code, index) => {
+          try {
+            const { data, error } = await externalSupabase
+              .from('sigtap_procedures')
+              .select('*')
+              .eq('code', code)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single()
+            
+            if (error) {
+              console.warn(`⚠️ Erro no código ${code}:`, error.message)
+              return null
+            }
+            
+            return data
+          } catch (err) {
+            console.warn(`⚠️ Exceção no código ${code}:`, err)
+            return null
+          }
+        })
+        
+        const batchResults = await Promise.all(promises)
+        const validResults = batchResults.filter(item => item !== null)
+        allResults = [...allResults, ...validResults]
+        
+        // Calcular progresso
+        const currentProgress = batchIndex + 1
+        const totalBatches = batches.length
+        const percentage = Math.round((currentProgress / totalBatches) * 100)
+        
+        // Log de progresso
+        console.log(`📈 Progresso: ${percentage}% - ${allResults.length} registros carregados`)
+        
+        // Callback de progresso
+        onProgress?.({
+          current: allResults.length,
+          total: uniqueCodes.length,
+          percentage,
+          message: `Carregando lote ${currentProgress}/${totalBatches}...`
+        })
+        
+        // Pequena pausa entre lotes para não sobrecarregar
+        if (batchIndex < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+      
+      const endTime = Date.now()
+      const duration = (endTime - startTime) / 1000
+      
+      console.log('🎉 Carregamento completo finalizado!')
+      console.log(`   📊 Total de registros únicos: ${allResults.length}`)
+      console.log(`   ⏱️ Tempo total: ${duration.toFixed(2)}s`)
+      console.log(`   🚀 Velocidade: ${(allResults.length / duration).toFixed(1)} registros/s`)
+      
+      // Progresso final
+      onProgress?.({
+        current: allResults.length,
+        total: allResults.length,
+        percentage: 100,
+        message: 'Carregamento concluído!'
+      })
+      
+      return allResults
+    } catch (error) {
+      console.error('❌ Erro ao carregar todos os procedimentos SIGTAP únicos:', error)
+      throw error
+    }
   }
 }
 
@@ -738,7 +907,7 @@ export const externalDataService = {
 // ============================================
 
 // Função para sincronizar dados entre os dois projetos (se necessário)
-export const syncDataBetweenProjects = {
+export const syncDataService = {
   // Exemplo: copiar hospitais do projeto externo para o atual
   async syncHospitais() {
     try {
@@ -747,6 +916,59 @@ export const syncDataBetweenProjects = {
       
       // Aqui você pode implementar a lógica para sincronizar os dados
       // com o projeto atual, se necessário
+      
+      return hospitaisExternos
+    } catch (error) {
+      console.error('Erro ao sincronizar hospitais:', error)
+      throw error
+    }
+  },
+
+  // Nova função para carregar todos os dados SIGTAP únicos de uma vez
+  async getAllSigtapProceduresUnique() {
+    try {
+      console.log('🔄 Carregando TODOS os procedimentos SIGTAP únicos...')
+      
+      // Carregar todos os dados de uma vez
+      const { data: allData, error } = await externalSupabase
+        .from('sigtap_procedures')
+        .select('*')
+        .order('code', { ascending: true })
+      
+      if (error) {
+        console.error('❌ Erro ao carregar dados SIGTAP:', error)
+        throw new Error(`Erro Supabase: ${error.message}`)
+      }
+      
+      if (!Array.isArray(allData)) {
+        throw new Error('Dados inválidos retornados')
+      }
+      
+      console.log(`📊 Total de registros carregados: ${allData.length}`)
+      
+      // Remover duplicatas baseado no código
+      const uniqueData = allData.filter((item, index, array) => 
+        array.findIndex(i => i.code === item.code) === index
+      )
+      
+      console.log(`✅ Procedimentos únicos: ${uniqueData.length} de ${allData.length} registros`)
+      console.log(`🎯 Taxa de duplicação: ${((allData.length - uniqueData.length) / allData.length * 100).toFixed(1)}%`)
+      
+      return uniqueData
+    } catch (error) {
+      console.error('❌ Erro ao carregar todos os procedimentos SIGTAP:', error)
+      throw error
+    }
+  }
+}
+
+// Função para sincronizar dados entre os dois projetos (se necessário)
+export const syncDataBetweenProjects = {
+  // Exemplo: copiar hospitais do projeto externo para o atual
+  async syncHospitais() {
+    try {
+      const hospitaisExternos = await externalDataService.getHospitais()
+      console.log('Hospitais encontrados no projeto externo:', hospitaisExternos.length)
       
       return hospitaisExternos
     } catch (error) {

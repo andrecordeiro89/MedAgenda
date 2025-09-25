@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { ProgressBar } from './ui';
 
 interface Column {
   key: string;
@@ -19,6 +20,17 @@ interface VirtualizedTableProps {
   currentPage?: number;
   onPageChange?: (page: number) => void;
   totalItems?: number;
+  expandedRows?: Set<string>;
+  onRowExpand?: (rowId: string) => void;
+  renderExpandedContent?: (row: any) => React.ReactNode;
+  expandedRowHeight?: number;
+  loading?: boolean;
+  progress?: {
+    current: number;
+    total: number;
+    percentage: number;
+    message?: string;
+  };
 }
 
 export const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
@@ -31,21 +43,45 @@ export const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
   pageSize = 50,
   currentPage = 1,
   onPageChange,
-  totalItems
+  totalItems,
+  expandedRows = new Set(),
+  onRowExpand,
+  renderExpandedContent,
+  expandedRowHeight = 200,
+  loading = false,
+  progress
 }) => {
   const parentRef = React.useRef<HTMLDivElement>(null);
 
   // Para paginação virtual, usar apenas os dados da página atual
   const displayData = useMemo(() => {
+    // Garantir que data é sempre um array
+    const safeData = Array.isArray(data) ? data : [];
+    
     if (showPagination && pageSize) {
       const startIndex = (currentPage - 1) * pageSize;
-      return data.slice(startIndex, startIndex + pageSize);
+      return safeData.slice(startIndex, startIndex + pageSize);
     }
-    return data;
+    return safeData;
   }, [data, showPagination, pageSize, currentPage]);
 
+  // Simplified virtual items - only data rows
+  const virtualItems = useMemo(() => {
+    // Garantir que displayData é sempre um array antes de usar map
+    if (!Array.isArray(displayData)) {
+      return [];
+    }
+    
+    return displayData.map((row, index) => ({
+      type: 'row' as const,
+      data: row,
+      id: row.id || row.code || index.toString(),
+      index
+    }));
+  }, [displayData]);
+
   const virtualizer = useVirtualizer({
-    count: displayData.length,
+    count: virtualItems.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => itemHeight,
     overscan: 5,
@@ -79,44 +115,92 @@ export const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
         className="overflow-auto"
         style={{ height: `${height}px` }}
       >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {items.map((virtualItem) => {
-            const row = displayData[virtualItem.index];
-            return (
-              <div
-                key={virtualItem.key}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualItem.size}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
+        {loading ? (
+          /* Loading State with Progress Bar */
+          <div className="p-8 text-center bg-white">
+            <div className="mb-6">
+              <ProgressBar 
+                progressInfo={{
+                  current: progress?.current || 0,
+                  total: progress?.total || data.length,
+                  percentage: progress?.percentage || 0,
+                  message: progress?.message || "Carregando dados..."
                 }}
-                className="border-b border-gray-100 hover:bg-gray-50"
-              >
-                <div className="grid gap-4 p-3 h-full items-center" style={{
-                  gridTemplateColumns: columns.map(col => col.width || '1fr').join(' ')
-                }}>
-                  {columns.map((column) => (
-                    <div key={column.key} className="text-sm text-gray-900 truncate">
-                      {column.render 
-                        ? column.render(row[column.key], row)
-                        : row[column.key] || '-'
-                      }
+                className="max-w-md mx-auto"
+                showPercentage={true}
+              />
+            </div>
+            <p className="text-slate-500 text-sm">
+              Aguarde enquanto os dados são carregados...
+            </p>
+          </div>
+        ) : (
+          /* Normal Table Content */
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {items.map((virtualItem) => {
+              const item = virtualItems[virtualItem.index];
+              const row = item.data;
+              const rowId = item.id;
+              const isExpanded = expandedRows.has(rowId);
+              
+              return (
+                <div key={virtualItem.key}>
+                  {/* Regular row */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualItem.size}px`,
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                    className="border-b border-gray-100 hover:bg-gray-50"
+                  >
+                    <div className="grid gap-4 p-3 h-full items-center" style={{
+                      gridTemplateColumns: columns.map(col => col.width || '1fr').join(' ')
+                    }}>
+                      {columns.map((column) => (
+                        <div key={column.key} className="text-sm text-gray-900 truncate">
+                          {column.render 
+                            ? column.render(row[column.key], row)
+                            : row[column.key] || '-'
+                          }
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                  
+                  {/* Expanded content - positioned after the row */}
+                  {isExpanded && renderExpandedContent && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${expandedRowHeight || 200}px`,
+                        transform: `translateY(${virtualItem.start + virtualItem.size}px)`,
+                        zIndex: 10,
+                      }}
+                      className="bg-gray-50 border-b border-gray-200 shadow-sm"
+                    >
+                      <div className="p-4">
+                        {renderExpandedContent(row)}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Footer with count and pagination */}

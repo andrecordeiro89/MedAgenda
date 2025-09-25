@@ -15,6 +15,7 @@ import {
 import { useAuth } from './PremiumLogin';
 import externalDataService from '../services/external-supabase';
 import { exportAllProceduresToExcel } from '../utils/excelExport';
+import { useDataCache } from '../contexts/DataCacheContext';
 
 type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap';
 
@@ -36,6 +37,16 @@ interface ExternalProcedureRecord {
 const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, onRefresh }) => {
   const { hospitalSelecionado } = useAuth();
   
+  // Hook do cache
+  const {
+    mostUsedProcedures,
+    setMostUsedProcedures,
+    setMostUsedLoading,
+    setMostUsedError,
+    setMostUsedProgress,
+    isCacheValid
+  } = useDataCache();
+  
   // Debug: verificar se especialidades estão chegando no ManagementView
   console.log('🏥 ManagementView - Especialidades recebidas:', especialidades?.length || 0, especialidades);
   const [activeTab, setActiveTab] = useState<ManagementTab>('agendamentos');
@@ -54,10 +65,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
   const [filtroDataFim, setFiltroDataFim] = useState<string>('');
   
-  // Procedimentos mais usados (externos)
-  const [mostUsedProcedures, setMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
-  const [loadingMostUsed, setLoadingMostUsed] = useState(false);
-  const [errorMostUsed, setErrorMostUsed] = useState<string | null>(null);
+  // Procedimentos mais usados (externos) - removidos pois agora usamos o cache
+  // const [mostUsedProcedures, setMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
+  // const [loadingMostUsed, setLoadingMostUsed] = useState(false);
+  // const [errorMostUsed, setErrorMostUsed] = useState<string | null>(null);
   const [rawMostUsedCount, setRawMostUsedCount] = useState<number>(0);
   // Paginação para procedimentos mais usados (únicos)
   const [mostUsedPage, setMostUsedPage] = useState<number>(1);
@@ -157,13 +168,21 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     ), [procedimentos, searchTerm, especialidades]);
   
   // Estado para armazenar TODOS os procedimentos únicos (para exportação)
-  const [allMostUsedProcedures, setAllMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
+  // Remover estado local que agora é gerenciado pelo cache
+  // const [allMostUsedProcedures, setAllMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
 
-  // Função para carregar TODOS os procedimentos únicos (sem paginação)
-  const loadAllMostUsedProcedures = async () => {
+  // Função para carregar TODOS os procedimentos únicos (sem paginação) com cache
+  const loadAllMostUsedProcedures = async (forceReload: boolean = false) => {
+    // Verificar se o cache é válido e não é um reload forçado
+    if (!forceReload && isCacheValid('mostUsed', 30)) {
+      console.log('📦 Usando dados de procedimentos mais usados do cache')
+      return
+    }
+
     try {
-      setLoadingMostUsed(true);
-      setErrorMostUsed(null);
+      setMostUsedLoading(true);
+      setMostUsedError(null);
+      setMostUsedProgress(undefined); // Reset progress
       console.log('🔍 Iniciando carregamento de todos os procedimentos únicos...');
       
       // Usar a função manual com um pageSize muito grande para pegar todos
@@ -172,33 +191,37 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         page: 1,
         pageSize: 10000, // Número grande para pegar todos os registros
         // searchTerm: undefined, // Removido para carregar todos os dados
+        onProgress: (progress: { current: number; total: number; percentage: number; message?: string }) => {
+          setMostUsedProgress(progress);
+        }
       });
       console.log('🔍 Dados carregados do servidor:', data?.length || 0);
       console.log('🔍 Primeiros 3 registros:', data?.slice(0, 3));
-      setAllMostUsedProcedures((data || []) as ExternalProcedureRecord[]);
+      setMostUsedProcedures((data || []) as ExternalProcedureRecord[]);
     } catch (e: any) {
       console.error('Erro ao carregar todos os procedimentos únicos:', e);
-      setErrorMostUsed(e?.message || 'Erro ao carregar procedimentos únicos');
+      setMostUsedError(e?.message || 'Erro ao carregar procedimentos únicos');
     } finally {
-      setLoadingMostUsed(false);
+      setMostUsedLoading(false);
+      setMostUsedProgress(undefined); // Clear progress when done
     }
   };
 
   // Filtro para TODOS os procedimentos únicos (para exportação)
   const allFilteredMostUsedProcedures = useMemo(() => {
-    if (!allMostUsedProcedures) return [];
+    if (!mostUsedProcedures.data) return [];
     
-    console.log('🔍 Debug filtro - allMostUsedProcedures:', allMostUsedProcedures.length);
+    console.log('🔍 Debug filtro - mostUsedProcedures.data:', mostUsedProcedures.data.length);
     console.log('🔍 Debug filtro - searchTerm:', searchTerm);
     console.log('🔍 Debug filtro - debouncedFilterCodigo:', debouncedFilterCodigo);
     
     // Se não há filtros, retorna todos os dados
     if (!debouncedFilterCodigo && !searchTerm) {
-      console.log('🔍 Sem filtros - retornando todos os dados:', allMostUsedProcedures.length);
-      return allMostUsedProcedures;
+      console.log('🔍 Sem filtros - retornando todos os dados:', mostUsedProcedures.data.length);
+      return mostUsedProcedures.data;
     }
     
-    const filtered = allMostUsedProcedures.filter(procedure => {
+    const filtered = mostUsedProcedures.data.filter(procedure => {
       // Filtro por código (sem pontos - busca por números sequenciais)
       const codigoMatch = !debouncedFilterCodigo || 
         procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(debouncedFilterCodigo.replace(/\./g, '').toLowerCase());
@@ -223,11 +246,11 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     
     console.log('🔍 Resultados filtrados:', filtered.length);
     return filtered;
-  }, [allMostUsedProcedures, debouncedFilterCodigo, searchTerm]);
+  }, [mostUsedProcedures.data, debouncedFilterCodigo, searchTerm]);
   const filteredMostUsedProcedures = useMemo(() => {
-    if (!mostUsedProcedures) return [];
+    if (!mostUsedProcedures.data) return [];
     
-    return mostUsedProcedures.filter(procedure => {
+    return mostUsedProcedures.data.filter(procedure => {
       // Filtro por código (sem pontos - busca por números sequenciais)
       const codigoMatch = debouncedFilterCodigo === '' || 
         procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(debouncedFilterCodigo.replace(/\./g, '').toLowerCase());
@@ -252,15 +275,15 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const handleExportToExcel = async () => {
     try {
       // Carregar todos os dados se ainda não foram carregados
-      if (allMostUsedProcedures.length === 0) {
+      if (mostUsedProcedures.data.length === 0) {
         await loadAllMostUsedProcedures();
       }
       
       // Usar os dados filtrados completos para exportação
-      const dataToExport = allFilteredMostUsedProcedures.length > 0 ? allFilteredMostUsedProcedures : allMostUsedProcedures;
+      const dataToExport = allFilteredMostUsedProcedures.length > 0 ? allFilteredMostUsedProcedures : mostUsedProcedures.data;
       
       exportAllProceduresToExcel(
-        allMostUsedProcedures || [],
+        mostUsedProcedures.data || [],
         dataToExport
       );
     } catch (error) {
@@ -494,33 +517,41 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
               <>
                 <div className="mb-2 text-xs text-slate-600 flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    {loadingMostUsed ? (
+                    {mostUsedProcedures.loading ? (
                       <span>Carregando procedimentos mais usados...</span>
                     ) : (
                       <span>
-                        Exibindo {allFilteredMostUsedProcedures.length} de {allMostUsedProcedures.length} procedimentos únicos
+                        Exibindo {allFilteredMostUsedProcedures.length} de {mostUsedProcedures.data.length} procedimentos únicos
                       </span>
                     )}
-                    {errorMostUsed && (
-                      <span className="ml-2 text-red-600">Erro: {errorMostUsed}</span>
+                    {mostUsedProcedures.error && (
+                      <span className="ml-2 text-red-600">
+                        Erro: {mostUsedProcedures.error}
+                        <button
+                          onClick={() => loadAllMostUsedProcedures(true)}
+                          className="ml-2 text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Tentar Novamente
+                        </button>
+                      </span>
                     )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => loadAllMostUsedProcedures(true)}
+                      disabled={mostUsedProcedures.loading}
+                      className="text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-400 flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Recarregar
+                    </button>
                   </div>
                 </div>
                 
-                {/* Estado de Loading */}
-                {loadingMostUsed && (
-                  <div className="p-8 text-center border rounded-lg bg-white">
-                    <div className="text-blue-500 mb-4">
-                      <svg className="w-8 h-8 mx-auto animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{animationDirection: 'reverse'}}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </div>
-                    <p className="text-slate-600">Carregando procedimentos mais usados...</p>
-                  </div>
-                )}
-
                 {/* Campos de Filtro */}
-                {!loadingMostUsed && (
+                {!mostUsedProcedures.loading && (
                   <div className="mb-4 p-4 bg-slate-50 rounded-lg border">
                     <h3 className="text-sm font-medium text-slate-700 mb-3">Filtros</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -569,7 +600,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 )}
 
                 {/* Botão de exportação */}
-                {!loadingMostUsed && allFilteredMostUsedProcedures.length > 0 && (
+                {!mostUsedProcedures.loading && allFilteredMostUsedProcedures.length > 0 && (
                   <div className="mb-4">
                     <Button
                       onClick={handleExportToExcel}
@@ -584,29 +615,29 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 )}
 
                 {/* Tabela de dados */}
-                {!loadingMostUsed && (
-                  <VirtualizedTable
-                    data={allFilteredMostUsedProcedures}
-                    height={500}
-                    itemHeight={60}
-                    columns={[
-                      {
-                        key: 'codigo_procedimento_original',
-                        header: 'Código',
-                        width: '200px',
-                        render: (value) => (
-                          <span className="font-medium text-slate-900">{value}</span>
-                        )
-                      },
-                      {
-                        key: 'procedure_description',
-                        header: 'Descrição',
-                        width: '1fr'
-                      }
-                    ]}
-                    className="mt-4"
-                  />
-                )}
+                <VirtualizedTable
+                  data={allFilteredMostUsedProcedures}
+                  height={500}
+                  itemHeight={60}
+                  loading={mostUsedProcedures.loading}
+                  progress={mostUsedProcedures.progress}
+                  columns={[
+                    {
+                      key: 'codigo_procedimento_original',
+                      header: 'Código',
+                      width: '200px',
+                      render: (value) => (
+                        <span className="font-medium text-slate-900">{value}</span>
+                      )
+                    },
+                    {
+                      key: 'procedure_description',
+                      header: 'Descrição',
+                      width: '1fr'
+                    }
+                  ]}
+                  className="mt-4"
+                />
               </>
           )}
 

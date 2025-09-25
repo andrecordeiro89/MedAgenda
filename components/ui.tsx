@@ -182,3 +182,61 @@ export const Select: React.FC<SelectProps> = ({ children, ...props }) => (
         {children}
     </select>
 );
+
+// --- PROGRESS BAR ---
+interface ProgressBarProps {
+  progress?: number; // 0-100
+  indeterminate?: boolean;
+  className?: string;
+  label?: string;
+  showPercentage?: boolean;
+  progressInfo?: {
+    current: number;
+    total: number;
+    percentage: number;
+    message?: string;
+  };
+}
+
+export const ProgressBar: React.FC<ProgressBarProps> = ({ 
+  progress = 0, 
+  indeterminate = false, 
+  className = '', 
+  label,
+  showPercentage = false,
+  progressInfo
+}) => {
+  // Use progressInfo if available, otherwise use individual props
+  const currentProgress = progressInfo?.percentage ?? progress;
+  const isIndeterminate = indeterminate && !progressInfo;
+  const displayLabel = progressInfo?.message ?? label;
+  const shouldShowPercentage = showPercentage || !!progressInfo;
+
+  return (
+    <div className={`w-full ${className}`}>
+      {displayLabel && (
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium text-slate-700">{displayLabel}</span>
+          {shouldShowPercentage && !isIndeterminate && (
+            <span className="text-sm text-slate-500">{Math.round(currentProgress)}%</span>
+          )}
+        </div>
+      )}
+      {progressInfo && (
+        <div className="flex justify-between items-center mb-1 text-xs text-slate-500">
+          <span>{progressInfo.current} de {progressInfo.total}</span>
+        </div>
+      )}
+      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+        <div 
+          className={`h-2 rounded-full transition-all duration-300 ${
+            isIndeterminate 
+              ? 'bg-blue-500 animate-pulse w-full' 
+              : 'bg-blue-500'
+          }`}
+          style={isIndeterminate ? {} : { width: `${Math.min(100, Math.max(0, currentProgress))}%` }}
+        />
+      </div>
+    </div>
+  );
+};

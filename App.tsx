@@ -6,10 +6,10 @@ import CalendarView from './components/CalendarView';
 import ManagementView from './components/ManagementView';
 import ExternalDataView from './components/ExternalDataView';
 import { 
-  AuthProvider, 
-  useAuth, 
-  PremiumLoginSystem,
-  useHospitalFilter 
+    AuthProvider, 
+    useAuth, 
+    PremiumLoginSystem,
+    useHospitalFilter 
 } from './components/PremiumLogin';
 import { 
     simpleMedicoService, 
@@ -19,6 +19,7 @@ import {
     simpleMedicoHospitalService
 } from './services/api-simple';
 import { testSupabaseConnection } from './services/supabase';
+import { DataCacheProvider } from './contexts/DataCacheContext';
 
 // ============================================================================
 // COMPONENTE PRINCIPAL DA APLICAÇÃO (COM LOGIN PREMIUM)
@@ -243,7 +244,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <AppContent />
+            <DataCacheProvider>
+                <AppContent />
+            </DataCacheProvider>
         </AuthProvider>
     );
 };
