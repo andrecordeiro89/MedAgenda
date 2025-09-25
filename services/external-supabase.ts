@@ -479,7 +479,8 @@ export const externalDataService = {
     try {
       const { page = 1, pageSize = 50, searchTerm } = options || {}
 
-      // 1) Carregar todos os códigos (em lotes) aplicando filtro/ordenando por código
+      // 1) Carregar TODOS os códigos únicos (sem filtros específicos)
+      // Aplicamos apenas o searchTerm se fornecido
       let allRows: { codigo_procedimento_original: string }[] = []
       let currentPage = 0
       let hasMore = true
@@ -492,6 +493,7 @@ export const externalDataService = {
           .order('codigo_procedimento_original')
           .range(currentPage * batchSize, (currentPage + 1) * batchSize - 1)
 
+        // Aplicar apenas searchTerm se fornecido
         if (searchTerm && searchTerm.trim()) {
           const term = `%${searchTerm.trim()}%`
           q = q.or(`codigo_procedimento_original.ilike.${term},procedure_description.ilike.${term}`)
@@ -536,7 +538,7 @@ export const externalDataService = {
       const to = Math.min(from + pageSize, totalCount)
       const pageCodes = uniqueCodes.slice(from, to)
 
-      // 4) Para cada código da página, buscar uma linha representativa (código + descrição)
+      // 4) Para cada código da página, buscar uma linha representativa (código + descrição + complexidade)
       const promises = pageCodes.map(async (code, index) => {
         try {
           const { data, error } = await externalSupabase

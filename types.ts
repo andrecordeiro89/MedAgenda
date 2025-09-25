@@ -66,6 +66,13 @@ export interface Procedimento {
     hospitalId?: string; // ID do hospital
 }
 
+// Interface para procedimentos externos (SIGTAP)
+export interface ExternalProcedureRecord {
+    codigo_procedimento_original: string;
+    procedure_description: string;
+    complexity?: string;
+}
+
 export interface AppState {
     agendamentos: Agendamento[];
     medicos: Medico[];

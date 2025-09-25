@@ -12,6 +12,7 @@ import {
 } from '../services/api-simple';
 import { useAuth } from './PremiumLogin';
 import externalDataService from '../services/external-supabase';
+import { exportAllProceduresToExcel } from '../utils/excelExport';
 
 type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap';
 
@@ -61,12 +62,17 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const [mostUsedPageSize, setMostUsedPageSize] = useState<number>(50);
   const [mostUsedTotal, setMostUsedTotal] = useState<number>(0);
   
-  useEffect(() => {
-    // Ao entrar na aba de procedimentos, limpar qualquer busca residual que possa reduzir resultados
-    if (activeTab === 'procedimentos') {
-      setSearchTerm('');
-    }
-  }, [activeTab]);
+  // Filtros para procedimentos mais usados
+  const [filterCodigo, setFilterCodigo] = useState<string>('');
+  const [filterDescricao, setFilterDescricao] = useState<string>('');
+  const [filterComplexidade, setFilterComplexidade] = useState<string>('');
+  
+  // Resetar página quando filtros mudarem (não precisa mais já que filtragem é local)
+  // useEffect(() => {
+  //   if (filterCodigo || filterDescricao || filterComplexidade) {
+  //     setMostUsedPage(1);
+  //   }
+  // }, [filterCodigo, filterDescricao, filterComplexidade]);
   
   // Carregamento paginado de registros únicos de procedure_records
   useEffect(() => {
@@ -168,9 +174,29 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   
   // Filtro para procedimentos mais usados (externos)
   const filteredMostUsedProcedures = useMemo(() => {
-    // Já recebemos página filtrada/ordenada do serviço externo; não aplicar filtro adicional
-    return mostUsedProcedures || [];
-  }, [mostUsedProcedures]);
+    if (!mostUsedProcedures) return [];
+    
+    return mostUsedProcedures.filter(procedure => {
+      // Filtro por código (sem pontos - busca por números sequenciais)
+      const codigoMatch = filterCodigo === '' || 
+        procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(filterCodigo.replace(/\./g, '').toLowerCase());
+      
+      // Filtro por descrição
+      const descricaoMatch = filterDescricao === '' || 
+        procedure.procedure_description?.toLowerCase().includes(filterDescricao.toLowerCase());
+      
+      // Filtro por complexidade
+      const complexidadeMatch = filterComplexidade === '' || 
+        procedure.complexity?.toLowerCase().includes(filterComplexidade.toLowerCase());
+      
+      return codigoMatch && descricaoMatch && complexidadeMatch;
+    });
+  }, [mostUsedProcedures, filterCodigo, filterDescricao, filterComplexidade]);
+
+  // Função para exportar procedimentos para Excel
+  const handleExportToExcel = () => {
+    exportAllProceduresToExcel(mostUsedProcedures || [], filteredMostUsedProcedures);
+  };
   
   const TabButton: React.FC<{ tab: ManagementTab; label: string }> = ({ tab, label }) => (
     <button
@@ -449,6 +475,86 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                       </svg>
                     </div>
                     <p className="text-slate-600">Carregando procedimentos mais usados...</p>
+                  </div>
+                )}
+
+                {/* Campos de Filtro */}
+                {!loadingMostUsed && (
+                  <div className="mb-4 p-4 bg-slate-50 rounded-lg border">
+                    <h3 className="text-sm font-medium text-slate-700 mb-3">Filtros</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Código (sem pontos)
+                        </label>
+                        <Input
+                          type="text"
+                          placeholder="Ex: 0101010012"
+                          value={filterCodigo}
+                          onChange={(e) => setFilterCodigo(e.target.value)}
+                          className="w-full text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Descrição
+                        </label>
+                        <Input
+                          type="text"
+                          placeholder="Buscar por descrição..."
+                          value={filterDescricao}
+                          onChange={(e) => setFilterDescricao(e.target.value)}
+                          className="w-full text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Complexidade
+                        </label>
+                        <Select
+                          value={filterComplexidade}
+                          onChange={(e) => setFilterComplexidade(e.target.value)}
+                          className="w-full text-sm"
+                        >
+                          <option value="">Todas</option>
+                          <option value="baixa">Baixa</option>
+                          <option value="media">Média</option>
+                          <option value="alta">Alta</option>
+                        </Select>
+                      </div>
+                    </div>
+                    {(filterCodigo || filterDescricao || filterComplexidade) && (
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-xs text-slate-600">
+                          {filteredMostUsedProcedures.length} resultado(s) encontrado(s)
+                        </span>
+                        <button
+                          onClick={() => {
+                            setFilterCodigo('');
+                            setFilterDescricao('');
+                            setFilterComplexidade('');
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Limpar filtros
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Botão de exportação */}
+                {!loadingMostUsed && filteredMostUsedProcedures.length > 0 && (
+                  <div className="mb-4">
+                    <Button
+                      onClick={handleExportToExcel}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Exportar para Excel ({filteredMostUsedProcedures.length} registros)
+                    </Button>
                   </div>
                 )}
 
