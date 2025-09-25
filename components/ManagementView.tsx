@@ -172,7 +172,44 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       getProcedimentoEspecialidade(p).toLowerCase().includes(searchTerm.toLowerCase())
     ), [procedimentos, searchTerm, especialidades]);
   
-  // Filtro para procedimentos mais usados (externos)
+  // Estado para armazenar TODOS os procedimentos únicos (para exportação)
+  const [allMostUsedProcedures, setAllMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
+
+  // Função para carregar TODOS os procedimentos únicos (sem paginação)
+  const loadAllMostUsedProcedures = async () => {
+    try {
+      // Usar a função manual com um pageSize muito grande para pegar todos
+      const { data } = await (externalDataService as any).getMostUsedProceduresUniqueManual({
+        page: 1,
+        pageSize: 10000, // Número grande para pegar todos os registros
+        searchTerm: searchTerm && searchTerm.trim() ? searchTerm.trim() : undefined,
+      });
+      setAllMostUsedProcedures((data || []) as ExternalProcedureRecord[]);
+    } catch (e: any) {
+      console.error('Erro ao carregar todos os procedimentos únicos:', e);
+    }
+  };
+
+  // Filtro para TODOS os procedimentos únicos (para exportação)
+  const allFilteredMostUsedProcedures = useMemo(() => {
+    if (!allMostUsedProcedures) return [];
+    
+    return allMostUsedProcedures.filter(procedure => {
+      // Filtro por código (sem pontos - busca por números sequenciais)
+      const codigoMatch = filterCodigo === '' || 
+        procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(filterCodigo.replace(/\./g, '').toLowerCase());
+      
+      // Filtro por descrição
+      const descricaoMatch = filterDescricao === '' || 
+        procedure.procedure_description?.toLowerCase().includes(filterDescricao.toLowerCase());
+      
+      // Filtro por complexidade
+      const complexidadeMatch = filterComplexidade === '' || 
+        procedure.complexity?.toLowerCase().includes(filterComplexidade.toLowerCase());
+      
+      return codigoMatch && descricaoMatch && complexidadeMatch;
+    });
+  }, [allMostUsedProcedures, filterCodigo, filterDescricao, filterComplexidade]);
   const filteredMostUsedProcedures = useMemo(() => {
     if (!mostUsedProcedures) return [];
     
@@ -193,9 +230,24 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     });
   }, [mostUsedProcedures, filterCodigo, filterDescricao, filterComplexidade]);
 
-  // Função para exportar procedimentos para Excel
-  const handleExportToExcel = () => {
-    exportAllProceduresToExcel(mostUsedProcedures || [], filteredMostUsedProcedures);
+  // Função para exportar todos os procedimentos únicos para Excel
+  const handleExportToExcel = async () => {
+    try {
+      // Carregar todos os dados se ainda não foram carregados
+      if (allMostUsedProcedures.length === 0) {
+        await loadAllMostUsedProcedures();
+      }
+      
+      // Usar os dados filtrados completos para exportação
+      const dataToExport = allFilteredMostUsedProcedures.length > 0 ? allFilteredMostUsedProcedures : allMostUsedProcedures;
+      
+      exportAllProceduresToExcel(
+        allMostUsedProcedures || [],
+        dataToExport
+      );
+    } catch (error) {
+      console.error('Erro ao exportar para Excel:', error);
+    }
   };
   
   const TabButton: React.FC<{ tab: ManagementTab; label: string }> = ({ tab, label }) => (
@@ -553,7 +605,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
-                      Exportar para Excel ({filteredMostUsedProcedures.length} registros)
+                      Exportar para Excel ({allFilteredMostUsedProcedures.length > 0 ? allFilteredMostUsedProcedures.length : mostUsedTotal} registros)
                     </Button>
                   </div>
                 )}
