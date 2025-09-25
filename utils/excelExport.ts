@@ -16,12 +16,11 @@ export function exportProceduresToExcel(
   } = options;
 
   try {
-    // Preparar os dados para exportação com as 3 colunas principais
+    // Preparar os dados para exportação com as 2 colunas principais
     const exportData = procedures.map((procedure, index) => ({
       'Nº': index + 1,
       'Código do Procedimento': procedure.codigo_procedimento_original || '',
-      'Descrição': procedure.procedure_description || '',
-      'Complexidade': procedure.complexity || ''
+      'Descrição': procedure.procedure_description || ''
     }));
 
     // Criar workbook e worksheet
@@ -32,8 +31,7 @@ export function exportProceduresToExcel(
     const columnWidths = [
       { wch: 5 },   // Nº
       { wch: 20 },  // Código do Procedimento
-      { wch: 60 },  // Descrição
-      { wch: 15 }   // Complexidade
+      { wch: 60 }   // Descrição
     ];
     worksheet['!cols'] = columnWidths;
 

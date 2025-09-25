@@ -4,6 +4,8 @@ import { Agendamento, Medico, Procedimento, Especialidade } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input, Select } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import SigtapProceduresView from './SigtapProceduresView';
+import { VirtualizedTable } from './VirtualizedTable';
+import { useDebounce } from '../hooks/useDebounce';
 import { formatDate } from '../utils';
 import { 
     simpleMedicoService,
@@ -64,46 +66,28 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   
   // Filtros para procedimentos mais usados
   const [filterCodigo, setFilterCodigo] = useState<string>('');
-  const [filterDescricao, setFilterDescricao] = useState<string>('');
-  const [filterComplexidade, setFilterComplexidade] = useState<string>('');
+  // Removido filterDescricao - usando searchTerm do campo geral
+  
+  // Debounced filters para busca instantânea
+  const debouncedFilterCodigo = useDebounce(filterCodigo, 300);
+  // Removido debouncedFilterDescricao - usando searchTerm diretamente
   
   // Resetar página quando filtros mudarem (não precisa mais já que filtragem é local)
   // useEffect(() => {
-  //   if (filterCodigo || filterDescricao || filterComplexidade) {
+  //   if (filterCodigo || searchTerm) {
   //     setMostUsedPage(1);
   //   }
-  // }, [filterCodigo, filterDescricao, filterComplexidade]);
+  // }, [filterCodigo, searchTerm]);
   
   // Carregamento paginado de registros únicos de procedure_records
-  useEffect(() => {
-    const loadMostUsed = async () => {
-      if (activeTab !== 'procedimentos') return;
-      try {
-        setLoadingMostUsed(true);
-        setErrorMostUsed(null);
-        const { data, totalCount, page } = await (externalDataService as any).getMostUsedProceduresUnique({
-          page: mostUsedPage,
-          pageSize: mostUsedPageSize,
-          searchTerm: searchTerm && searchTerm.trim() ? searchTerm.trim() : undefined,
-        });
-        setMostUsedProcedures((data || []) as ExternalProcedureRecord[]);
-        setMostUsedTotal(totalCount || 0);
-        setRawMostUsedCount(totalCount || 0);
-        // Ajuste de segurança: se a página atual estiver além do total (após uma busca), voltar para 1
-        const totalPages = Math.max(1, Math.ceil((totalCount || 0) / mostUsedPageSize));
-        if (mostUsedPage > totalPages) {
-          setMostUsedPage(1);
-        }
-      } catch (e: any) {
-        console.error('Erro ao carregar procedimentos mais usados (paginado):', e);
-        setErrorMostUsed(e?.message || 'Erro ao carregar procedimentos mais usados');
-      } finally {
-        setLoadingMostUsed(false);
-      }
-    };
-  
-    loadMostUsed();
-  }, [activeTab, mostUsedPage, mostUsedPageSize, searchTerm]);
+  // Remover o useEffect de paginação - agora usamos apenas loadAllMostUsedProcedures
+  // useEffect(() => {
+  //   const loadMostUsed = async () => {
+  //     if (activeTab !== 'procedimentos') return;
+  //     // Código removido - não precisamos mais de paginação
+  //   };
+  //   loadMostUsed();
+  // }, [activeTab, mostUsedPage, mostUsedPageSize]);
   
   const openModal = (item: Agendamento | Medico | Procedimento | null = null) => {
     setEditingItem(item);
@@ -178,15 +162,25 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   // Função para carregar TODOS os procedimentos únicos (sem paginação)
   const loadAllMostUsedProcedures = async () => {
     try {
+      setLoadingMostUsed(true);
+      setErrorMostUsed(null);
+      console.log('🔍 Iniciando carregamento de todos os procedimentos únicos...');
+      
       // Usar a função manual com um pageSize muito grande para pegar todos
+      // NÃO usar searchTerm aqui para permitir filtro no cliente
       const { data } = await (externalDataService as any).getMostUsedProceduresUniqueManual({
         page: 1,
         pageSize: 10000, // Número grande para pegar todos os registros
-        searchTerm: searchTerm && searchTerm.trim() ? searchTerm.trim() : undefined,
+        // searchTerm: undefined, // Removido para carregar todos os dados
       });
+      console.log('🔍 Dados carregados do servidor:', data?.length || 0);
+      console.log('🔍 Primeiros 3 registros:', data?.slice(0, 3));
       setAllMostUsedProcedures((data || []) as ExternalProcedureRecord[]);
     } catch (e: any) {
       console.error('Erro ao carregar todos os procedimentos únicos:', e);
+      setErrorMostUsed(e?.message || 'Erro ao carregar procedimentos únicos');
+    } finally {
+      setLoadingMostUsed(false);
     }
   };
 
@@ -194,41 +188,65 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const allFilteredMostUsedProcedures = useMemo(() => {
     if (!allMostUsedProcedures) return [];
     
-    return allMostUsedProcedures.filter(procedure => {
+    console.log('🔍 Debug filtro - allMostUsedProcedures:', allMostUsedProcedures.length);
+    console.log('🔍 Debug filtro - searchTerm:', searchTerm);
+    console.log('🔍 Debug filtro - debouncedFilterCodigo:', debouncedFilterCodigo);
+    
+    // Se não há filtros, retorna todos os dados
+    if (!debouncedFilterCodigo && !searchTerm) {
+      console.log('🔍 Sem filtros - retornando todos os dados:', allMostUsedProcedures.length);
+      return allMostUsedProcedures;
+    }
+    
+    const filtered = allMostUsedProcedures.filter(procedure => {
       // Filtro por código (sem pontos - busca por números sequenciais)
-      const codigoMatch = filterCodigo === '' || 
-        procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(filterCodigo.replace(/\./g, '').toLowerCase());
+      const codigoMatch = !debouncedFilterCodigo || 
+        procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(debouncedFilterCodigo.replace(/\./g, '').toLowerCase());
       
-      // Filtro por descrição
-      const descricaoMatch = filterDescricao === '' || 
-        procedure.procedure_description?.toLowerCase().includes(filterDescricao.toLowerCase());
+      // Filtro por descrição usando searchTerm
+      const descricaoMatch = !searchTerm || 
+        procedure.procedure_description?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      // Filtro por complexidade
-      const complexidadeMatch = filterComplexidade === '' || 
-        procedure.complexity?.toLowerCase().includes(filterComplexidade.toLowerCase());
+      // Debug para alguns itens
+      if (searchTerm && procedure.procedure_description?.toLowerCase().includes('artroplastia')) {
+        console.log('🔍 Encontrou Artroplastia:', {
+          codigo: procedure.codigo_procedimento_original,
+          descricao: procedure.procedure_description,
+          codigoMatch,
+          descricaoMatch,
+          searchTerm: searchTerm
+        });
+      }
       
-      return codigoMatch && descricaoMatch && complexidadeMatch;
+      return codigoMatch && descricaoMatch;
     });
-  }, [allMostUsedProcedures, filterCodigo, filterDescricao, filterComplexidade]);
+    
+    console.log('🔍 Resultados filtrados:', filtered.length);
+    return filtered;
+  }, [allMostUsedProcedures, debouncedFilterCodigo, searchTerm]);
   const filteredMostUsedProcedures = useMemo(() => {
     if (!mostUsedProcedures) return [];
     
     return mostUsedProcedures.filter(procedure => {
       // Filtro por código (sem pontos - busca por números sequenciais)
-      const codigoMatch = filterCodigo === '' || 
-        procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(filterCodigo.replace(/\./g, '').toLowerCase());
+      const codigoMatch = debouncedFilterCodigo === '' || 
+        procedure.codigo_procedimento_original?.replace(/\./g, '').toLowerCase().includes(debouncedFilterCodigo.replace(/\./g, '').toLowerCase());
       
-      // Filtro por descrição
-      const descricaoMatch = filterDescricao === '' || 
-        procedure.procedure_description?.toLowerCase().includes(filterDescricao.toLowerCase());
+      // Filtro por descrição usando searchTerm
+      const descricaoMatch = searchTerm === '' || 
+        procedure.procedure_description?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      // Filtro por complexidade
-      const complexidadeMatch = filterComplexidade === '' || 
-        procedure.complexity?.toLowerCase().includes(filterComplexidade.toLowerCase());
-      
-      return codigoMatch && descricaoMatch && complexidadeMatch;
+      return codigoMatch && descricaoMatch;
     });
-  }, [mostUsedProcedures, filterCodigo, filterDescricao, filterComplexidade]);
+  }, [mostUsedProcedures, debouncedFilterCodigo, searchTerm]);
+
+  // Carregar dados dos procedimentos únicos quando a aba for ativada
+  useEffect(() => {
+    if (activeTab === 'procedimentos') {
+      console.log('🔍 Aba procedimentos ativada - forçando carregamento');
+      loadAllMostUsedProcedures();
+    }
+  }, [activeTab]);
 
   // Função para exportar todos os procedimentos únicos para Excel
   const handleExportToExcel = async () => {
@@ -423,18 +441,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
           </div>
         )}
         
-        {/* Filtros simples para outras abas */}
-        {activeTab !== 'agendamentos' && activeTab !== 'sigtap' && (
-          <div className="mb-4">
-            <Input 
-              type="text" 
-              placeholder="Buscar..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
-          </div>
-        )}
+        {/* Removido campo de busca geral - será movido para dentro do card */}
         <div className="overflow-x-auto">
           {activeTab === 'agendamentos' && (
              <DataTable 
@@ -491,30 +498,12 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                       <span>Carregando procedimentos mais usados...</span>
                     ) : (
                       <span>
-                        Exibindo {filteredMostUsedProcedures.length} itens | Página {mostUsedPage} de {Math.max(1, Math.ceil((mostUsedTotal || 0) / mostUsedPageSize))} | Total únicos: {mostUsedTotal}
+                        Exibindo {allFilteredMostUsedProcedures.length} de {allMostUsedProcedures.length} procedimentos únicos
                       </span>
                     )}
                     {errorMostUsed && (
                       <span className="ml-2 text-red-600">Erro: {errorMostUsed}</span>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="px-2 py-1 border rounded text-xs disabled:opacity-50"
-                      onClick={() => setMostUsedPage(p => Math.max(1, p - 1))}
-                      disabled={mostUsedPage <= 1 || loadingMostUsed}
-                      aria-label="Página anterior"
-                    >
-                      « Anterior
-                    </button>
-                    <button
-                      className="px-2 py-1 border rounded text-xs disabled:opacity-50"
-                      onClick={() => setMostUsedPage(p => p + 1)}
-                      disabled={loadingMostUsed || (mostUsedPage >= Math.max(1, Math.ceil((mostUsedTotal || 0) / mostUsedPageSize)))}
-                      aria-label="Próxima página"
-                    >
-                      Próxima »
-                    </button>
                   </div>
                 </div>
                 
@@ -534,9 +523,9 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 {!loadingMostUsed && (
                   <div className="mb-4 p-4 bg-slate-50 rounded-lg border">
                     <h3 className="text-sm font-medium text-slate-700 mb-3">Filtros</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
                           Código (sem pontos)
                         </label>
                         <Input
@@ -548,45 +537,29 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
                           Descrição
                         </label>
                         <Input
                           type="text"
                           placeholder="Buscar por descrição..."
-                          value={filterDescricao}
-                          onChange={(e) => setFilterDescricao(e.target.value)}
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
                           className="w-full text-sm"
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">
-                          Complexidade
-                        </label>
-                        <Select
-                          value={filterComplexidade}
-                          onChange={(e) => setFilterComplexidade(e.target.value)}
-                          className="w-full text-sm"
-                        >
-                          <option value="">Todas</option>
-                          <option value="baixa">Baixa</option>
-                          <option value="media">Média</option>
-                          <option value="alta">Alta</option>
-                        </Select>
-                      </div>
                     </div>
-                    {(filterCodigo || filterDescricao || filterComplexidade) && (
+                    {(filterCodigo || searchTerm) && (
                       <div className="mt-3 flex items-center justify-between">
                         <span className="text-xs text-slate-600">
-                          {filteredMostUsedProcedures.length} resultado(s) encontrado(s)
+                          {allFilteredMostUsedProcedures.length} resultado(s) encontrado(s)
                         </span>
                         <button
                           onClick={() => {
                             setFilterCodigo('');
-                            setFilterDescricao('');
-                            setFilterComplexidade('');
+                            setSearchTerm('');
                           }}
-                          className="text-xs text-blue-600 hover:text-blue-800 underline"
+                          className="text-xs text-blue-600 hover:text-blue-800"
                         >
                           Limpar filtros
                         </button>
@@ -596,7 +569,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 )}
 
                 {/* Botão de exportação */}
-                {!loadingMostUsed && filteredMostUsedProcedures.length > 0 && (
+                {!loadingMostUsed && allFilteredMostUsedProcedures.length > 0 && (
                   <div className="mb-4">
                     <Button
                       onClick={handleExportToExcel}
@@ -612,17 +585,26 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
 
                 {/* Tabela de dados */}
                 {!loadingMostUsed && (
-                  <DataTable
-                    headers={['Código', 'Descrição', 'Complexidade']}
-                    data={filteredMostUsedProcedures as any}
-                    getKey={(item: ExternalProcedureRecord) => item.codigo_procedimento_original || item.procedure_description}
-                    renderRow={(item: ExternalProcedureRecord) => (
-                        <>
-                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{item.codigo_procedimento_original}</td>
-                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{item.procedure_description}</td>
-                            <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{item.complexity || '-'}</td>
-                        </>
-                    )}
+                  <VirtualizedTable
+                    data={allFilteredMostUsedProcedures}
+                    height={500}
+                    itemHeight={60}
+                    columns={[
+                      {
+                        key: 'codigo_procedimento_original',
+                        header: 'Código',
+                        width: '200px',
+                        render: (value) => (
+                          <span className="font-medium text-slate-900">{value}</span>
+                        )
+                      },
+                      {
+                        key: 'procedure_description',
+                        header: 'Descrição',
+                        width: '1fr'
+                      }
+                    ]}
+                    className="mt-4"
                   />
                 )}
               </>
