@@ -541,7 +541,7 @@ export const externalDataService = {
         try {
           const { data, error } = await externalSupabase
             .from('procedure_records')
-            .select('codigo_procedimento_original, procedure_description')
+            .select('codigo_procedimento_original, procedure_description, complexity')
             .eq('codigo_procedimento_original', code)
             .limit(1)
             .single()
@@ -555,14 +555,14 @@ export const externalDataService = {
             console.log(`🔄 procedure_records: ${index + 1}/${pageCodes.length} registros carregados`)
           }
 
-          return data as { codigo_procedimento_original: string; procedure_description: string }
+          return data as { codigo_procedimento_original: string; procedure_description: string; complexity?: string }
         } catch (err) {
           console.warn(`⚠️ Exceção ao buscar registro do código ${code}:`, err)
           return null
         }
       })
 
-      const pageResults = (await Promise.all(promises)).filter(Boolean) as { codigo_procedimento_original: string; procedure_description: string }[]
+      const pageResults = (await Promise.all(promises)).filter(Boolean) as { codigo_procedimento_original: string; procedure_description: string; complexity?: string }[]
 
       console.log(`✅ Página ${page} concluída. Itens: ${pageResults.length} / ${pageCodes.length}. Total únicos: ${totalCount}`)
 
