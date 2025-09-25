@@ -11,6 +11,7 @@ import {
     simpleAgendamentoService
 } from '../services/api-simple';
 import { useAuth } from './PremiumLogin';
+import externalDataService from '../services/external-supabase';
 
 type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap';
 
@@ -20,6 +21,12 @@ interface ManagementViewProps {
   procedimentos: Procedimento[];
   especialidades: Especialidade[];
   onRefresh: () => void;
+}
+
+// Tipo para registros mais usados vindos do Supabase externo
+interface ExternalProcedureRecord {
+  codigo_procedimento_original: string;
+  procedure_description: string;
 }
 
 const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, onRefresh }) => {
@@ -42,13 +49,60 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const [filtroEspecialidade, setFiltroEspecialidade] = useState<string>('todos');
   const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
   const [filtroDataFim, setFiltroDataFim] = useState<string>('');
-
-
+  
+  // Procedimentos mais usados (externos)
+  const [mostUsedProcedures, setMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
+  const [loadingMostUsed, setLoadingMostUsed] = useState(false);
+  const [errorMostUsed, setErrorMostUsed] = useState<string | null>(null);
+  const [rawMostUsedCount, setRawMostUsedCount] = useState<number>(0);
+  // Paginação para procedimentos mais usados (únicos)
+  const [mostUsedPage, setMostUsedPage] = useState<number>(1);
+  const [mostUsedPageSize, setMostUsedPageSize] = useState<number>(50);
+  const [mostUsedTotal, setMostUsedTotal] = useState<number>(0);
+  
+  useEffect(() => {
+    // Ao entrar na aba de procedimentos, limpar qualquer busca residual que possa reduzir resultados
+    if (activeTab === 'procedimentos') {
+      setSearchTerm('');
+    }
+  }, [activeTab]);
+  
+  // Carregamento paginado de registros únicos de procedure_records
+  useEffect(() => {
+    const loadMostUsed = async () => {
+      if (activeTab !== 'procedimentos') return;
+      try {
+        setLoadingMostUsed(true);
+        setErrorMostUsed(null);
+        const { data, totalCount, page } = await (externalDataService as any).getMostUsedProceduresUnique({
+          page: mostUsedPage,
+          pageSize: mostUsedPageSize,
+          searchTerm: searchTerm && searchTerm.trim() ? searchTerm.trim() : undefined,
+        });
+        setMostUsedProcedures((data || []) as ExternalProcedureRecord[]);
+        setMostUsedTotal(totalCount || 0);
+        setRawMostUsedCount(totalCount || 0);
+        // Ajuste de segurança: se a página atual estiver além do total (após uma busca), voltar para 1
+        const totalPages = Math.max(1, Math.ceil((totalCount || 0) / mostUsedPageSize));
+        if (mostUsedPage > totalPages) {
+          setMostUsedPage(1);
+        }
+      } catch (e: any) {
+        console.error('Erro ao carregar procedimentos mais usados (paginado):', e);
+        setErrorMostUsed(e?.message || 'Erro ao carregar procedimentos mais usados');
+      } finally {
+        setLoadingMostUsed(false);
+      }
+    };
+  
+    loadMostUsed();
+  }, [activeTab, mostUsedPage, mostUsedPageSize, searchTerm]);
+  
   const openModal = (item: Agendamento | Medico | Procedimento | null = null) => {
     setEditingItem(item);
     setIsModalOpen(true);
   };
-
+  
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingItem(null);
@@ -63,7 +117,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     if (!procedimento.especialidadeId) return 'N/A';
     return especialidades.find(e => e.id === procedimento.especialidadeId)?.nome || 'N/A';
   };
-
+  
   const filteredAgendamentos = useMemo(() =>
     agendamentos.filter(a => {
       // Filtro de busca textual
@@ -97,19 +151,25 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       
       return matchesSearch && matchesStatus && matchesTipo && matchesMedico && matchesEspecialidade && matchesDataInicio && matchesDataFim;
     }), [agendamentos, searchTerm, filtroStatus, filtroTipo, filtroMedico, filtroEspecialidade, filtroDataInicio, filtroDataFim, medicos, procedimentos]);
-
+  
   const filteredMedicos = useMemo(() =>
     medicos.filter(m =>
       m.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.especialidade.toLowerCase().includes(searchTerm.toLowerCase())
     ), [medicos, searchTerm]);
-
+  
   const filteredProcedimentos = useMemo(() =>
     procedimentos.filter(p =>
       p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       getProcedimentoEspecialidade(p).toLowerCase().includes(searchTerm.toLowerCase())
     ), [procedimentos, searchTerm, especialidades]);
+  
+  // Filtro para procedimentos mais usados (externos)
+  const filteredMostUsedProcedures = useMemo(() => {
+    // Já recebemos página filtrada/ordenada do serviço externo; não aplicar filtro adicional
+    return mostUsedProcedures || [];
+  }, [mostUsedProcedures]);
 
   const TabButton: React.FC<{ tab: ManagementTab; label: string }> = ({ tab, label }) => (
     <button
@@ -139,10 +199,10 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-slate-800">Gerenciamento</h2>
-        {activeTab !== 'sigtap' && (
+        {(activeTab === 'agendamentos' || activeTab === 'medicos') && (
           <Button onClick={() => openModal()} data-new-appointment={activeTab === 'agendamentos' ? 'true' : undefined}>
             <PlusIcon className="w-5 h-5"/>
-            Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
+            Novo {activeTab === 'agendamentos' ? 'Agendamento' : 'Médico'}
           </Button>
         )}
       </div>
@@ -150,7 +210,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       <div className="border-b border-slate-200">
         <TabButton tab="agendamentos" label="Agendamentos" />
         <TabButton tab="medicos" label="Médicos" />
-        <TabButton tab="procedimentos" label="Procedimentos" />
+        <TabButton tab="procedimentos" label="Procedimentos (Mais usados)" />
         <TabButton tab="sigtap" label="Procedimentos SIGTAP" />
       </div>
 
@@ -345,25 +405,61 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
               />
           )}
            {activeTab === 'procedimentos' && (
-              <DataTable
-                headers={['Nome', 'Tipo', 'Especialidade', 'Ações']}
-                data={filteredProcedimentos}
-                renderRow={(item: Procedimento) => (
-                    <>
-                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{item.nome}</td>
-                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 capitalize">{item.tipo}</td>
-                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                {getProcedimentoEspecialidade(item)}
-                            </span>
-                        </td>
-                        <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">
-                            <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700"><EditIcon className="w-5 h-5" /></button>
-                            <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-5 h-5"/></button>
-                        </td>
-                    </>
-                )}
-              />
+              <>
+                <div className="mb-2 text-xs text-slate-600 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    {loadingMostUsed ? (
+                      <span>Carregando procedimentos mais usados...</span>
+                    ) : (
+                      <span>
+                        Exibindo {filteredMostUsedProcedures.length} itens | Página {mostUsedPage} de {Math.max(1, Math.ceil((mostUsedTotal || 0) / mostUsedPageSize))} | Total únicos: {mostUsedTotal}
+                      </span>
+                    )}
+                    {errorMostUsed && (
+                      <span className="ml-2 text-red-600">Erro: {errorMostUsed}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-600">Itens por página</label>
+                    <select
+                      className="border rounded px-2 py-1 text-xs"
+                      value={mostUsedPageSize}
+                      onChange={(e) => { setMostUsedPageSize(parseInt(e.target.value || '50', 10)); setMostUsedPage(1); }}
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <button
+                      className="px-2 py-1 border rounded text-xs disabled:opacity-50"
+                      onClick={() => setMostUsedPage(p => Math.max(1, p - 1))}
+                      disabled={mostUsedPage <= 1 || loadingMostUsed}
+                      aria-label="Página anterior"
+                    >
+                      « Anterior
+                    </button>
+                    <button
+                      className="px-2 py-1 border rounded text-xs disabled:opacity-50"
+                      onClick={() => setMostUsedPage(p => p + 1)}
+                      disabled={loadingMostUsed || (mostUsedPage >= Math.max(1, Math.ceil((mostUsedTotal || 0) / mostUsedPageSize)))}
+                      aria-label="Próxima página"
+                    >
+                      Próxima »
+                    </button>
+                  </div>
+                </div>
+                <DataTable
+                  headers={['Código', 'Descrição']}
+                  data={filteredMostUsedProcedures as any}
+                  getKey={(item: ExternalProcedureRecord) => item.codigo_procedimento_original || item.procedure_description}
+                  renderRow={(item: ExternalProcedureRecord) => (
+                      <>
+                          <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">{item.codigo_procedimento_original}</td>
+                          <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{item.procedure_description}</td>
+                      </>
+                  )}
+                />
+              </>
           )}
 
           {activeTab === 'sigtap' && (
@@ -439,35 +535,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 error={error}
             />
         }
-        {activeTab === 'procedimentos' &&
-            <ProcedureForm 
-                procedimento={editingItem as Procedimento | undefined}
-                especialidades={especialidades}
-                onSave={async (data, id) => {
-                    try {
-                        setLoading(true);
-                        setError(null);
-                        
-                        if (id) {
-                            await simpleProcedimentoService.update(id, data);
-                        } else {
-                            const dataWithHospital = { ...data, hospitalId: hospitalSelecionado?.id };
-                            await simpleProcedimentoService.create(dataWithHospital);
-                        }
-                        
-                        onRefresh();
-                        closeModal();
-                    } catch (err) {
-                        setError(err instanceof Error ? err.message : 'Erro ao salvar procedimento');
-                    } finally {
-                        setLoading(false);
-                    }
-                }}
-                onCancel={closeModal}
-                loading={loading}
-                error={error}
-            />
-        }
+        {activeTab === 'procedimentos' && null}
       </Modal>
 
       {/* Confirmation Modal for Deletion */}
@@ -498,7 +566,9 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                             } else if (activeTab === 'medicos') {
                                 await simpleMedicoService.delete(deletingId);
                             } else if (activeTab === 'procedimentos') {
-                                await simpleProcedimentoService.delete(deletingId);
+                                // Aba procedimentos agora é somente leitura (procedimentos mais usados)
+                                // Nenhuma exclusão é permitida aqui.
+                                throw new Error('Exclusão não permitida nesta aba.');
                             }
                             
                             onRefresh();
@@ -545,7 +615,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                     <p className="text-gray-600">
                         Você tem certeza que deseja excluir este {
                             activeTab === 'medicos' ? 'médico' : 
-                            activeTab === 'procedimentos' ? 'procedimento' : 
+                            activeTab === 'procedimentos' ? 'procedimento (não permitido)' : 
                             'agendamento'
                         }? Esta ação não pode ser desfeita.
                     </p>
@@ -572,9 +642,10 @@ interface DataTableProps<T> {
     headers: string[];
     data: T[];
     renderRow: (item: T) => React.ReactNode;
+    getKey?: (item: T) => string | number;
 }
 
-const DataTable = <T extends {id: string}, >({ headers, data, renderRow }: DataTableProps<T>) => {
+const DataTable = <T extends any>({ headers, data, renderRow, getKey }: DataTableProps<T>) => {
     // Headers responsivos para médicos
     const getHeaderClass = (index: number, header: string) => {
         const baseClass = "px-3 md:px-4 lg:px-6 py-2 md:py-3";
@@ -602,8 +673,8 @@ const DataTable = <T extends {id: string}, >({ headers, data, renderRow }: DataT
                 </tr>
             </thead>
             <tbody>
-                {data.length > 0 ? data.map(item => (
-                    <tr key={item.id} className="bg-white border-b hover:bg-slate-50">
+                {data.length > 0 ? data.map((item, idx) => (
+                    <tr key={(getKey ? getKey(item) : (item as any).id) ?? idx} className="bg-white border-b hover:bg-slate-50">
                         {renderRow(item)}
                     </tr>
                 )) : (

@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 // ============================================
 // CONFIGURAÇÃO DO SUPABASE EXTERNO
 // ============================================
-const externalSupabaseUrl = 'https://fvtfxunakabdrlkocdme.supabase.co'
-const externalSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2dGZ4dW5ha2FiZHJsa29jZG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5MzU2NDUsImV4cCI6MjA2NjUxMTY0NX0.sclE7gxen5qG5GMeyyAM_9tHR2iAlk1F1SyLeXBKvXc'
+const externalSupabaseUrl = (import.meta as any).env?.VITE_EXTERNAL_SUPABASE_URL || 'https://fvtfxunakabdrlkocdme.supabase.co'
+const externalSupabaseAnonKey = (import.meta as any).env?.VITE_EXTERNAL_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2dGZ4dW5ha2FiZHJsa29jZG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5MzU2NDUsImV4cCI6MjA2NjUxMTY0NX0.sclE7gxen5qG5GMeyyAM_9tHR2iAlk1F1SyLeXBKvXc'
 
 export const externalSupabase = createClient(externalSupabaseUrl, externalSupabaseAnonKey, {
   auth: {
@@ -32,12 +32,14 @@ export const externalDataService = {
     select?: string
     filter?: Record<string, any>
     order?: string
+    orderAscending?: boolean
     limit?: number
+    range?: { start: number; end: number }
   }) {
     try {
       console.log(`🔄 Buscando dados da tabela: ${tableName}`)
       
-      let query = externalSupabase.from(tableName)
+      let query: any = externalSupabase.from(tableName)
       
       // Select (campos a buscar)
       if (options?.select) {
@@ -55,11 +57,15 @@ export const externalDataService = {
       
       // Ordenação
       if (options?.order) {
-        query = query.order(options.order)
+        query = query.order(options.order, { ascending: options.orderAscending ?? true })
       }
       
-      // Limite
-      if (options?.limit) {
+      // Paginação com range (Supabase v2)
+      if (options?.range) {
+        const { start, end } = options.range
+        query = query.range(start, end)
+      } else if (options?.limit) {
+        // Limite simples quando range não for fornecido
         query = query.limit(options.limit)
       }
       
@@ -124,7 +130,7 @@ export const externalDataService = {
   async diagnoseSigtapTable() {
     console.log('🔍 Iniciando diagnóstico da tabela SIGTAP...')
     console.log('📋 URL do projeto:', externalSupabaseUrl)
-    console.log('🔑 Chave API (primeiros 20 chars):', externalSupabaseAnonKey.substring(0, 20) + '...')
+    // Removido log de chave API por segurança
     
     try {
       // Teste 1: Verificar se a conexão básica funciona
@@ -226,25 +232,47 @@ export const externalDataService = {
   // Buscar códigos únicos da tabela SIGTAP
   async getSigtapUniquesCodes() {
     try {
-      console.log('🔄 Buscando códigos únicos SIGTAP...')
+      console.log('🔄 Buscando códigos únicos SIGTAP (em lotes)...')
       
-      const { data, error } = await externalSupabase
-        .from('sigtap_procedures')
-        .select('code')
-        .order('code')
+      let allCodes: { code: string }[] = []
+      let currentPage = 0
+      let hasMore = true
+      const batchSize = 1000
       
-      if (error) {
-        console.error('❌ Erro ao buscar códigos SIGTAP:', error)
-        throw new Error(`Erro ao buscar códigos: ${error.message}`)
-      }
-      
-      if (!data || !Array.isArray(data)) {
-        console.warn('⚠️ Nenhum dado retornado da tabela sigtap_procedures')
-        return []
+      while (hasMore) {
+        const { data, error } = await externalSupabase
+          .from('sigtap_procedures')
+          .select('code')
+          .order('code')
+          .range(currentPage * batchSize, (currentPage + 1) * batchSize - 1)
+        
+        if (error) {
+          console.error('❌ Erro ao buscar códigos SIGTAP (lote', currentPage, '):', error)
+          throw new Error(`Erro ao buscar códigos: ${error.message}`)
+        }
+        
+        if (!data || data.length === 0) {
+          hasMore = false
+          break
+        }
+        
+        allCodes = allCodes.concat(data as any)
+        currentPage++
+        
+        console.log(`📦 Lote ${currentPage} carregado: ${(data as any).length} códigos (total: ${allCodes.length})`)
+        
+        if ((data as any).length < batchSize) {
+          hasMore = false
+        }
+        
+        if (currentPage > 200) {
+          console.warn('⚠️ Limite de segurança atingido, interrompendo busca de códigos')
+          hasMore = false
+        }
       }
       
       // Filtrar códigos únicos
-      const uniqueCodes = [...new Set(data.map(item => item.code).filter(code => code))]
+      const uniqueCodes = [...new Set(allCodes.map(item => (item as any).code).filter(code => code))]
       
       console.log('✅ Códigos SIGTAP únicos encontrados:', uniqueCodes.length)
       return uniqueCodes
@@ -261,6 +289,7 @@ export const externalDataService = {
         .from('sigtap_procedures')
         .select('*')
         .eq('code', code)
+        // Removido order por 'created_at' para compatibilidade com esquemas sem essa coluna
         .limit(1)
         .single()
       
@@ -427,6 +456,127 @@ export const externalDataService = {
       seen.add(item.code)
       return true
     })
+  },
+
+  // ================= PROCEDURE RECORDS (Mais usados) =================
+  // Buscar registros únicos de procedure_records (código + uma descrição), com paginação otimizada
+  async getMostUsedProceduresUnique(options?: {
+    page?: number
+    pageSize?: number
+    searchTerm?: string
+  }) {
+    const { page = 1, pageSize = 50, searchTerm } = options || {}
+    console.log(`🔎 Carregando procedure_records únicos - página ${page}, tamanho ${pageSize}`)
+    return this.getMostUsedProceduresUniqueManual({ page, pageSize, searchTerm })
+  },
+
+  // Método manual otimizado para garantir unicidade por codigo_procedimento_original em procedure_records
+  async getMostUsedProceduresUniqueManual(options?: {
+    page?: number
+    pageSize?: number
+    searchTerm?: string
+  }) {
+    try {
+      const { page = 1, pageSize = 50, searchTerm } = options || {}
+
+      // 1) Carregar todos os códigos (em lotes) aplicando filtro/ordenando por código
+      let allRows: { codigo_procedimento_original: string }[] = []
+      let currentPage = 0
+      let hasMore = true
+      const batchSize = 1000
+
+      while (hasMore) {
+        let q = externalSupabase
+          .from('procedure_records')
+          .select('codigo_procedimento_original')
+          .order('codigo_procedimento_original')
+          .range(currentPage * batchSize, (currentPage + 1) * batchSize - 1)
+
+        if (searchTerm && searchTerm.trim()) {
+          const term = `%${searchTerm.trim()}%`
+          q = q.or(`codigo_procedimento_original.ilike.${term},procedure_description.ilike.${term}`)
+        }
+
+        const { data, error } = await q
+        if (error) {
+          console.error('❌ Erro ao buscar códigos de procedure_records (lote', currentPage, '):', error)
+          break
+        }
+
+        if (!data || data.length === 0) {
+          hasMore = false
+          break
+        }
+
+        allRows = allRows.concat(data as any)
+        currentPage++
+
+        if (data.length < batchSize) {
+          hasMore = false
+        }
+
+        if (currentPage > 200) {
+          console.warn('⚠️ Limite de segurança atingido ao ler procedure_records, interrompendo...')
+          hasMore = false
+        }
+      }
+
+      // 2) Extrair códigos únicos não vazios e ordenar
+      const uniqueCodes = [...new Set(
+        allRows
+          .map(r => (r as any).codigo_procedimento_original)
+          .filter((c: string) => c && String(c).trim())
+      )]
+      uniqueCodes.sort((a: string, b: string) => String(a).localeCompare(String(b), 'pt-BR'))
+
+      const totalCount = uniqueCodes.length
+
+      // 3) Paginação nos códigos únicos
+      const from = (page - 1) * pageSize
+      const to = Math.min(from + pageSize, totalCount)
+      const pageCodes = uniqueCodes.slice(from, to)
+
+      // 4) Para cada código da página, buscar uma linha representativa (código + descrição)
+      const promises = pageCodes.map(async (code, index) => {
+        try {
+          const { data, error } = await externalSupabase
+            .from('procedure_records')
+            .select('codigo_procedimento_original, procedure_description')
+            .eq('codigo_procedimento_original', code)
+            .limit(1)
+            .single()
+
+          if (error) {
+            console.warn(`⚠️ Erro ao buscar registro do código ${code}:`, error.message)
+            return null
+          }
+
+          if (index % 10 === 0 && index > 0) {
+            console.log(`🔄 procedure_records: ${index + 1}/${pageCodes.length} registros carregados`)
+          }
+
+          return data as { codigo_procedimento_original: string; procedure_description: string }
+        } catch (err) {
+          console.warn(`⚠️ Exceção ao buscar registro do código ${code}:`, err)
+          return null
+        }
+      })
+
+      const pageResults = (await Promise.all(promises)).filter(Boolean) as { codigo_procedimento_original: string; procedure_description: string }[]
+
+      console.log(`✅ Página ${page} concluída. Itens: ${pageResults.length} / ${pageCodes.length}. Total únicos: ${totalCount}`)
+
+      return {
+        data: pageResults,
+        totalCount,
+        page,
+        pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      }
+    } catch (error) {
+      console.error('❌ Erro em getMostUsedProceduresUniqueManual:', error)
+      throw error
+    }
   },
 
   // Buscar contagem total de códigos únicos (OTIMIZADO)
