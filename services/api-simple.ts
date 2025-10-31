@@ -166,6 +166,8 @@ export class SimpleAgendamentoService {
 export class SimpleMedicoService {
   async getAll(hospitalId: string): Promise<Medico[]> {
     // VOLTA AO MODELO SIMPLES ORIGINAL - buscar médicos direto da tabela medicos
+    console.log('🏥 Buscando médicos para hospital_id:', hospitalId);
+    
     const { data, error } = await supabase
       .from('medicos')
       .select('*')
@@ -173,9 +175,12 @@ export class SimpleMedicoService {
       .order('nome', { ascending: true });
 
     if (error) {
-      console.error('Erro ao buscar médicos:', error);
+      console.error('❌ Erro ao buscar médicos:', error);
       return [];
     }
+
+    console.log('✅ Médicos encontrados:', data?.length || 0);
+    console.log('📋 Médicos:', data?.map(m => ({ nome: m.nome, hospital_id: m.hospital_id })));
 
     return data?.map(convertSupabaseToMedico) || [];
   }
@@ -246,6 +251,8 @@ export class SimpleMedicoService {
 
 export class SimpleProcedimentoService {
   async getAll(hospitalId: string): Promise<Procedimento[]> {
+    console.log('🔍 Buscando procedimentos para hospital_id:', hospitalId);
+    
     const { data, error } = await supabase
       .from('procedimentos')
       .select('*')
@@ -253,11 +260,17 @@ export class SimpleProcedimentoService {
       .order('nome', { ascending: true });
 
     if (error) {
-      console.error('Erro ao buscar procedimentos:', error);
+      console.error('❌ Erro ao buscar procedimentos:', error);
       return [];
     }
 
-    return data?.map(convertSupabaseToProcedimento) || [];
+    console.log('✅ Procedimentos encontrados:', data?.length || 0);
+    console.log('📋 Dados brutos do Supabase:', data);
+    
+    const procedimentos = data?.map(convertSupabaseToProcedimento) || [];
+    console.log('📦 Procedimentos convertidos:', procedimentos);
+    
+    return procedimentos;
   }
 
   async create(procedimento: Omit<Procedimento, 'id'>): Promise<Procedimento> {

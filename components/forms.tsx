@@ -278,15 +278,17 @@ export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, espe
      const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Converter nome da especialidade para ID
-        const especialidadeId = especialidades.find(e => e.nome === formData.especialidade)?.id;
+        // Converter nome da especialidade para ID (se preenchido)
+        const especialidadeId = formData.especialidade ? 
+            especialidades.find(e => e.nome === formData.especialidade)?.id : 
+            undefined;
         
         const dataToSave = {
             nome: formData.nome,
             tipo: formData.tipo,
             duracaoEstimada: formData.duracaoEstimada,
             descricao: formData.descricao,
-            especialidade: formData.especialidade, // Salvar nome na coluna física
+            especialidade: formData.especialidade || '', // Salvar nome na coluna física
             especialidadeId: especialidadeId // Salvar ID para relacionamento
         };
         
@@ -300,30 +302,51 @@ export const ProcedureForm: React.FC<ProcedureFormProps> = ({ procedimento, espe
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <FormField label="Nome do Procedimento">
-                <Input name="nome" value={formData.nome} onChange={handleChange} required />
+                <Input name="nome" value={formData.nome} onChange={handleChange} required placeholder="Ex: Consulta Ambulatorial" />
             </FormField>
-            <FormField label="Tipo">
-                <Select name="tipo" value={formData.tipo} onChange={handleChange}>
-                    <option value="ambulatorial">Ambulatorial</option>
-                    <option value="cirurgico">Cirúrgico</option>
-                </Select>
-            </FormField>
-            <FormField label="Especialidade">
-                <Select name="especialidade" value={formData.especialidade} onChange={handleChange} required>
-                    <option value="">Selecione uma especialidade</option>
-                    {especialidades.map(esp => (
-                        <option key={esp.id} value={esp.nome}>
-                            {esp.nome}
-                        </option>
-                    ))}
-                </Select>
-            </FormField>
-            <FormField label="Duração Estimada (minutos)">
-                <Input name="duracaoEstimada" type="number" value={formData.duracaoEstimada} onChange={handleChange} required />
-            </FormField>
-            <FormField label="Descrição">
-                <Input name="descricao" value={formData.descricao} onChange={handleChange} />
-            </FormField>
+            
+            {/* Campos opcionais - podem ser editados depois */}
+            <div className="pt-2 border-t">
+                <p className="text-xs text-gray-500 mb-3">
+                    💡 <strong>Campos opcionais:</strong> Você pode preencher agora ou editar depois
+                </p>
+                
+                <FormField label="Tipo (Opcional)">
+                    <Select name="tipo" value={formData.tipo} onChange={handleChange}>
+                        <option value="ambulatorial">Ambulatorial</option>
+                        <option value="cirurgico">Cirúrgico</option>
+                    </Select>
+                </FormField>
+                
+                <FormField label="Especialidade (Opcional)">
+                    <Select name="especialidade" value={formData.especialidade} onChange={handleChange}>
+                        <option value="">Nenhuma</option>
+                        {especialidades.map(esp => (
+                            <option key={esp.id} value={esp.nome}>
+                                {esp.nome}
+                            </option>
+                        ))}
+                    </Select>
+                </FormField>
+                
+                <FormField label="Duração Estimada (Opcional)">
+                    <div className="flex items-center gap-2">
+                        <Input 
+                            name="duracaoEstimada" 
+                            type="number" 
+                            value={formData.duracaoEstimada} 
+                            onChange={handleChange} 
+                            className="w-32"
+                        />
+                        <span className="text-sm text-gray-500">minutos</span>
+                    </div>
+                </FormField>
+                
+                <FormField label="Descrição (Opcional)">
+                    <Input name="descricao" value={formData.descricao} onChange={handleChange} placeholder="Informações adicionais..." />
+                </FormField>
+            </div>
+            
             <div className="flex justify-end gap-3 pt-4">
                 {error && (
                     <div className="w-full p-3 bg-red-100 border border-red-400 text-red-700 rounded mb-3">

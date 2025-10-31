@@ -16,6 +16,8 @@ import { useAuth } from './PremiumLogin';
 import externalDataService from '../services/external-supabase';
 import { exportAllProceduresToExcel } from '../utils/excelExport';
 import { useDataCache } from '../contexts/DataCacheContext';
+import ExcelImportMedicos from './ExcelImportMedicos';
+import ExcelImportProcedimentos from './ExcelImportProcedimentos';
 
 type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap';
 
@@ -64,6 +66,12 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   const [filtroEspecialidade, setFiltroEspecialidade] = useState<string>('todos');
   const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
   const [filtroDataFim, setFiltroDataFim] = useState<string>('');
+  
+  // Estado para controlar modal de importação de médicos
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  
+  // Estado para controlar modal de importação de procedimentos
+  const [isImportProcedimentosModalOpen, setIsImportProcedimentosModalOpen] = useState(false);
   
   // Procedimentos mais usados (externos) - removidos pois agora usamos o cache
   // const [mostUsedProcedures, setMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
@@ -160,12 +168,14 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       m.especialidade.toLowerCase().includes(searchTerm.toLowerCase())
     ), [medicos, searchTerm]);
   
-  const filteredProcedimentos = useMemo(() =>
-    procedimentos.filter(p =>
+  const filteredProcedimentos = useMemo(() => {
+    console.log('🔍 Filtrando procedimentos:', procedimentos);
+    return procedimentos.filter(p =>
       p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       getProcedimentoEspecialidade(p).toLowerCase().includes(searchTerm.toLowerCase())
-    ), [procedimentos, searchTerm, especialidades]);
+    );
+  }, [procedimentos, searchTerm, especialidades]);
   
   // Estado para armazenar TODOS os procedimentos únicos (para exportação)
   // Remover estado local que agora é gerenciado pelo cache
@@ -319,18 +329,32 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-slate-800">Gerenciamento</h2>
-        {(activeTab === 'agendamentos' || activeTab === 'medicos') && (
-          <Button onClick={() => openModal()} data-new-appointment={activeTab === 'agendamentos' ? 'true' : undefined}>
-            <PlusIcon className="w-5 h-5"/>
-            Novo {activeTab === 'agendamentos' ? 'Agendamento' : 'Médico'}
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {/* Botão de Importar Excel - Oculto (já foi feita a importação inicial) */}
+          {/* {activeTab === 'medicos' && (
+            <Button 
+              onClick={() => setIsImportModalOpen(true)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Importar Excel
+            </Button>
+          )} */}
+          {(activeTab === 'agendamentos' || activeTab === 'medicos' || activeTab === 'procedimentos') && (
+            <Button onClick={() => openModal()} data-new-appointment={activeTab === 'agendamentos' ? 'true' : undefined}>
+              <PlusIcon className="w-5 h-5"/>
+              Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
+            </Button>
+          )}
+        </div>
       </div>
   
       <div className="border-b border-slate-200">
         <TabButton tab="agendamentos" label="Agendamentos" />
         <TabButton tab="medicos" label="Médicos" />
-        <TabButton tab="procedimentos" label="Procedimentos (Mais usados)" />
+        <TabButton tab="procedimentos" label="Procedimentos" />
         <TabButton tab="sigtap" label="Procedimentos SIGTAP" />
       </div>
   
@@ -506,8 +530,8 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 hidden md:table-cell">{item.telefone}</td>
                         <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 hidden lg:table-cell">{item.email}</td>
                         <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">
-                           <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700"><EditIcon className="w-5 h-5" /></button>
-                           <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-5 h-5"/></button>
+                           <button onClick={() => openModal(item)} className="text-blue-500 hover:text-blue-700" title="Editar médico"><EditIcon className="w-5 h-5" /></button>
+                           <button onClick={() => setDeletingId(item.id)} className="text-red-500 hover:text-red-700" title="Excluir médico"><TrashIcon className="w-5 h-5"/></button>
                         </td>
                     </>
                 )}
@@ -515,128 +539,69 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
           )}
            {activeTab === 'procedimentos' && (
               <>
-                <div className="mb-2 text-xs text-slate-600 flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    {mostUsedProcedures.loading ? (
-                      <span>Carregando procedimentos mais usados...</span>
-                    ) : (
-                      <span>
-                        Exibindo {allFilteredMostUsedProcedures.length} de {mostUsedProcedures.data.length} procedimentos únicos
-                      </span>
-                    )}
-                    {mostUsedProcedures.error && (
-                      <span className="ml-2 text-red-600">
-                        Erro: {mostUsedProcedures.error}
-                        <button
-                          onClick={() => loadAllMostUsedProcedures(true)}
-                          className="ml-2 text-blue-600 hover:text-blue-800 underline"
-                        >
-                          Tentar Novamente
-                        </button>
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => loadAllMostUsedProcedures(true)}
-                      disabled={mostUsedProcedures.loading}
-                      className="text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-400 flex items-center gap-1"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Recarregar
-                    </button>
-                  </div>
+                {/* Botão de Importar Excel - Oculto (funcionalidade movida para botão Novo Procedimento) */}
+                {/* <div className="mb-4 flex justify-end">
+                  <Button 
+                    onClick={() => setIsImportProcedimentosModalOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    Importar Excel
+                  </Button>
+                </div> */}
+              
+                {/* Campo de busca */}
+                <div className="mb-4">
+                  <Input
+                    type="text"
+                    placeholder="Buscar procedimento..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full"
+                  />
                 </div>
-                
-                {/* Campos de Filtro */}
-                {!mostUsedProcedures.loading && (
-                  <div className="mb-4 p-4 bg-slate-50 rounded-lg border">
-                    <h3 className="text-sm font-medium text-slate-700 mb-3">Filtros</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                          Código (sem pontos)
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="Ex: 0101010012"
-                          value={filterCodigo}
-                          onChange={(e) => setFilterCodigo(e.target.value)}
-                          className="w-full text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                          Descrição
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="Buscar por descrição..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full text-sm"
-                        />
-                      </div>
-                    </div>
-                    {(filterCodigo || searchTerm) && (
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-xs text-slate-600">
-                          {allFilteredMostUsedProcedures.length} resultado(s) encontrado(s)
+
+                {/* Tabela de Procedimentos Cadastrados */}
+                <DataTable
+                  headers={['Procedimento', 'Tipo', 'Ações']}
+                  data={filteredProcedimentos}
+                  renderRow={(item: Procedimento) => {
+                    console.log(`📊 Renderizando: ${item.nome} | Tipo: "${item.tipo}" | Comparação cirurgico: ${item.tipo === 'cirurgico'}`);
+                    return (
+                    <>
+                      <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 font-medium text-slate-900">
+                        {item.nome}
+                      </td>
+                      <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          item.tipo === 'cirurgico' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {item.tipo === 'cirurgico' ? 'Cirúrgico' : 'Ambulatorial'}
                         </span>
-                        <button
-                          onClick={() => {
-                            setFilterCodigo('');
-                            setSearchTerm('');
-                          }}
-                          className="text-xs text-blue-600 hover:text-blue-800"
+                      </td>
+                      <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">
+                        <button 
+                          onClick={() => openModal(item)} 
+                          className="text-blue-500 hover:text-blue-700"
+                          title="Editar procedimento"
                         >
-                          Limpar filtros
+                          <EditIcon className="w-5 h-5" />
                         </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Botão de exportação */}
-                {!mostUsedProcedures.loading && allFilteredMostUsedProcedures.length > 0 && (
-                  <div className="mb-4">
-                    <Button
-                      onClick={handleExportToExcel}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Exportar para Excel ({allFilteredMostUsedProcedures.length > 0 ? allFilteredMostUsedProcedures.length : mostUsedTotal} registros)
-                    </Button>
-                  </div>
-                )}
-
-                {/* Tabela de dados */}
-                <VirtualizedTable
-                  data={allFilteredMostUsedProcedures}
-                  height={500}
-                  itemHeight={60}
-                  loading={mostUsedProcedures.loading}
-                  progress={mostUsedProcedures.progress}
-                  columns={[
-                    {
-                      key: 'codigo_procedimento_original',
-                      header: 'Código',
-                      width: '200px',
-                      render: (value) => (
-                        <span className="font-medium text-slate-900">{value}</span>
-                      )
-                    },
-                    {
-                      key: 'procedure_description',
-                      header: 'Descrição',
-                      width: '1fr'
-                    }
-                  ]}
-                  className="mt-4"
+                        <button 
+                          onClick={() => setDeletingId(item.id)} 
+                          className="text-red-500 hover:text-red-700"
+                          title="Excluir procedimento"
+                        >
+                          <TrashIcon className="w-5 h-5"/>
+                        </button>
+                      </td>
+                    </>
+                    );
+                  }}
                 />
               </>
           )}
@@ -694,11 +659,13 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         setError(null);
                         
                         if (id) {
+                            // Ao atualizar, não altera o hospital_id
                             await simpleMedicoService.update(id, data);
                         } else {
-                            // VOLTA AO MODELO SIMPLES - incluir hospitalId no objeto
+                            // Ao criar novo médico, vincula automaticamente ao hospital do usuário
                             const dataWithHospital = { ...data, hospitalId: hospitalSelecionado?.id };
                             await simpleMedicoService.create(dataWithHospital, hospitalSelecionado?.id || '');
+                            console.log('✅ Médico criado e vinculado ao hospital:', hospitalSelecionado?.nome);
                         }
                         
                         onRefresh();
@@ -714,7 +681,38 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                 error={error}
             />
         }
-        {activeTab === 'procedimentos' && null}
+        {activeTab === 'procedimentos' &&
+            <ProcedureForm
+                procedimento={editingItem as Procedimento | undefined}
+                especialidades={especialidades}
+                onSave={async (data, id) => {
+                    try {
+                        setLoading(true);
+                        setError(null);
+                        
+                        if (id) {
+                            // Ao atualizar, não altera o hospital_id
+                            await simpleProcedimentoService.update(id, data);
+                        } else {
+                            // Ao criar novo procedimento, vincula automaticamente ao hospital do usuário
+                            const dataWithHospital = { ...data, hospitalId: hospitalSelecionado?.id };
+                            await simpleProcedimentoService.create(dataWithHospital);
+                            console.log('✅ Procedimento criado e vinculado ao hospital:', hospitalSelecionado?.nome);
+                        }
+                        
+                        onRefresh();
+                        closeModal();
+                    } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Erro ao salvar procedimento');
+                    } finally {
+                        setLoading(false);
+                    }
+                }}
+                onCancel={closeModal}
+                loading={loading}
+                error={error}
+            />
+        }
       </Modal>
 
       {/* Confirmation Modal for Deletion */}
@@ -745,9 +743,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                             } else if (activeTab === 'medicos') {
                                 await simpleMedicoService.delete(deletingId);
                             } else if (activeTab === 'procedimentos') {
-                                // Aba procedimentos agora é somente leitura (procedimentos mais usados)
-                                // Nenhuma exclusão é permitida aqui.
-                                throw new Error('Exclusão não permitida nesta aba.');
+                                await simpleProcedimentoService.delete(deletingId);
                             }
                             
                             onRefresh();
@@ -794,7 +790,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                     <p className="text-gray-600">
                         Você tem certeza que deseja excluir este {
                             activeTab === 'medicos' ? 'médico' : 
-                            activeTab === 'procedimentos' ? 'procedimento (não permitido)' : 
+                            activeTab === 'procedimentos' ? 'procedimento' : 
                             'agendamento'
                         }? Esta ação não pode ser desfeita.
                     </p>
@@ -812,6 +808,27 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
             )}
         </div>
       </Modal>
+
+      {/* Modal de Importação de Médicos via Excel */}
+      <ExcelImportMedicos
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportComplete={() => {
+          setIsImportModalOpen(false);
+          onRefresh(); // Atualizar lista de médicos
+        }}
+      />
+
+      {/* Modal de Importação de Procedimentos via Excel */}
+      <ExcelImportProcedimentos
+        isOpen={isImportProcedimentosModalOpen}
+        onClose={() => setIsImportProcedimentosModalOpen(false)}
+        onImportComplete={() => {
+          setIsImportProcedimentosModalOpen(false);
+          onRefresh(); // Atualizar lista de procedimentos
+        }}
+        hospitalId={hospitalSelecionado?.id || ''}
+      />
     </div>
   );
 };
