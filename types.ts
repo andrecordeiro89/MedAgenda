@@ -1,7 +1,7 @@
 
 export type StatusLiberacao = 'x' | 'v'; // x = pendente, v = liberado
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
-export type View = 'dashboard' | 'calendar' | 'management' | 'external';
+export type View = 'dashboard' | 'calendar' | 'management' | 'avaliacao-anestesica';
 
 export interface Agendamento {
   id: string;

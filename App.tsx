@@ -4,7 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
 import ManagementView from './components/ManagementView';
-import ExternalDataView from './components/ExternalDataView';
+import AvaliacaoAnestesicaView from './components/AvaliacaoAnestesicaView';
 import { 
     AuthProvider, 
     useAuth, 
@@ -214,8 +214,16 @@ const AppContent: React.FC = () => {
                         onRefresh={() => loadData(false)}
                     />
                 );
-            case 'external':
-                return <ExternalDataView />;
+            case 'avaliacao-anestesica':
+                return (
+                    <AvaliacaoAnestesicaView
+                        agendamentos={agendamentos}
+                        medicos={medicos}
+                        procedimentos={procedimentos}
+                        hospitalId={hospitalSelecionado?.id || ''}
+                        onRefresh={() => loadData(false)}
+                    />
+                );
             default:
                 return <div>View não encontrada</div>;
         }
