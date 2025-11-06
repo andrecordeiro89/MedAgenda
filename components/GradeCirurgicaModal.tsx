@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon, Badge } from './ui';
+import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon } from './ui';
 import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana } from '../types';
 
 interface GradeCirurgicaModalProps {
@@ -114,17 +114,53 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }));
   };
 
-  // Adicionar procedimento
-  const handleAddProcedimento = (gradeIndex: number) => {
+  // Adicionar procedimento (com especialidadeId para inserir na posição correta)
+  const handleAddProcedimento = (gradeIndex: number, especialidadeId?: string) => {
     setGrades(prev => prev.map((grade, i) => {
       if (i === gradeIndex) {
         const novoItem: GradeCirurgicaItem = {
           id: `temp-${Date.now()}-${Math.random()}`,
           tipo: 'procedimento',
           texto: '',
-          ordem: grade.itens.length + 1
+          ordem: 0 // Será recalculado
         };
-        return { ...grade, itens: [...grade.itens, novoItem] };
+
+        // Se foi passado o ID da especialidade, inserir logo após ela
+        if (especialidadeId) {
+          const especialidadeIndex = grade.itens.findIndex(item => item.id === especialidadeId);
+          
+          if (especialidadeIndex !== -1) {
+            // Encontrar a posição do último procedimento desta especialidade
+            let insertIndex = especialidadeIndex + 1;
+            
+            // Avançar até encontrar outra especialidade ou o fim
+            while (
+              insertIndex < grade.itens.length && 
+              grade.itens[insertIndex].tipo === 'procedimento'
+            ) {
+              insertIndex++;
+            }
+            
+            // Inserir o novo procedimento nessa posição
+            const novosItens = [
+              ...grade.itens.slice(0, insertIndex),
+              novoItem,
+              ...grade.itens.slice(insertIndex)
+            ];
+            
+            // Reordenar todos os itens
+            return {
+              ...grade,
+              itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
+            };
+          }
+        }
+        
+        // Se não foi passado especialidadeId ou não encontrou, adiciona no final
+        return { 
+          ...grade, 
+          itens: [...grade.itens, { ...novoItem, ordem: grade.itens.length + 1 }] 
+        };
       }
       return grade;
     }));
@@ -293,28 +329,28 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${nomeDiaClicado}s - ${mesProximoNome}`}
-      size="full"
+      title={`Grade Cirúrgica - ${nomeDiaClicado}s de ${mesProximoNome}`}
+      size="fullscreen"
     >
-      <div className="h-[calc(100vh-180px)] overflow-hidden">
+      <div className="flex flex-col h-full p-4">
         {/* Grid com as 3 datas */}
-        <div className="grid grid-cols-3 gap-3 h-full">
+        <div className="grid grid-cols-3 gap-4 flex-1 min-h-0 mb-4">
           {proximasDatas.map((data, index) => {
             const grade = grades[index];
 
             return (
               <div
                 key={index}
-                className="border border-slate-300 rounded-md bg-white shadow flex flex-col h-full"
+                className="border-2 border-slate-300 rounded-lg bg-white shadow-md flex flex-col min-h-0"
               >
-                {/* Header do Card - Compacto */}
-                <div className={`px-2 py-1.5 border-b ${
+                {/* Header do Card */}
+                <div className={`px-3 py-1.5 border-b-2 ${
                   grade.itens.length > 0 
                     ? 'border-green-200 bg-green-50' 
                     : 'border-slate-200 bg-slate-50'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <h3 className="text-sm font-bold text-slate-800">
                         {data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                       </h3>
@@ -324,11 +360,34 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                         </span>
                       )}
                     </div>
+                    
+                    {/* Botões de ação do header */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleAddEspecialidade(index)}
+                        className="flex items-center gap-0.5 px-2 py-0.5 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-medium transition-colors"
+                        title="Adicionar Especialidade"
+                      >
+                        <PlusIcon className="w-2.5 h-2.5" />
+                        Especialidade
+                      </button>
+                      
+                      {grade.itens.length > 0 && (
+                        <button
+                          onClick={() => handleReplicarParaTodas(index)}
+                          className="flex items-center gap-0.5 px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-medium transition-colors"
+                          title="Replicar para todos os dias"
+                        >
+                          <CopyIcon className="w-2.5 h-2.5" />
+                          Replicar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Tabela de Itens Agrupados por Especialidade */}
-                <div className="flex-1 p-2 overflow-hidden">
+                <div className="flex-1 p-2 overflow-y-auto min-h-0">
                   {grade.itens.length === 0 ? (
                     <div className="text-center py-4 text-slate-500">
                       <p className="text-xs">Vazio</p>
@@ -336,10 +395,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   ) : (
                     <div className="space-y-1.5">
                       {getEspecialidadesAgrupadas(grade.itens).map((grupo, grupoIndex) => (
-                        <div key={grupoIndex} className="border border-slate-300 rounded overflow-hidden bg-white">
-                          {/* Header da Especialidade - Compacto */}
+                        <div key={grupoIndex} className="border border-slate-300 rounded overflow-hidden bg-white shadow-sm">
+                          {/* Header da Especialidade */}
                           {grupo.especialidade && (
-                            <div className="group flex items-center gap-1 px-1.5 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                            <div className="group flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                               {/* Botões de ordem */}
                               <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
@@ -349,7 +408,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                   title="↑"
                                 >
                                   <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                   </svg>
                                 </button>
                                 <button
@@ -358,7 +417,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                   title="↓"
                                 >
                                   <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
                                 </button>
                               </div>
@@ -367,14 +426,24 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               <Input
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
-                                placeholder="Ex: Ortopedia"
-                                className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-xs focus:bg-white/30 py-0.5 px-1"
+                                placeholder="Ex: Ortopedia - Joelho"
+                                className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-xs focus:bg-white/30 py-0.5 px-1.5"
                               />
 
                               {/* Badge com contador */}
-                              <span className="bg-white/30 text-white px-1 py-0.5 rounded text-[10px] font-semibold">
+                              <span className="bg-white/30 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold">
                                 {grupo.procedimentos.length}
                               </span>
+
+                              {/* Botão adicionar procedimento */}
+                              <button
+                                onClick={() => handleAddProcedimento(index, grupo.especialidade!.id)}
+                                className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/20 hover:bg-white/30 text-white rounded text-[10px] font-medium transition-colors"
+                                title="Adicionar Procedimento"
+                              >
+                                <PlusIcon className="w-2.5 h-2.5" />
+                                Proc.
+                              </button>
 
                               {/* Botão remover */}
                               <button
@@ -387,13 +456,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                             </div>
                           )}
 
-                          {/* Lista de Procedimentos - Compacta */}
+                          {/* Lista de Procedimentos */}
                           {grupo.procedimentos.length > 0 && (
                             <div className="p-1 space-y-0.5 bg-slate-50">
                               {grupo.procedimentos.map((proc) => (
                                 <div
                                   key={proc.id}
-                                  className="group flex items-center gap-1 px-1 py-0.5 bg-white rounded border border-slate-200 hover:border-slate-300 transition-all"
+                                  className="group flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200 hover:border-slate-300 transition-all"
                                 >
                                   {/* Botões de ordem */}
                                   <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
@@ -404,7 +473,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                       title="↑"
                                     >
                                       <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                       </svg>
                                     </button>
                                     <button
@@ -413,7 +482,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                       title="↓"
                                     >
                                       <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                       </svg>
                                     </button>
                                   </div>
@@ -423,7 +492,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                     value={proc.texto}
                                     onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
                                     placeholder="Ex: LCA"
-                                    className="flex-1 border-0 shadow-none text-[11px] focus:ring-1 py-0.5 px-1"
+                                    className="flex-1 border-0 shadow-none text-xs focus:ring-1 py-0.5 px-1.5"
                                   />
 
                                   {/* Botão remover */}
@@ -443,57 +512,20 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     </div>
                   )}
                 </div>
-
-                {/* Footer com botões - Compacto */}
-                <div className="px-1.5 py-1 border-t border-slate-200 bg-slate-50">
-                  {/* Botões de adicionar */}
-                  <div className="flex gap-1">
-                    <Button
-                      onClick={() => handleAddEspecialidade(index)}
-                      variant="secondary"
-                      size="small"
-                      className="flex-1 text-[10px] py-0.5 px-1"
-                    >
-                      <PlusIcon className="w-2.5 h-2.5 mr-0.5" />
-                      Esp.
-                    </Button>
-                    <Button
-                      onClick={() => handleAddProcedimento(index)}
-                      variant="secondary"
-                      size="small"
-                      className="flex-1 text-[10px] py-0.5 px-1"
-                    >
-                      <PlusIcon className="w-2.5 h-2.5 mr-0.5" />
-                      Proc.
-                    </Button>
-                    {grade.itens.length > 0 && (
-                      <Button
-                        onClick={() => handleReplicarParaTodas(index)}
-                        variant="secondary"
-                        size="small"
-                        className="flex-1 text-[10px] py-0.5 px-1"
-                      >
-                        <CopyIcon className="w-2.5 h-2.5 mr-0.5" />
-                        Repl.
-                      </Button>
-                    )}
-                  </div>
-                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Botões de Ação - Compacto */}
-        <div className="flex justify-between items-center pt-2 border-t mt-2">
+        {/* Botões de Ação */}
+        <div className="flex justify-between items-center px-4 py-2 border-t flex-shrink-0 bg-white">
           <span className="text-[10px] text-slate-500 italic">
             ✓ Auto-salvo
           </span>
           <Button
             onClick={onClose}
             variant="secondary"
-            size="small"
-            className="text-xs py-1 px-3"
+            className="text-xs py-1.5 px-4"
           >
             Fechar
           </Button>
