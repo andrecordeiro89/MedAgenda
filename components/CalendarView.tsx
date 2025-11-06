@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Agendamento, Medico, Procedimento, GradeCirurgicaDia } from '../types';
+import React, { useState, useMemo } from 'react';
+import { Agendamento, Medico, Procedimento, GradeCirurgicaDia, Especialidade, MetaEspecialidade, DiaSemana } from '../types';
 import { ChevronLeftIcon, ChevronRightIcon, Modal } from './ui';
 import { formatDate } from '../utils';
 import GradeCirurgicaModal from './GradeCirurgicaModal';
@@ -9,6 +9,8 @@ interface CalendarViewProps {
   agendamentos: Agendamento[];
   medicos: Medico[];
   procedimentos: Procedimento[];
+  especialidades: Especialidade[];
+  metasEspecialidades: MetaEspecialidade[];
   hospitalId: string;
   onRefresh?: () => void;
 }
@@ -17,6 +19,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   agendamentos, 
   medicos, 
   procedimentos,
+  especialidades,
+  metasEspecialidades = [], // Default para array vazio
   hospitalId
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -24,6 +28,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGradeCirurgicaModalOpen, setIsGradeCirurgicaModalOpen] = useState(false);
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 0=Dom, 1=Seg, ..., 6=Sáb
+
+  // Debug: verificar se metas estão carregadas
+  console.log('📊 CalendarView - Metas carregadas:', metasEspecialidades.length);
   
   // Verificar se há grades configuradas para cada dia da semana
   const getDiasComGrade = (): Set<number> => {
@@ -86,6 +93,17 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + amount, 1));
   };
   
+  // Mapear dia da semana para DiaSemana
+  const diaSemanaMap: Record<number, DiaSemana> = {
+    0: 'domingo',
+    1: 'segunda',
+    2: 'terca',
+    3: 'quarta',
+    4: 'quinta',
+    5: 'sexta',
+    6: 'sabado'
+  };
+
   const today = new Date();
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -95,11 +113,31 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
     const isToday = date.toDateString() === today.toDateString();
     const temGrade = diasComGrade.has(date.getDay());
+    const diaSemana = diaSemanaMap[date.getDay()];
+
+    // Agrupar agendamentos por médico e contar
+    const agendamentosPorMedico = dayAppointments.reduce((acc, agendamento) => {
+      const medico = medicos.find(m => m.id === agendamento.medicoId);
+      if (medico) {
+        if (!acc[medico.id]) {
+          acc[medico.id] = {
+            medico,
+            count: 0,
+            especialidadeId: medico.especialidadeId || ''
+          };
+        }
+        acc[medico.id].count++;
+      }
+      return acc;
+    }, {} as Record<string, { medico: Medico; count: number; especialidadeId: string }>);
+
+    // Obter metas para este dia da semana (verificar se metasEspecialidades existe)
+    const metasDoDia = metasEspecialidades?.filter(m => m.diaSemana === diaSemana && m.ativo) || [];
 
     days.push(
       <div
         key={day}
-        className={`border-r border-b p-2 cursor-pointer transition-colors relative ${
+        className={`border-r border-b p-1 cursor-pointer transition-colors relative overflow-hidden ${
           temGrade ? 'hover:bg-green-50' : 'hover:bg-blue-50'
         }`}
         onClick={() => handleDayClick(day)}
@@ -107,20 +145,51 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       >
         {/* Indicador de Grade Configurada */}
         {temGrade && (
-          <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full shadow-sm" title="Grade configurada"></div>
+          <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full shadow-sm z-10" title="Grade configurada"></div>
         )}
         
-        <div className={`flex justify-center items-center w-8 h-8 rounded-full ${
+        {/* Número do dia */}
+        <div className={`flex justify-center items-center w-6 h-6 rounded-full text-xs mx-auto ${
           isToday ? 'bg-primary text-white font-bold' : temGrade ? 'font-semibold text-green-700' : ''
         }`}>
           {day}
         </div>
         
-        <div className="flex flex-wrap gap-1 mt-2 justify-center">
-            {dayAppointments.some(a => getAgendamentoTipo(a) === 'ambulatorial') && <div className="w-2 h-2 rounded-full bg-blue-500" title="Ambulatorial"></div>}
-            {dayAppointments.some(a => getAgendamentoTipo(a) === 'cirurgico') && <div className="w-2 h-2 rounded-full bg-red-500" title="Cirúrgico"></div>}
-            {dayAppointments.some(a => a.statusLiberacao === 'v') && <div className="w-2 h-2 rounded-full bg-green-500" title="Liberado"></div>}
-            {dayAppointments.some(a => a.statusLiberacao === 'x') && <div className="w-2 h-2 rounded-full bg-orange-500" title="Pendente"></div>}
+        {/* Barras de progresso por médico/especialidade */}
+        <div className="mt-1 space-y-0.5">
+          {Object.values(agendamentosPorMedico).map(({ medico, count, especialidadeId }) => {
+            // Buscar meta para esta especialidade neste dia
+            const meta = metasDoDia.find(m => m.especialidadeId === especialidadeId);
+            const metaQuantidade = meta?.quantidadeAgendamentos || 10; // Default 10 se não houver meta
+            const percentual = Math.min((count / metaQuantidade) * 100, 100);
+            const atingiuMeta = count >= metaQuantidade;
+
+            return (
+              <div
+                key={medico.id}
+                className="text-[8px] leading-tight"
+                title={`${medico.nome} - ${count}/${metaQuantidade}`}
+              >
+                {/* Nome do médico (truncado) */}
+                <div className="truncate font-medium text-slate-700">
+                  {medico.nome.split(' ')[0]}
+                </div>
+                {/* Barra de progresso */}
+                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      atingiuMeta ? 'bg-green-500' : 'bg-red-400'
+                    }`}
+                    style={{ width: `${percentual}%` }}
+                  ></div>
+                </div>
+                {/* Contador */}
+                <div className="text-[7px] text-slate-500 text-center">
+                  {count}/{metaQuantidade}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -197,6 +266,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             mesAtual={currentDate}
             diaSemanaClicado={selectedDayOfWeek}
             hospitalId={hospitalId}
+            especialidades={especialidades}
         />
     </div>
   );

@@ -5,18 +5,27 @@ export type View = 'dashboard' | 'calendar' | 'management' | 'avaliacao-anestesi
 
 export interface Agendamento {
   id: string;
-  nome: string;
-  dataNascimento: string; // YYYY-MM-DD
-  idade: number;
-  procedimentoId: string;
-  medicoId: string;
-  cidadeNatal: string;
-  statusLiberacao: StatusLiberacao;
-  telefone: string;
-  whatsapp: string;
-  dataAgendamento: string; // YYYY-MM-DD
-  tipo: TipoAgendamento;
-  hospitalId?: string; // ID do hospital
+  nome_paciente: string; // CAMPO REAL DO BANCO
+  data_nascimento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
+  idade?: number; // Calculado no frontend
+  procedimento_id: string; // CAMPO REAL DO BANCO
+  medico_id: string; // CAMPO REAL DO BANCO
+  cidade_natal: string; // CAMPO REAL DO BANCO
+  status_liberacao: StatusLiberacao; // CAMPO REAL DO BANCO (x ou v)
+  telefone: string; // CAMPO REAL DO BANCO
+  whatsapp: string; // CAMPO REAL DO BANCO
+  data_agendamento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
+  hospital_id: string; // CAMPO REAL DO BANCO
+  
+  // Campos auxiliares (populados via JOIN ou calculados)
+  tipo?: TipoAgendamento; // Calculado baseado no procedimento
+  nome?: string; // Alias para nome_paciente (compatibilidade)
+  dataNascimento?: string; // Alias para data_nascimento (compatibilidade)
+  dataAgendamento?: string; // Alias para data_agendamento (compatibilidade)
+  procedimentoId?: string; // Alias para procedimento_id (compatibilidade)
+  medicoId?: string; // Alias para medico_id (compatibilidade)
+  cidadeNatal?: string; // Alias para cidade_natal (compatibilidade)
+  hospitalId?: string; // Alias para hospital_id (compatibilidade)
 }
 
 export interface Medico {
@@ -51,8 +60,14 @@ export interface Hospital {
 
 export interface Especialidade {
     id: string;
-    nome: string;
-    descricao?: string;
+    nome: string; // CAMPO REAL DO BANCO (único campo)
+}
+
+// Interface para usuários da aplicação
+export interface AppUser {
+    id: string;
+    login: string; // CAMPO REAL DO BANCO
+    senha: string; // CAMPO REAL DO BANCO (use hash em produção!)
 }
 
 // Dia da semana para metas
@@ -74,13 +89,16 @@ export interface MetaEspecialidade {
 
 export interface Procedimento {
     id: string;
-    nome: string;
-    tipo: TipoAgendamento;
-    duracaoEstimada: number; // in minutes
-    descricao: string;
-    especialidade?: string; // Nome da especialidade (coluna física)
-    especialidadeId?: string; // ID da especialidade (relacionamento)
-    hospitalId?: string; // ID do hospital
+    nome: string; // CAMPO REAL DO BANCO (único campo existente)
+    prefixo?: string; // NOVA COLUNA A ADICIONAR (prefixo do procedimento, ex: LCA, MENISCO)
+    
+    // Campos auxiliares (calculados ou obtidos via JOIN)
+    tipo?: TipoAgendamento; // Calculado ou configurado
+    duracaoEstimada?: number; // Calculado ou configurado
+    descricao?: string; // Se precisar no futuro
+    especialidade?: string; // Nome da especialidade (via JOIN)
+    especialidadeId?: string; // ID da especialidade (via JOIN)
+    hospitalId?: string; // ID do hospital (via JOIN)
 }
 
 // Interfaces para Grade Cirúrgica
@@ -89,6 +107,9 @@ export interface GradeCirurgicaItem {
     tipo: 'especialidade' | 'procedimento';
     texto: string;
     ordem: number;
+    pacientes?: string[]; // Lista de nomes de pacientes vinculados ao procedimento
+    especialidadeId?: string; // ID da especialidade (quando tipo='especialidade')
+    procedimentoId?: string; // ID do procedimento (quando tipo='procedimento')
 }
 
 export interface GradeCirurgicaDia {

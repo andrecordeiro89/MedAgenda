@@ -44,6 +44,8 @@ ON metas_especialidades(hospital_id, especialidade_id) WHERE ativo = true;
 -- ============================================================================
 -- TRIGGER PARA ATUALIZAR updated_at AUTOMATICAMENTE
 -- ============================================================================
+DROP TRIGGER IF EXISTS update_metas_especialidades_updated_at ON metas_especialidades;
+
 CREATE TRIGGER update_metas_especialidades_updated_at 
     BEFORE UPDATE ON metas_especialidades
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -203,31 +205,40 @@ COMMENT ON VIEW vw_resumo_metas_por_hospital IS 'Resumo agregado de metas por ho
 
 -- ============================================================================
 -- PERMISSÕES (RLS - Row Level Security)
--- Se estiver usando RLS, configure aqui as políticas
 -- ============================================================================
 
--- Habilitar RLS na tabela (se necessário)
--- ALTER TABLE metas_especialidades ENABLE ROW LEVEL SECURITY;
+-- Habilitar RLS na tabela
+ALTER TABLE metas_especialidades ENABLE ROW LEVEL SECURITY;
+
+-- Remover políticas antigas se existirem
+DROP POLICY IF EXISTS "Permitir leitura de metas" ON metas_especialidades;
+DROP POLICY IF EXISTS "Permitir inserção de metas" ON metas_especialidades;
+DROP POLICY IF EXISTS "Permitir atualização de metas" ON metas_especialidades;
+DROP POLICY IF EXISTS "Permitir exclusão de metas" ON metas_especialidades;
 
 -- Política de SELECT (todos podem ler)
--- CREATE POLICY "Permitir leitura de metas" ON metas_especialidades
--- FOR SELECT TO anon, authenticated
--- USING (true);
+CREATE POLICY "Permitir leitura de metas" ON metas_especialidades
+FOR SELECT 
+TO public
+USING (true);
 
--- Política de INSERT (autenticados podem inserir)
--- CREATE POLICY "Permitir inserção de metas" ON metas_especialidades
--- FOR INSERT TO authenticated
--- WITH CHECK (true);
+-- Política de INSERT (todos podem inserir)
+CREATE POLICY "Permitir inserção de metas" ON metas_especialidades
+FOR INSERT 
+TO public
+WITH CHECK (true);
 
--- Política de UPDATE (autenticados podem atualizar suas metas)
--- CREATE POLICY "Permitir atualização de metas" ON metas_especialidades
--- FOR UPDATE TO authenticated
--- USING (true);
+-- Política de UPDATE (todos podem atualizar)
+CREATE POLICY "Permitir atualização de metas" ON metas_especialidades
+FOR UPDATE 
+TO public
+USING (true);
 
--- Política de DELETE (autenticados podem excluir suas metas)
--- CREATE POLICY "Permitir exclusão de metas" ON metas_especialidades
--- FOR DELETE TO authenticated
--- USING (true);
+-- Política de DELETE (todos podem excluir)
+CREATE POLICY "Permitir exclusão de metas" ON metas_especialidades
+FOR DELETE 
+TO public
+USING (true);
 
 -- ============================================================================
 -- FIM DO SCRIPT

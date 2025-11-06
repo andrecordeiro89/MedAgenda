@@ -677,9 +677,278 @@ export class SimpleMetaEspecialidadeService {
 }
 
 // Instâncias dos serviços
+// ============================================================================
+// SERVICE: GradeCirurgica - Gerenciamento de Grades Cirúrgicas
+// ============================================================================
+
+interface GradeCirurgicaDB {
+  id: string;
+  hospital_id: string;
+  dia_semana: string;
+  mes_referencia: string;
+  ativa: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface GradeCirurgicaDiaDB {
+  id: string;
+  grade_id: string;
+  data: string;
+  dia_semana: string;
+  ordem: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface GradeCirurgicaItemDB {
+  id: string;
+  dia_id: string;
+  tipo: 'especialidade' | 'procedimento';
+  especialidade_id?: string;
+  procedimento_id?: string;
+  texto: string;
+  ordem: number;
+  pacientes: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export class SimpleGradeCirurgicaService {
+  // Buscar grade completa por hospital, dia da semana e mês
+  async getGrade(hospitalId: string, diaSemana: string, mesReferencia: string): Promise<any> {
+    console.log('🏥 Buscando grade cirúrgica:', { hospitalId, diaSemana, mesReferencia });
+    
+    // Buscar grade
+    const { data: gradeData, error: gradeError } = await supabase
+      .from('grades_cirurgicas')
+      .select('*')
+      .eq('hospital_id', hospitalId)
+      .eq('dia_semana', diaSemana)
+      .eq('mes_referencia', mesReferencia)
+      .eq('ativa', true)
+      .single();
+
+    if (gradeError) {
+      if (gradeError.code === 'PGRST116') {
+        console.log('ℹ️ Nenhuma grade encontrada');
+        return null;
+      }
+      console.error('❌ Erro ao buscar grade:', gradeError);
+      throw gradeError;
+    }
+
+    // Buscar dias da grade
+    const { data: diasData, error: diasError } = await supabase
+      .from('grades_cirurgicas_dias')
+      .select('*')
+      .eq('grade_id', gradeData.id)
+      .order('data', { ascending: true });
+
+    if (diasError) {
+      console.error('❌ Erro ao buscar dias:', diasError);
+      throw diasError;
+    }
+
+    // Buscar itens de cada dia
+    const diasComItens = await Promise.all(
+      (diasData || []).map(async (dia) => {
+        const { data: itensData, error: itensError } = await supabase
+          .from('grades_cirurgicas_itens')
+          .select('*')
+          .eq('dia_id', dia.id)
+          .order('ordem', { ascending: true });
+
+        if (itensError) {
+          console.error('❌ Erro ao buscar itens do dia:', itensError);
+          return { ...dia, itens: [] };
+        }
+
+        return {
+          id: dia.id,
+          data: dia.data,
+          diaSemana: dia.dia_semana,
+          ordem: dia.ordem,
+          itens: (itensData || []).map(item => ({
+            id: item.id,
+            tipo: item.tipo,
+            texto: item.texto,
+            ordem: item.ordem,
+            pacientes: item.pacientes || [],
+            especialidadeId: item.especialidade_id,
+            procedimentoId: item.procedimento_id
+          }))
+        };
+      })
+    );
+
+    console.log('✅ Grade carregada:', { gradeId: gradeData.id, totalDias: diasComItens.length });
+
+    return {
+      id: gradeData.id,
+      hospitalId: gradeData.hospital_id,
+      diaSemana: gradeData.dia_semana,
+      mesReferencia: gradeData.mes_referencia,
+      ativa: gradeData.ativa,
+      dias: diasComItens
+    };
+  }
+
+  // Salvar grade completa (criar ou atualizar)
+  async saveGrade(grade: any): Promise<void> {
+    console.log('💾 Salvando grade cirúrgica:', grade);
+
+    try {
+      // 1. Verificar se já existe uma grade
+      const { data: existingGrade, error: checkError } = await supabase
+        .from('grades_cirurgicas')
+        .select('id')
+        .eq('hospital_id', grade.hospitalId)
+        .eq('dia_semana', grade.diaSemana)
+        .eq('mes_referencia', grade.mesReferencia)
+        .eq('ativa', true)
+        .single();
+
+      let gradeId: string;
+
+      if (existingGrade) {
+        // Atualizar grade existente
+        gradeId = existingGrade.id;
+        console.log('🔄 Atualizando grade existente:', gradeId);
+
+        // Deletar dias antigos (cascade vai deletar os itens)
+        await supabase
+          .from('grades_cirurgicas_dias')
+          .delete()
+          .eq('grade_id', gradeId);
+      } else {
+        // Criar nova grade
+        const { data: newGrade, error: createError } = await supabase
+          .from('grades_cirurgicas')
+          .insert([{
+            hospital_id: grade.hospitalId,
+            dia_semana: grade.diaSemana,
+            mes_referencia: grade.mesReferencia,
+            ativa: true
+          }])
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        gradeId = newGrade.id;
+        console.log('✨ Nova grade criada:', gradeId);
+      }
+
+      // 2. Inserir dias e itens
+      for (const dia of grade.dias) {
+        const { data: diaData, error: diaError } = await supabase
+          .from('grades_cirurgicas_dias')
+          .insert([{
+            grade_id: gradeId,
+            data: dia.data,
+            dia_semana: dia.diaSemana,
+            ordem: dia.ordem
+          }])
+          .select()
+          .single();
+
+        if (diaError) {
+          console.error('❌ Erro ao criar dia:', diaError);
+          throw diaError;
+        }
+
+        // 3. Inserir itens do dia
+        if (dia.itens && dia.itens.length > 0) {
+          const itensToInsert = dia.itens.map((item: any) => ({
+            dia_id: diaData.id,
+            tipo: item.tipo,
+            especialidade_id: item.especialidadeId || null,
+            procedimento_id: item.procedimentoId || null,
+            texto: item.texto,
+            ordem: item.ordem,
+            pacientes: item.pacientes || []
+          }));
+
+          const { error: itensError } = await supabase
+            .from('grades_cirurgicas_itens')
+            .insert(itensToInsert);
+
+          if (itensError) {
+            console.error('❌ Erro ao criar itens:', itensError);
+            throw itensError;
+          }
+        }
+      }
+
+      console.log('✅ Grade salva com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao salvar grade:', error);
+      throw error;
+    }
+  }
+
+  // Listar todas as grades de um hospital
+  async getGradesByHospital(hospitalId: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('grades_cirurgicas')
+      .select('*')
+      .eq('hospital_id', hospitalId)
+      .eq('ativa', true)
+      .order('dia_semana', { ascending: true });
+
+    if (error) {
+      console.error('❌ Erro ao buscar grades:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  // Deletar grade
+  async deleteGrade(gradeId: string): Promise<void> {
+    const { error } = await supabase
+      .from('grades_cirurgicas')
+      .delete()
+      .eq('id', gradeId);
+
+    if (error) {
+      console.error('❌ Erro ao deletar grade:', error);
+      throw error;
+    }
+
+    console.log('✅ Grade deletada:', gradeId);
+  }
+
+  // Obter prefixos mais usados (para autocomplete)
+  async getPrefixosMaisUsados(limit: number = 20): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('grades_cirurgicas_itens')
+      .select('texto')
+      .eq('tipo', 'procedimento')
+      .limit(1000);
+
+    if (error) {
+      console.error('❌ Erro ao buscar prefixos:', error);
+      return [];
+    }
+
+    // Contar frequência de cada prefixo
+    const frequencia: Record<string, number> = {};
+    data.forEach(item => {
+      frequencia[item.texto] = (frequencia[item.texto] || 0) + 1;
+    });
+
+    // Ordenar por frequência e retornar os top N
+    return Object.keys(frequencia)
+      .sort((a, b) => frequencia[b] - frequencia[a])
+      .slice(0, limit);
+  }
+}
+
 export const simpleAgendamentoService = new SimpleAgendamentoService();
 export const simpleMedicoService = new SimpleMedicoService();
 export const simpleProcedimentoService = new SimpleProcedimentoService();
 export const simpleEspecialidadeService = new SimpleEspecialidadeService();
 export const simpleMedicoHospitalService = new SimpleMedicoHospitalService();
 export const simpleMetaEspecialidadeService = new SimpleMetaEspecialidadeService();
+export const simpleGradeCirurgicaService = new SimpleGradeCirurgicaService();

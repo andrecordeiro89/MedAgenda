@@ -198,6 +198,8 @@ const AppContent: React.FC = () => {
                         agendamentos={agendamentos}
                         medicos={medicos}
                         procedimentos={procedimentos}
+                        especialidades={especialidades}
+                        metasEspecialidades={metasEspecialidades}
                         hospitalId={hospitalSelecionado?.id || ''}
                         onRefresh={() => loadData(false)}
                     />

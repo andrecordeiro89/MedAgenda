@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon } from './ui';
-import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana } from '../types';
+import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from '../types';
+import { simpleGradeCirurgicaService } from '../services/api-simple';
 
 interface GradeCirurgicaModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface GradeCirurgicaModalProps {
   mesAtual: Date;
   diaSemanaClicado: number; // 0=Dom, 1=Seg, 2=Ter, ..., 6=Sáb
   hospitalId: string;
+  especialidades: Especialidade[]; // NOVA PROP: Lista de especialidades do banco
 }
 
 // Mapeamento de número do dia (getDay()) para DiaSemana
@@ -37,7 +39,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   onClose,
   mesAtual,
   diaSemanaClicado,
-  hospitalId
+  hospitalId,
+  especialidades // Receber especialidades
 }) => {
   // Calcular as 3 próximas ocorrências do dia da semana clicado no próximo mês
   const proximasDatas = useMemo(() => {
@@ -55,35 +58,66 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     return datas;
   }, [mesAtual, diaSemanaClicado]);
 
-  // Gerar chave única para armazenamento no localStorage
-  const storageKey = useMemo(() => 
-    `gradeCirurgica_${hospitalId}_${DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado]}_${mesAtual.getFullYear()}_${mesAtual.getMonth() + 2}`,
-    [hospitalId, diaSemanaClicado, mesAtual]
-  );
+  // Mês de referência no formato YYYY-MM
+  const mesReferencia = useMemo(() => {
+    const proximoMes = new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 1);
+    const ano = proximoMes.getFullYear();
+    const mes = String(proximoMes.getMonth() + 1).padStart(2, '0');
+    return `${ano}-${mes}`;
+  }, [mesAtual]);
 
-  // Estado das grades
-  const [grades, setGrades] = useState<GradeCirurgicaDia[]>(() => {
-    // Tentar carregar do localStorage
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Validar se as datas batem
-        if (parsed.length === proximasDatas.length) {
-          return parsed;
+  // Estados
+  const [grades, setGrades] = useState<GradeCirurgicaDia[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false); // Estado para indicar auto-save
+
+  // Carregar grade do banco ao abrir o modal
+  useEffect(() => {
+    const loadGrade = async () => {
+      if (!isOpen) return;
+      
+      setLoading(true);
+      try {
+        const diaSemana = DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado];
+        const gradeData = await simpleGradeCirurgicaService.getGrade(
+          hospitalId,
+          diaSemana,
+          mesReferencia
+        );
+
+        if (gradeData && gradeData.dias && gradeData.dias.length > 0) {
+          // Carregar grade existente do banco
+          console.log('✅ Grade carregada do banco:', gradeData);
+          setGrades(gradeData.dias);
+        } else {
+          // Inicializar grade vazia
+          console.log('ℹ️ Nenhuma grade encontrada, inicializando vazia');
+          setGrades(proximasDatas.map((data, index) => ({
+            id: `temp-${Date.now()}-${index}`,
+            data: data.toISOString().split('T')[0],
+            diaSemana: DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado],
+            ordem: index + 1,
+            itens: []
+          })));
         }
+      } catch (error) {
+        console.error('❌ Erro ao carregar grade:', error);
+        // Em caso de erro, inicializar vazia
+        setGrades(proximasDatas.map((data, index) => ({
+          id: `temp-${Date.now()}-${index}`,
+          data: data.toISOString().split('T')[0],
+          diaSemana: DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado],
+          ordem: index + 1,
+          itens: []
+        })));
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.error('Erro ao carregar grade salva:', e);
-    }
-    
-    // Se não houver grade salva, criar vazia
-    return proximasDatas.map(data => ({
-      data: data.toISOString().split('T')[0],
-      diaSemana: DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado],
-      itens: []
-    }));
-  });
+    };
+
+    loadGrade();
+  }, [isOpen, hospitalId, diaSemanaClicado, mesReferencia, proximasDatas]);
 
   // Estado para controlar se já houve a primeira edição
   const [primeiraEdicaoFeita, setPrimeiraEdicaoFeita] = useState(() => {
@@ -91,38 +125,158 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     return grades.some(g => g.itens.length > 0);
   });
 
-  // Salvar no localStorage sempre que as grades mudarem
-  useEffect(() => {
-    if (grades.some(g => g.itens.length > 0)) {
-      localStorage.setItem(storageKey, JSON.stringify(grades));
-    }
-  }, [grades, storageKey]);
+  // Estado para controlar expansão de procedimentos (gradeIndex_especialidadeId => boolean)
+  const [expandedEspecialidades, setExpandedEspecialidades] = useState<Record<string, boolean>>({});
 
-  // Adicionar especialidade
-  const handleAddEspecialidade = (gradeIndex: number) => {
-    setGrades(prev => prev.map((grade, i) => {
-      if (i === gradeIndex) {
+  // Estado para controlar qual procedimento está adicionando paciente
+  const [addingPaciente, setAddingPaciente] = useState<{gradeIndex: number, itemId: string} | null>(null);
+  const [novoPacienteNome, setNovoPacienteNome] = useState('');
+
+  // Estado para controlar a adição de especialidade
+  const [addingEspecialidade, setAddingEspecialidade] = useState<number | null>(null); // índice da grade
+  const [especialidadeSelecionada, setEspecialidadeSelecionada] = useState('');
+
+  // Função para salvar grade no banco (MANUAL - com alert)
+  const handleSaveGrade = async () => {
+    setSaving(true);
+    try {
+      const diaSemana = DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado];
+      
+      await simpleGradeCirurgicaService.saveGrade({
+        hospitalId,
+        diaSemana,
+        mesReferencia,
+        ativa: true,
+        dias: grades.map((grade, index) => ({
+          data: grade.data,
+          diaSemana: grade.diaSemana,
+          ordem: index + 1,
+          itens: grade.itens.map((item, itemIndex) => ({
+            tipo: item.tipo,
+            texto: item.texto,
+            ordem: itemIndex,
+            pacientes: item.pacientes || [],
+            especialidadeId: item.especialidadeId || undefined, // 🔥 ENVIAR O ID CORRETO
+            procedimentoId: item.procedimentoId || undefined // 🔥 ENVIAR O ID CORRETO
+          }))
+        }))
+      });
+
+      console.log('✅ Grade salva com sucesso no banco!');
+      alert('Grade salva com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao salvar grade:', error);
+      alert('Erro ao salvar grade. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Função para SALVAR AUTOMATICAMENTE (silencioso - sem alert)
+  const autoSaveGrade = async (updatedGrades: GradeCirurgicaDia[]) => {
+    setAutoSaving(true);
+    try {
+      const diaSemana = DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado];
+      
+      await simpleGradeCirurgicaService.saveGrade({
+        hospitalId,
+        diaSemana,
+        mesReferencia,
+        ativa: true,
+        dias: updatedGrades.map((grade, index) => ({
+          data: grade.data,
+          diaSemana: grade.diaSemana,
+          ordem: index + 1,
+          itens: grade.itens.map((item, itemIndex) => ({
+            tipo: item.tipo,
+            texto: item.texto,
+            ordem: itemIndex,
+            pacientes: item.pacientes || [],
+            especialidadeId: item.especialidadeId || undefined, // 🔥 ENVIAR O ID CORRETO
+            procedimentoId: item.procedimentoId || undefined // 🔥 ENVIAR O ID CORRETO
+          }))
+        }))
+      });
+
+      console.log('✅ Auto-save: Grade salva automaticamente!');
+    } catch (error) {
+      console.error('❌ Erro no auto-save:', error);
+      // Não mostra alert - apenas log no console
+    } finally {
+      // Delay curto para mostrar o indicador
+      setTimeout(() => setAutoSaving(false), 500);
+    }
+  };
+
+  // Iniciar adição de especialidade (abre o dropdown)
+  const handleAddEspecialidadeClick = (gradeIndex: number) => {
+    setAddingEspecialidade(gradeIndex);
+    setEspecialidadeSelecionada(''); // Limpar seleção anterior
+  };
+
+  // Confirmar adição de especialidade (COM AUTO-SAVE)
+  const handleConfirmAddEspecialidade = () => {
+    if (addingEspecialidade === null || !especialidadeSelecionada) return;
+
+    // Buscar o nome da especialidade selecionada
+    const especialidade = especialidades.find(e => e.id === especialidadeSelecionada);
+    if (!especialidade) return;
+
+    console.log('✅ Adicionando especialidade:', especialidade);
+
+    // Calcular o novo estado
+    const updatedGrades = grades.map((grade, i) => {
+      if (i === addingEspecialidade) {
         const novoItem: GradeCirurgicaItem = {
           id: `temp-${Date.now()}-${Math.random()}`,
           tipo: 'especialidade',
-          texto: '',
-          ordem: grade.itens.length + 1
+          texto: especialidade.nome, // Usar o nome da especialidade do banco
+          especialidadeId: especialidade.id, // 🔥 ADICIONAR ID DA ESPECIALIDADE
+          ordem: grade.itens.length,
+          pacientes: [] // Especialidades não têm pacientes
         };
-        return { ...grade, itens: [...grade.itens, novoItem] };
+        
+        console.log('📝 Novo item criado:', novoItem);
+        console.log('📋 Itens antes:', grade.itens.length);
+        
+        const novosItens = [...grade.itens, novoItem];
+        console.log('📋 Itens depois:', novosItens.length);
+        
+        return { ...grade, itens: novosItens };
       }
       return grade;
-    }));
+    });
+
+    console.log('🔄 Estado atualizado:', updatedGrades);
+
+    // Atualizar estado local IMEDIATAMENTE
+    setGrades(updatedGrades);
+
+    // 🔥 SALVAR AUTOMATICAMENTE NO BANCO
+    autoSaveGrade(updatedGrades);
+
+    // Limpar estado
+    setAddingEspecialidade(null);
+    setEspecialidadeSelecionada('');
   };
 
-  // Adicionar procedimento (com especialidadeId para inserir na posição correta)
+  // Cancelar adição de especialidade
+  const handleCancelAddEspecialidade = () => {
+    setAddingEspecialidade(null);
+    setEspecialidadeSelecionada('');
+  };
+
+  // Adicionar procedimento (COM AUTO-SAVE)
   const handleAddProcedimento = (gradeIndex: number, especialidadeId?: string) => {
-    setGrades(prev => prev.map((grade, i) => {
+    // Calcular novo estado
+    const updatedGrades = grades.map((grade, i) => {
       if (i === gradeIndex) {
         const novoItem: GradeCirurgicaItem = {
           id: `temp-${Date.now()}-${Math.random()}`,
           tipo: 'procedimento',
           texto: '',
-          ordem: 0 // Será recalculado
+          ordem: 0, // Será recalculado
+          pacientes: [] // Array vazio de pacientes
         };
 
         // Se foi passado o ID da especialidade, inserir logo após ela
@@ -151,7 +305,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             // Reordenar todos os itens
             return {
               ...grade,
-              itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
+              itens: novosItens.map((item, idx) => ({ ...item, ordem: idx }))
             };
           }
         }
@@ -159,49 +313,61 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         // Se não foi passado especialidadeId ou não encontrou, adiciona no final
         return { 
           ...grade, 
-          itens: [...grade.itens, { ...novoItem, ordem: grade.itens.length + 1 }] 
+          itens: [...grade.itens, { ...novoItem, ordem: grade.itens.length }] 
         };
       }
       return grade;
-    }));
+    });
+
+    // Atualizar estado local
+    setGrades(updatedGrades);
+
+    // 🔥 SALVAR AUTOMATICAMENTE
+    autoSaveGrade(updatedGrades);
   };
 
   // Atualizar texto de um item
   const handleUpdateItem = (gradeIndex: number, itemId: string, novoTexto: string) => {
-    setGrades(prev => {
-      const novasGrades = prev.map((grade, i) => {
-        if (i === gradeIndex) {
+    // Calcular novo estado
+    let novasGrades = grades.map((grade, i) => {
+      if (i === gradeIndex) {
+        return {
+          ...grade,
+          itens: grade.itens.map(item => 
+            item.id === itemId ? { ...item, texto: novoTexto } : item
+          )
+        };
+      }
+      return grade;
+    });
+
+    // Se for a primeira edição no primeiro dia e o texto não estiver vazio, replicar para todos
+    if (!primeiraEdicaoFeita && gradeIndex === 0 && novoTexto.trim() !== '') {
+      const primeiroDia = novasGrades[0];
+      if (primeiroDia.itens.some(item => item.texto.trim() !== '')) {
+        setPrimeiraEdicaoFeita(true);
+        // Replicar para todos os outros dias
+        novasGrades = novasGrades.map((grade, i) => {
+          if (i === 0) return grade;
           return {
             ...grade,
-            itens: grade.itens.map(item => 
-              item.id === itemId ? { ...item, texto: novoTexto } : item
-            )
+            itens: primeiroDia.itens.map(item => ({
+              ...item,
+              id: `temp-${Date.now()}-${Math.random()}-${i}`
+            }))
           };
-        }
-        return grade;
-      });
-
-      // Se for a primeira edição no primeiro dia e o texto não estiver vazio, replicar para todos
-      if (!primeiraEdicaoFeita && gradeIndex === 0 && novoTexto.trim() !== '') {
-        const primeiroDia = novasGrades[0];
-        if (primeiroDia.itens.some(item => item.texto.trim() !== '')) {
-          setPrimeiraEdicaoFeita(true);
-          // Replicar para todos os outros dias
-          return novasGrades.map((grade, i) => {
-            if (i === 0) return grade;
-            return {
-              ...grade,
-              itens: primeiroDia.itens.map(item => ({
-                ...item,
-                id: `temp-${Date.now()}-${Math.random()}-${i}`
-              }))
-            };
-          });
-        }
+        });
       }
+    }
 
-      return novasGrades;
-    });
+    // Atualizar estado local
+    setGrades(novasGrades);
+  };
+
+  // Função auxiliar para auto-save após edição (chamada no onBlur)
+  const handleBlurItem = () => {
+    // 🔥 AUTO-SAVE após perder foco do input
+    autoSaveGrade(grades);
   };
 
   // Remover item
@@ -255,33 +421,143 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }));
   };
 
-  // Replicar grade
+  // Replicar grade (COM AUTO-SAVE)
   const handleReplicarGrade = (gradeOrigemIndex: number, gradeDestinoIndex: number) => {
     const gradeOrigem = grades[gradeOrigemIndex];
-    setGrades(prev => prev.map((grade, i) => {
+    
+    // Calcular novo estado
+    const updatedGrades = grades.map((grade, i) => {
       if (i === gradeDestinoIndex) {
         return {
           ...grade,
           itens: gradeOrigem.itens.map(item => ({
-            ...item,
+            ...item, // Mantém todos os campos (especialidadeId, procedimentoId, pacientes)
             id: `temp-${Date.now()}-${Math.random()}-${i}`
           }))
         };
       }
       return grade;
+    });
+
+    // Atualizar estado local
+    setGrades(updatedGrades);
+
+    // 🔥 SALVAR AUTOMATICAMENTE
+    autoSaveGrade(updatedGrades);
+  };
+
+  // Replicar para todas (COM AUTO-SAVE)
+  const handleReplicarParaTodas = (gradeOrigemIndex: number) => {
+    const gradeOrigem = grades[gradeOrigemIndex];
+    
+    console.log('🔄 Replicando grade do dia', gradeOrigemIndex, 'para todos os dias');
+    console.log('📋 Itens a replicar:', gradeOrigem.itens);
+    
+    // Calcular novo estado
+    const updatedGrades = grades.map((grade, i) => ({
+      ...grade,
+      itens: gradeOrigem.itens.map(item => ({
+        ...item, // Mantém todos os campos (especialidadeId, procedimentoId, pacientes)
+        id: `temp-${Date.now()}-${Math.random()}-${i}`
+      }))
+    }));
+
+    console.log('✅ Grades atualizadas:', updatedGrades);
+
+    // Atualizar estado local
+    setGrades(updatedGrades);
+
+    // 🔥 SALVAR AUTOMATICAMENTE
+    autoSaveGrade(updatedGrades);
+  };
+
+  // Alternar expansão de especialidade
+  const toggleExpansao = (gradeIndex: number, especialidadeId: string) => {
+    const key = `${gradeIndex}_${especialidadeId}`;
+    setExpandedEspecialidades(prev => ({
+      ...prev,
+      [key]: !prev[key]
     }));
   };
 
-  // Replicar para todas
-  const handleReplicarParaTodas = (gradeOrigemIndex: number) => {
-    const gradeOrigem = grades[gradeOrigemIndex];
-    setGrades(prev => prev.map((grade, i) => ({
-      ...grade,
-      itens: gradeOrigem.itens.map(item => ({
-        ...item,
-        id: `temp-${Date.now()}-${Math.random()}-${i}`
-      }))
-    })));
+  // Verificar se especialidade está expandida
+  const isExpanded = (gradeIndex: number, especialidadeId: string) => {
+    const key = `${gradeIndex}_${especialidadeId}`;
+    return expandedEspecialidades[key] || false;
+  };
+
+  // Adicionar paciente a um procedimento
+  const handleAddPacienteClick = (gradeIndex: number, itemId: string) => {
+    setAddingPaciente({ gradeIndex, itemId });
+    setNovoPacienteNome('');
+  };
+
+  // Confirmar adição de paciente (COM AUTO-SAVE)
+  const handleConfirmAddPaciente = () => {
+    if (!addingPaciente || !novoPacienteNome.trim()) return;
+
+    // Calcular novo estado
+    const updatedGrades = grades.map((grade, i) => {
+      if (i === addingPaciente.gradeIndex) {
+        return {
+          ...grade,
+          itens: grade.itens.map(item => {
+            if (item.id === addingPaciente.itemId && item.tipo === 'procedimento') {
+              const pacientes = item.pacientes || [];
+              return {
+                ...item,
+                pacientes: [...pacientes, novoPacienteNome.trim()]
+              };
+            }
+            return item;
+          })
+        };
+      }
+      return grade;
+    });
+
+    // Atualizar estado local
+    setGrades(updatedGrades);
+
+    // 🔥 SALVAR AUTOMATICAMENTE
+    autoSaveGrade(updatedGrades);
+
+    setAddingPaciente(null);
+    setNovoPacienteNome('');
+  };
+
+  // Cancelar adição de paciente
+  const handleCancelAddPaciente = () => {
+    setAddingPaciente(null);
+    setNovoPacienteNome('');
+  };
+
+  // Remover paciente de um procedimento
+  const handleRemovePaciente = (gradeIndex: number, itemId: string, pacienteIndex: number) => {
+    // Calcular novo estado
+    const updatedGrades = grades.map((grade, i) => {
+      if (i === gradeIndex) {
+        return {
+          ...grade,
+          itens: grade.itens.map(item => {
+            if (item.id === itemId && item.tipo === 'procedimento' && item.pacientes) {
+              return {
+                ...item,
+                pacientes: item.pacientes.filter((_, idx) => idx !== pacienteIndex)
+              };
+            }
+            return item;
+          })
+        };
+      }
+      return grade;
+    });
+
+    // Atualizar estado local
+    setGrades(updatedGrades);
+
+    // 🔥 SALVAR AUTOMATICAMENTE
+    autoSaveGrade(updatedGrades);
   };
 
 
@@ -333,10 +609,33 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       size="fullscreen"
     >
       <div className="flex flex-col p-4 overflow-y-auto">
-        {/* Grid com as 3 datas */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          {proximasDatas.map((data, index) => {
-            const grade = grades[index];
+        {/* 🔥 FEEDBACK VISUAL DE AUTO-SAVE */}
+        {autoSaving && (
+          <div className="fixed top-20 right-6 z-50 animate-fade-in">
+            <div className="bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+              <div className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span className="font-medium text-sm">Salvando automaticamente...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Indicador de Loading */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+              <p className="text-slate-600">Carregando grade cirúrgica...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Grid com as 3 datas */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              {proximasDatas.map((data, index) => {
+                const grade = grades[index];
+                
+                // Proteção: se grade não existir ainda (loading), pular
+                if (!grade) return null;
 
             return (
               <div
@@ -356,7 +655,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       </h3>
                       {grade.itens.length > 0 && (
                         <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full">
-                          {grade.itens.length}
+                          {(() => {
+                            const totalPacientes = grade.itens
+                              .filter(item => item.tipo === 'procedimento')
+                              .reduce((sum, item) => sum + (item.pacientes?.length || 0), 0);
+                            return totalPacientes > 0 ? totalPacientes : grade.itens.length;
+                          })()}
                         </span>
                       )}
                     </div>
@@ -364,7 +668,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     {/* Botões de ação do header */}
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => handleAddEspecialidade(index)}
+                        onClick={() => handleAddEspecialidadeClick(index)}
                         className="flex items-center gap-0.5 px-2 py-0.5 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-medium transition-colors"
                         title="Adicionar Especialidade"
                       >
@@ -385,6 +689,43 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Dropdown para Adicionar Especialidade */}
+                {addingEspecialidade === index && (
+                  <div className="p-3 bg-blue-50 border-b-2 border-blue-200">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-blue-900">Selecione a Especialidade:</label>
+                      <select
+                        value={especialidadeSelecionada}
+                        onChange={(e) => setEspecialidadeSelecionada(e.target.value)}
+                        className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      >
+                        <option value="">-- Selecione --</option>
+                        {especialidades.map(esp => (
+                          <option key={esp.id} value={esp.id}>
+                            {esp.nome}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleConfirmAddEspecialidade}
+                        disabled={!especialidadeSelecionada}
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        title="Confirmar"
+                      >
+                        ✓ OK
+                      </button>
+                      <button
+                        onClick={handleCancelAddEspecialidade}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
+                        title="Cancelar"
+                      >
+                        ✕ Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Tabela de Itens Agrupados por Especialidade */}
                 <div className="flex-1 p-2">
@@ -426,13 +767,19 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               <Input
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
+                                onBlur={handleBlurItem}
                                 placeholder="Ex: Ortopedia - Joelho"
                                 className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-xs focus:bg-white/30 py-0.5 px-1.5"
                               />
 
-                              {/* Badge com contador */}
+                              {/* Badge com contador de procedimentos e pacientes */}
                               <span className="bg-white/30 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold">
-                                {grupo.procedimentos.length}
+                                {(() => {
+                                  const totalPacientes = grupo.procedimentos.reduce((sum, proc) => 
+                                    sum + (proc.pacientes?.length || 0), 0
+                                  );
+                                  return totalPacientes > 0 ? totalPacientes : grupo.procedimentos.length;
+                                })()}
                               </span>
 
                               {/* Botão adicionar procedimento */}
@@ -458,53 +805,197 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
                           {/* Lista de Procedimentos */}
                           {grupo.procedimentos.length > 0 && (
-                            <div className="p-1 space-y-0.5 bg-slate-50">
-                              {grupo.procedimentos.map((proc) => (
-                                <div
-                                  key={proc.id}
-                                  className="group flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200 hover:border-slate-300 transition-all"
+                            <div className="bg-slate-50">
+                              <div className="p-1 space-y-0.5">
+                                {(() => {
+                                  const expanded = grupo.especialidade ? isExpanded(index, grupo.especialidade.id) : true;
+                                  const procedimentosVisiveis = expanded ? grupo.procedimentos : grupo.procedimentos.slice(0, 5);
+                                  
+                                  return procedimentosVisiveis.map((proc) => {
+                                    // Para cada procedimento com pacientes, criar uma linha para cada paciente
+                                    if (proc.pacientes && proc.pacientes.length > 0) {
+                                      return proc.pacientes.map((paciente, pIdx) => (
+                                        <div
+                                          key={`${proc.id}-${pIdx}`}
+                                          className="group flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200 hover:border-slate-300 transition-all"
+                                        >
+                                          {/* Botões de ordem (apenas no primeiro paciente) */}
+                                          {pIdx === 0 && (
+                                            <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <button
+                                                onClick={() => handleMoveUp(index, proc.id)}
+                                                disabled={grade.itens.indexOf(proc) === (grupo.especialidade ? grade.itens.indexOf(grupo.especialidade) + 1 : 0)}
+                                                className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="↑"
+                                              >
+                                                <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                                </svg>
+                                              </button>
+                                              <button
+                                                onClick={() => handleMoveDown(index, proc.id)}
+                                                className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="↓"
+                                              >
+                                                <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                              </button>
+                                            </div>
+                                          )}
+                                          {pIdx > 0 && <div className="w-4"></div>}
+
+                                          {/* Nome do procedimento e paciente na mesma linha */}
+                                          <span className="text-xs flex-1">
+                                            <span className="font-medium text-slate-700">{proc.texto}</span>
+                                            <span className="mx-1 text-slate-400">-</span>
+                                            <span className="font-semibold text-slate-900 bg-yellow-100 px-1 rounded">{paciente}</span>
+                                          </span>
+
+                                          {/* Botão remover paciente */}
+                                          <button
+                                            onClick={() => handleRemovePaciente(index, proc.id, pIdx)}
+                                            className="opacity-0 group-hover:opacity-100 p-0.5 text-red-600 hover:bg-red-100 rounded transition-all flex-shrink-0"
+                                            title="Remover paciente"
+                                          >
+                                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      ));
+                                    }
+
+                                    // Se não tem pacientes, mostrar linha do procedimento vazio
+                                    return (
+                                      <div
+                                        key={proc.id}
+                                        className="group flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200 hover:border-slate-300 transition-all"
+                                      >
+                                        {/* Botões de ordem */}
+                                        <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button
+                                            onClick={() => handleMoveUp(index, proc.id)}
+                                            disabled={grade.itens.indexOf(proc) === (grupo.especialidade ? grade.itens.indexOf(grupo.especialidade) + 1 : 0)}
+                                            className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                                            title="↑"
+                                          >
+                                            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => handleMoveDown(index, proc.id)}
+                                            className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                                            title="↓"
+                                          >
+                                            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                          </button>
+                                        </div>
+
+                                        {/* Se está adicionando paciente, mostrar input inline */}
+                                        {addingPaciente?.gradeIndex === index && addingPaciente?.itemId === proc.id ? (
+                                          <>
+                                            {/* Input do Procedimento (largura fixa) */}
+                                            <Input
+                                              value={proc.texto}
+                                              onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
+                                              onBlur={handleBlurItem}
+                                              placeholder="Ex: LCA"
+                                              className="w-32 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
+                                            />
+                                            <span className="text-xs text-slate-400">-</span>
+                                            <Input
+                                              value={novoPacienteNome}
+                                              onChange={(e) => setNovoPacienteNome(e.target.value)}
+                                              placeholder="Nome do paciente"
+                                              className="flex-1 text-xs py-0.5 px-2 border-blue-300 bg-blue-50"
+                                              autoFocus
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleConfirmAddPaciente();
+                                                if (e.key === 'Escape') handleCancelAddPaciente();
+                                              }}
+                                            />
+                                            <button
+                                              onClick={handleConfirmAddPaciente}
+                                              className="p-0.5 text-green-600 hover:bg-green-100 rounded flex-shrink-0"
+                                              title="Confirmar"
+                                            >
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={handleCancelAddPaciente}
+                                              className="p-0.5 text-red-600 hover:bg-red-100 rounded flex-shrink-0"
+                                              title="Cancelar"
+                                            >
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                              </svg>
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            {/* Input do Procedimento */}
+                                            <Input
+                                              value={proc.texto}
+                                              onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
+                                              onBlur={handleBlurItem}
+                                              placeholder="Ex: LCA"
+                                              className="flex-1 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
+                                            />
+
+                                            {/* Botão adicionar paciente */}
+                                            <button
+                                              onClick={() => handleAddPacienteClick(index, proc.id)}
+                                              className="p-0.5 text-green-600 hover:bg-green-100 rounded transition-all flex-shrink-0"
+                                              title="Adicionar Paciente"
+                                            >
+                                              <PlusIcon className="w-3 h-3" />
+                                            </button>
+
+                                            {/* Botão remover procedimento */}
+                                            <button
+                                              onClick={() => handleRemoveItem(index, proc.id)}
+                                              className="opacity-0 group-hover:opacity-100 p-0.5 text-red-600 hover:bg-red-100 rounded transition-all flex-shrink-0"
+                                              title="✕"
+                                            >
+                                              <TrashIcon className="w-2.5 h-2.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    );
+                                  }).flat();
+                                })()}
+                              </div>
+                              
+                              {/* Botão Ver mais / Ver menos */}
+                              {grupo.procedimentos.length > 5 && grupo.especialidade && (
+                                <button
+                                  onClick={() => toggleExpansao(index, grupo.especialidade!.id)}
+                                  className="w-full py-1 px-2 text-[10px] text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-medium transition-colors border-t border-slate-200"
                                 >
-                                  {/* Botões de ordem */}
-                                  <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => handleMoveUp(index, proc.id)}
-                                      disabled={grade.itens.indexOf(proc) === (grupo.especialidade ? grade.itens.indexOf(grupo.especialidade) + 1 : 0)}
-                                      className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                                      title="↑"
-                                    >
-                                      <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  {isExpanded(index, grupo.especialidade.id) ? (
+                                    <span className="flex items-center justify-center gap-1">
+                                      Ver menos
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                       </svg>
-                                    </button>
-                                    <button
-                                      onClick={() => handleMoveDown(index, proc.id)}
-                                      className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                                      title="↓"
-                                    >
-                                      <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center justify-center gap-1">
+                                      Ver mais ({grupo.procedimentos.length - 5} ocultos)
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                       </svg>
-                                    </button>
-                                  </div>
-
-                                  {/* Input do Procedimento */}
-                                  <Input
-                                    value={proc.texto}
-                                    onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
-                                    placeholder="Ex: LCA"
-                                    className="flex-1 border-0 shadow-none text-xs focus:ring-1 py-0.5 px-1.5"
-                                  />
-
-                                  {/* Botão remover */}
-                                  <button
-                                    onClick={() => handleRemoveItem(index, proc.id)}
-                                    className="opacity-0 group-hover:opacity-100 p-0.5 text-red-600 hover:bg-red-100 rounded transition-all"
-                                    title="✕"
-                                  >
-                                    <TrashIcon className="w-2.5 h-2.5" />
-                                  </button>
-                                </div>
-                              ))}
+                                    </span>
+                                  )}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -517,19 +1008,27 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           })}
         </div>
 
-        {/* Botões de Ação */}
-        <div className="flex justify-between items-center px-4 py-2 border-t flex-shrink-0 bg-white">
-          <span className="text-[10px] text-slate-500 italic">
-            ✓ Auto-salvo
-          </span>
-          <Button
-            onClick={onClose}
-            variant="secondary"
-            className="text-xs py-1.5 px-4"
-          >
-            Fechar
-          </Button>
-        </div>
+            {/* Botões de Ação */}
+            <div className="flex justify-between items-center px-4 py-2 border-t flex-shrink-0 bg-white">
+              <Button
+                onClick={handleSaveGrade}
+                variant="primary"
+                disabled={saving || loading}
+                className="text-xs py-1.5 px-6"
+              >
+                {saving ? 'Salvando...' : '💾 Salvar Grade'}
+              </Button>
+              <Button
+                onClick={onClose}
+                variant="secondary"
+                disabled={saving}
+                className="text-xs py-1.5 px-4"
+              >
+                Fechar
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );
