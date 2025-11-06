@@ -55,6 +55,23 @@ export interface Especialidade {
     descricao?: string;
 }
 
+// Dia da semana para metas
+export type DiaSemana = 'domingo' | 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado';
+
+// Interface para metas de agendamento por especialidade
+export interface MetaEspecialidade {
+    id: string;
+    especialidadeId: string;
+    especialidadeNome?: string; // Populado via JOIN
+    diaSemana: DiaSemana;
+    quantidadeAgendamentos: number;
+    ativo: boolean;
+    hospitalId: string;
+    observacoes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface Procedimento {
     id: string;
     nome: string;
@@ -64,6 +81,31 @@ export interface Procedimento {
     especialidade?: string; // Nome da especialidade (coluna física)
     especialidadeId?: string; // ID da especialidade (relacionamento)
     hospitalId?: string; // ID do hospital
+}
+
+// Interfaces para Grade Cirúrgica
+export interface GradeCirurgicaItem {
+    id: string;
+    tipo: 'especialidade' | 'procedimento';
+    texto: string;
+    ordem: number;
+}
+
+export interface GradeCirurgicaDia {
+    data: string; // YYYY-MM-DD
+    diaSemana: DiaSemana;
+    itens: GradeCirurgicaItem[];
+}
+
+export interface GradeCirurgica {
+    id: string;
+    hospitalId: string;
+    diaSemana: DiaSemana;
+    mesReferencia: string; // YYYY-MM (ex: 2024-03)
+    dias: GradeCirurgicaDia[];
+    ativa: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 // Interface para procedimentos externos (SIGTAP)

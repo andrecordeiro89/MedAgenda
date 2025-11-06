@@ -1,20 +1,52 @@
 
 import React, { useState } from 'react';
-import { Agendamento, Medico, Procedimento } from '../types';
+import { Agendamento, Medico, Procedimento, GradeCirurgicaDia } from '../types';
 import { ChevronLeftIcon, ChevronRightIcon, Modal } from './ui';
 import { formatDate } from '../utils';
+import GradeCirurgicaModal from './GradeCirurgicaModal';
 
 interface CalendarViewProps {
   agendamentos: Agendamento[];
   medicos: Medico[];
   procedimentos: Procedimento[];
+  hospitalId: string;
   onRefresh?: () => void;
 }
 
-const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, procedimentos }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ 
+  agendamentos, 
+  medicos, 
+  procedimentos,
+  hospitalId
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGradeCirurgicaModalOpen, setIsGradeCirurgicaModalOpen] = useState(false);
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 0=Dom, 1=Seg, ..., 6=Sáb
+  
+  // Verificar se há grades configuradas para cada dia da semana
+  const getDiasComGrade = (): Set<number> => {
+    const diasComGrade = new Set<number>();
+    for (let dia = 0; dia <= 6; dia++) {
+      const diaSemanaKey = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][dia];
+      const storageKey = `gradeCirurgica_${hospitalId}_${diaSemanaKey}_${currentDate.getFullYear()}_${currentDate.getMonth() + 2}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.some((g: any) => g.itens && g.itens.length > 0)) {
+            diasComGrade.add(dia);
+          }
+        } catch (e) {
+          // Ignorar erros
+        }
+      }
+    }
+    return diasComGrade;
+  };
+  
+  const diasComGrade = getDiasComGrade();
 
   const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
@@ -34,9 +66,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
 
   const handleDayClick = (day: number) => {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dayOfWeek = date.getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+    
     setSelectedDate(date);
-    setIsModalOpen(true);
+    setSelectedDayOfWeek(dayOfWeek);
+    
+    // Sempre abrir modal de grade cirúrgica
+    setIsGradeCirurgicaModalOpen(true);
   };
+
 
   const selectedDateAppointments = selectedDate
     ? agendamentos.filter(
@@ -56,14 +94,28 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
     const dayAppointments = agendamentos.filter(a => a.dataAgendamento === dateString);
 
     const isToday = date.toDateString() === today.toDateString();
+    const temGrade = diasComGrade.has(date.getDay());
 
     days.push(
       <div
         key={day}
-        className="border-r border-b p-2 cursor-pointer hover:bg-blue-50 transition-colors"
+        className={`border-r border-b p-2 cursor-pointer transition-colors relative ${
+          temGrade ? 'hover:bg-green-50' : 'hover:bg-blue-50'
+        }`}
         onClick={() => handleDayClick(day)}
+        title={temGrade ? 'Grade cirúrgica configurada - Clique para editar' : 'Clique para configurar Grade Cirúrgica'}
       >
-        <div className={`flex justify-center items-center w-8 h-8 rounded-full ${isToday ? 'bg-primary text-white' : ''}`}>{day}</div>
+        {/* Indicador de Grade Configurada */}
+        {temGrade && (
+          <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full shadow-sm" title="Grade configurada"></div>
+        )}
+        
+        <div className={`flex justify-center items-center w-8 h-8 rounded-full ${
+          isToday ? 'bg-primary text-white font-bold' : temGrade ? 'font-semibold text-green-700' : ''
+        }`}>
+          {day}
+        </div>
+        
         <div className="flex flex-wrap gap-1 mt-2 justify-center">
             {dayAppointments.some(a => getAgendamentoTipo(a) === 'ambulatorial') && <div className="w-2 h-2 rounded-full bg-blue-500" title="Ambulatorial"></div>}
             {dayAppointments.some(a => getAgendamentoTipo(a) === 'cirurgico') && <div className="w-2 h-2 rounded-full bg-red-500" title="Cirúrgico"></div>}
@@ -92,11 +144,20 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
                 </h3>
                 <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-slate-100"><ChevronRightIcon /></button>
             </div>
-             <div className="flex flex-wrap gap-4 mb-4 p-2 justify-center">
-                <LegendItem color="bg-blue-500" label="Ambulatorial" />
-                <LegendItem color="bg-red-500" label="Cirúrgico" />
-                <LegendItem color="bg-green-500" label="Liberado" />
-                <LegendItem color="bg-orange-500" label="Pendente" />
+             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-blue-800 font-medium mb-2">
+                  💡 <strong>Dica:</strong> Clique em qualquer dia para configurar a Grade Cirúrgica
+                </p>
+                <div className="flex flex-wrap gap-4 justify-center">
+                  <LegendItem color="bg-blue-500" label="Ambulatorial" />
+                  <LegendItem color="bg-red-500" label="Cirúrgico" />
+                  <LegendItem color="bg-green-500" label="Liberado" />
+                  <LegendItem color="bg-orange-500" label="Pendente" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="text-sm text-slate-600 font-semibold">Grade Configurada</span>
+                  </div>
+                </div>
             </div>
             <div className="grid grid-cols-7 text-center font-semibold text-slate-500 border-t border-l">
                 {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
@@ -108,6 +169,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
             </div>
         </div>
 
+        {/* Modal de Agendamentos Normais */}
         <Modal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
@@ -127,6 +189,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ agendamentos, medicos, proc
                 <p>Nenhum agendamento para esta data.</p>
             )}
         </Modal>
+
+        {/* Modal de Grade Cirúrgica (abre ao clicar em qualquer dia) */}
+        <GradeCirurgicaModal
+            isOpen={isGradeCirurgicaModalOpen}
+            onClose={() => setIsGradeCirurgicaModalOpen(false)}
+            mesAtual={currentDate}
+            diaSemanaClicado={selectedDayOfWeek}
+            hospitalId={hospitalId}
+        />
     </div>
   );
 };

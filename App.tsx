@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Agendamento, Medico, Procedimento, Especialidade } from './types';
+import { View, Agendamento, Medico, Procedimento, Especialidade, MetaEspecialidade } from './types';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
@@ -16,7 +16,8 @@ import {
     simpleProcedimentoService,
     simpleAgendamentoService,
     simpleEspecialidadeService,
-    simpleMedicoHospitalService
+    simpleMedicoHospitalService,
+    simpleMetaEspecialidadeService
 } from './services/api-simple';
 import { testSupabaseConnection } from './services/supabase';
 import { DataCacheProvider } from './contexts/DataCacheContext';
@@ -41,6 +42,7 @@ const AppContent: React.FC = () => {
     const [medicos, setMedicos] = useState<Medico[]>([]);
     const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
     const [especialidades, setEspecialidades] = useState<Especialidade[]>([]);
+    const [metasEspecialidades, setMetasEspecialidades] = useState<MetaEspecialidade[]>([]);
 
     // PERSISTÊNCIA: Salvar tela atual no localStorage quando muda
     const changeView = (newView: View) => {
@@ -70,24 +72,27 @@ const AppContent: React.FC = () => {
 
             // Carregar dados filtrados por hospital usando serviços simplificados
             const hospitalId = hospitalSelecionado.id;
-            const [agendamentosData, medicosData, procedimentosData, especialidadesData] = await Promise.all([
+            const [agendamentosData, medicosData, procedimentosData, especialidadesData, metasData] = await Promise.all([
                 simpleAgendamentoService.getAll(hospitalId),
                 simpleMedicoService.getAll(hospitalId),
                 simpleProcedimentoService.getAll(hospitalId),
-                simpleEspecialidadeService.getAll() // Especialidades são globais, não por hospital
+                simpleEspecialidadeService.getAll(), // Especialidades são globais, não por hospital
+                simpleMetaEspecialidadeService.getAll(hospitalId) // Metas são por hospital
             ]);
 
             setAgendamentos(agendamentosData);
             setMedicos(medicosData);
             setProcedimentos(procedimentosData);
             setEspecialidades(especialidadesData);
+            setMetasEspecialidades(metasData);
 
             console.log('✅ Dados carregados:', {
                 hospital: hospitalSelecionado.nome,
                 agendamentos: agendamentosData.length,
                 medicos: medicosData.length,
                 procedimentos: procedimentosData.length,
-                especialidades: especialidadesData.length
+                especialidades: especialidadesData.length,
+                metas: metasData.length
             });
 
             // Verificar se especialidades foram carregadas
@@ -193,6 +198,7 @@ const AppContent: React.FC = () => {
                         agendamentos={agendamentos}
                         medicos={medicos}
                         procedimentos={procedimentos}
+                        hospitalId={hospitalSelecionado?.id || ''}
                         onRefresh={() => loadData(false)}
                     />
                 );
@@ -203,6 +209,8 @@ const AppContent: React.FC = () => {
                         medicos={medicos}
                         procedimentos={procedimentos}
                         especialidades={especialidades}
+                        metasEspecialidades={metasEspecialidades}
+                        hospitalId={hospitalSelecionado?.id || ''}
                         onRefresh={() => loadData(false)}
                     />
                 );

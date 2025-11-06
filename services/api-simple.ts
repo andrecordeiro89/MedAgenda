@@ -2,7 +2,7 @@
 // Filtra dados por hospital sem autenticação real
 
 import { supabase } from './supabase';
-import { Agendamento, Medico, Procedimento, StatusLiberacao, Especialidade, MedicoHospital, Hospital } from '../types';
+import { Agendamento, Medico, Procedimento, StatusLiberacao, Especialidade, MedicoHospital, Hospital, MetaEspecialidade, DiaSemana } from '../types';
 
 // Mapeamento de hospitais (mesmo que no PremiumLogin)
 export const HOSPITAIS = {
@@ -58,8 +58,7 @@ function convertSupabaseToProcedimento(data: any): Procedimento {
 function convertSupabaseToEspecialidade(data: any): Especialidade {
   return {
     id: data.id,
-    nome: data.nome,
-    descricao: data.descricao || ''
+    nome: data.nome
   };
 }
 
@@ -357,8 +356,7 @@ export class SimpleEspecialidadeService {
     const { data, error } = await supabase
       .from('especialidades')
       .insert([{
-        nome: especialidade.nome,
-        descricao: especialidade.descricao
+        nome: especialidade.nome
       }])
       .select()
       .single();
@@ -374,7 +372,6 @@ export class SimpleEspecialidadeService {
     const supabaseData: any = {};
     
     if (especialidade.nome) supabaseData.nome = especialidade.nome;
-    if (especialidade.descricao !== undefined) supabaseData.descricao = especialidade.descricao;
 
     const { data, error } = await supabase
       .from('especialidades')
@@ -498,9 +495,191 @@ export class SimpleMedicoHospitalService {
   }
 }
 
+// Serviço para Metas de Especialidades
+export class SimpleMetaEspecialidadeService {
+  async getAll(hospitalId: string): Promise<MetaEspecialidade[]> {
+    console.log('🎯 Buscando metas de especialidades para hospital_id:', hospitalId);
+    
+    const { data, error } = await supabase
+      .from('metas_especialidades')
+      .select(`
+        *,
+        especialidades:especialidade_id (
+          id,
+          nome
+        )
+      `)
+      .eq('hospital_id', hospitalId)
+      .order('especialidade_id', { ascending: true })
+      .order('dia_semana', { ascending: true });
+
+    if (error) {
+      console.error('❌ Erro ao buscar metas de especialidades:', error);
+      return [];
+    }
+
+    console.log('✅ Metas de especialidades encontradas:', data?.length || 0);
+
+    return data?.map((item: any) => ({
+      id: item.id,
+      especialidadeId: item.especialidade_id,
+      especialidadeNome: item.especialidades?.nome || 'N/A',
+      diaSemana: item.dia_semana as DiaSemana,
+      quantidadeAgendamentos: item.quantidade_agendamentos,
+      ativo: item.ativo,
+      hospitalId: item.hospital_id,
+      observacoes: item.observacoes,
+      created_at: item.created_at,
+      updated_at: item.updated_at
+    })) || [];
+  }
+
+  async create(meta: Omit<MetaEspecialidade, 'id' | 'created_at' | 'updated_at' | 'especialidadeNome'>): Promise<MetaEspecialidade> {
+    console.log('🎯 Criando nova meta de especialidade:', meta);
+
+    const supabaseData = {
+      especialidade_id: meta.especialidadeId,
+      dia_semana: meta.diaSemana,
+      quantidade_agendamentos: meta.quantidadeAgendamentos,
+      ativo: meta.ativo,
+      hospital_id: meta.hospitalId,
+      observacoes: meta.observacoes || null
+    };
+
+    const { data, error } = await supabase
+      .from('metas_especialidades')
+      .insert(supabaseData)
+      .select(`
+        *,
+        especialidades:especialidade_id (
+          id,
+          nome
+        )
+      `)
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao criar meta de especialidade:', error);
+      throw new Error(`Erro ao criar meta de especialidade: ${error.message}`);
+    }
+
+    console.log('✅ Meta de especialidade criada com sucesso:', data.id);
+
+    return {
+      id: data.id,
+      especialidadeId: data.especialidade_id,
+      especialidadeNome: data.especialidades?.nome || 'N/A',
+      diaSemana: data.dia_semana as DiaSemana,
+      quantidadeAgendamentos: data.quantidade_agendamentos,
+      ativo: data.ativo,
+      hospitalId: data.hospital_id,
+      observacoes: data.observacoes,
+      created_at: data.created_at,
+      updated_at: data.updated_at
+    };
+  }
+
+  async update(id: string, meta: Partial<Omit<MetaEspecialidade, 'id' | 'created_at' | 'updated_at' | 'especialidadeNome'>>): Promise<MetaEspecialidade> {
+    console.log('🎯 Atualizando meta de especialidade:', id, meta);
+
+    const supabaseData: any = {};
+    
+    if (meta.especialidadeId !== undefined) supabaseData.especialidade_id = meta.especialidadeId;
+    if (meta.diaSemana !== undefined) supabaseData.dia_semana = meta.diaSemana;
+    if (meta.quantidadeAgendamentos !== undefined) supabaseData.quantidade_agendamentos = meta.quantidadeAgendamentos;
+    if (meta.ativo !== undefined) supabaseData.ativo = meta.ativo;
+    if (meta.observacoes !== undefined) supabaseData.observacoes = meta.observacoes;
+
+    const { data, error } = await supabase
+      .from('metas_especialidades')
+      .update(supabaseData)
+      .eq('id', id)
+      .select(`
+        *,
+        especialidades:especialidade_id (
+          id,
+          nome
+        )
+      `)
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao atualizar meta de especialidade:', error);
+      throw new Error(`Erro ao atualizar meta de especialidade: ${error.message}`);
+    }
+
+    console.log('✅ Meta de especialidade atualizada com sucesso');
+
+    return {
+      id: data.id,
+      especialidadeId: data.especialidade_id,
+      especialidadeNome: data.especialidades?.nome || 'N/A',
+      diaSemana: data.dia_semana as DiaSemana,
+      quantidadeAgendamentos: data.quantidade_agendamentos,
+      ativo: data.ativo,
+      hospitalId: data.hospital_id,
+      observacoes: data.observacoes,
+      created_at: data.created_at,
+      updated_at: data.updated_at
+    };
+  }
+
+  async delete(id: string): Promise<void> {
+    console.log('🎯 Excluindo meta de especialidade:', id);
+
+    const { error } = await supabase
+      .from('metas_especialidades')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('❌ Erro ao excluir meta de especialidade:', error);
+      throw new Error(`Erro ao excluir meta de especialidade: ${error.message}`);
+    }
+
+    console.log('✅ Meta de especialidade excluída com sucesso');
+  }
+
+  // Buscar metas por especialidade
+  async getByEspecialidade(especialidadeId: string, hospitalId: string): Promise<MetaEspecialidade[]> {
+    const { data, error } = await supabase
+      .from('metas_especialidades')
+      .select(`
+        *,
+        especialidades:especialidade_id (
+          id,
+          nome
+        )
+      `)
+      .eq('especialidade_id', especialidadeId)
+      .eq('hospital_id', hospitalId)
+      .eq('ativo', true)
+      .order('dia_semana', { ascending: true });
+
+    if (error) {
+      console.error('❌ Erro ao buscar metas por especialidade:', error);
+      return [];
+    }
+
+    return data?.map((item: any) => ({
+      id: item.id,
+      especialidadeId: item.especialidade_id,
+      especialidadeNome: item.especialidades?.nome || 'N/A',
+      diaSemana: item.dia_semana as DiaSemana,
+      quantidadeAgendamentos: item.quantidade_agendamentos,
+      ativo: item.ativo,
+      hospitalId: item.hospital_id,
+      observacoes: item.observacoes,
+      created_at: item.created_at,
+      updated_at: item.updated_at
+    })) || [];
+  }
+}
+
 // Instâncias dos serviços
 export const simpleAgendamentoService = new SimpleAgendamentoService();
 export const simpleMedicoService = new SimpleMedicoService();
 export const simpleProcedimentoService = new SimpleProcedimentoService();
 export const simpleEspecialidadeService = new SimpleEspecialidadeService();
 export const simpleMedicoHospitalService = new SimpleMedicoHospitalService();
+export const simpleMetaEspecialidadeService = new SimpleMetaEspecialidadeService();

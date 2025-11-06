@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Agendamento, Medico, Procedimento, Especialidade } from '../types';
+import { Agendamento, Medico, Procedimento, Especialidade, MetaEspecialidade } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input, Select } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import SigtapProceduresView from './SigtapProceduresView';
+import EspecialidadesMetasView from './EspecialidadesMetasView';
 import { VirtualizedTable } from './VirtualizedTable';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatDate } from '../utils';
@@ -19,13 +20,15 @@ import { useDataCache } from '../contexts/DataCacheContext';
 import ExcelImportMedicos from './ExcelImportMedicos';
 import ExcelImportProcedimentos from './ExcelImportProcedimentos';
 
-type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap';
+type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap' | 'especialidades';
 
 interface ManagementViewProps {
   agendamentos: Agendamento[];
   medicos: Medico[];
   procedimentos: Procedimento[];
   especialidades: Especialidade[];
+  metasEspecialidades: MetaEspecialidade[];
+  hospitalId: string;
   onRefresh: () => void;
 }
 
@@ -36,7 +39,7 @@ interface ExternalProcedureRecord {
   complexity?: string;
 }
 
-const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, onRefresh }) => {
+const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, metasEspecialidades, hospitalId, onRefresh }) => {
   const { hospitalSelecionado } = useAuth();
   
   // Hook do cache
@@ -348,6 +351,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
               Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
             </Button>
           )}
+          {/* Botão "Novo" não aparece nas abas de Especialidades e SIGTAP pois têm seus próprios controles */}
         </div>
       </div>
   
@@ -355,6 +359,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         <TabButton tab="agendamentos" label="Agendamentos" />
         <TabButton tab="medicos" label="Médicos" />
         <TabButton tab="procedimentos" label="Procedimentos" />
+        <TabButton tab="especialidades" label="Metas de Especialidades" />
         <TabButton tab="sigtap" label="Procedimentos SIGTAP" />
       </div>
   
@@ -604,6 +609,17 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                   }}
                 />
               </>
+          )}
+
+          {activeTab === 'especialidades' && (
+            <EspecialidadesMetasView
+              especialidades={especialidades}
+              metas={metasEspecialidades}
+              hospitalId={hospitalId}
+              medicos={medicos}
+              procedimentos={procedimentos}
+              onRefresh={onRefresh}
+            />
           )}
 
           {activeTab === 'sigtap' && (
