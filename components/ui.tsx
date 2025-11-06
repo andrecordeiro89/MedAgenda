@@ -122,7 +122,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             <XIcon className={isFullscreen ? 'w-5 h-5' : 'w-6 h-6'} />
           </button>
         </div>
-        <div className={`flex-1 ${isFullscreen ? 'overflow-hidden' : 'p-6 overflow-y-auto'}`}>
+        <div className={`flex-1 ${isFullscreen ? 'overflow-y-auto' : 'p-6 overflow-y-auto'}`}>
           {children}
         </div>
         {footer && (

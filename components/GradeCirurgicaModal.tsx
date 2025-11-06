@@ -332,16 +332,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       title={`Grade Cirúrgica - ${nomeDiaClicado}s de ${mesProximoNome}`}
       size="fullscreen"
     >
-      <div className="flex flex-col h-full p-4">
+      <div className="flex flex-col p-4 overflow-y-auto">
         {/* Grid com as 3 datas */}
-        <div className="grid grid-cols-3 gap-4 flex-1 min-h-0 mb-4">
+        <div className="grid grid-cols-3 gap-4 mb-4">
           {proximasDatas.map((data, index) => {
             const grade = grades[index];
 
             return (
               <div
                 key={index}
-                className="border-2 border-slate-300 rounded-lg bg-white shadow-md flex flex-col min-h-0"
+                className="border-2 border-slate-300 rounded-lg bg-white shadow-md flex flex-col"
               >
                 {/* Header do Card */}
                 <div className={`px-3 py-1.5 border-b-2 ${
@@ -387,7 +387,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 </div>
 
                 {/* Tabela de Itens Agrupados por Especialidade */}
-                <div className="flex-1 p-2 overflow-y-auto min-h-0">
+                <div className="flex-1 p-2">
                   {grade.itens.length === 0 ? (
                     <div className="text-center py-4 text-slate-500">
                       <p className="text-xs">Vazio</p>
