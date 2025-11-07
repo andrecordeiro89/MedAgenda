@@ -287,54 +287,26 @@ export const procedimentoService = {
 // SERVIÇOS PARA AGENDAMENTOS
 // ============================================
 export const agendamentoService = {
-  async getAll(params?: {
-    search?: string
-    startDate?: string
-    endDate?: string
-    medicoId?: string
-    status?: StatusLiberacao
-  }): Promise<Agendamento[]> {
-    const { data, error } = await supabase
-      .from('agendamentos_completos')
+  async getAll(hospitalId?: string): Promise<Agendamento[]> {
+    let query = supabase
+      .from('agendamentos')
       .select('*')
-      .order('data_agendamento')
+      .order('data_agendamento', { ascending: true });
     
-    if (error) throw new Error(error.message)
-    
-    let filteredData = data || []
-    
-    // Aplicar filtros
-    if (params?.search) {
-      const searchLower = params.search.toLowerCase()
-      filteredData = filteredData.filter(item => 
-        item.nome_paciente.toLowerCase().includes(searchLower) ||
-        item.medico_nome?.toLowerCase().includes(searchLower)
-      )
+    if (hospitalId) {
+      query = query.eq('hospital_id', hospitalId);
     }
     
-    if (params?.startDate) {
-      filteredData = filteredData.filter(item => item.data_agendamento >= params.startDate!)
-    }
+    const { data, error } = await query;
     
-    if (params?.endDate) {
-      filteredData = filteredData.filter(item => item.data_agendamento <= params.endDate!)
-    }
+    if (error) throw new Error(error.message);
     
-    if (params?.medicoId) {
-      filteredData = filteredData.filter(item => item.medico_id === params.medicoId)
-    }
-    
-    if (params?.status) {
-      const statusSupabase = params.status === 'v' ? 'liberado' : 'pendente'
-      filteredData = filteredData.filter(item => item.status_liberacao === statusSupabase)
-    }
-    
-    return filteredData.map(convertAgendamentoFromSupabase)
+    return data as Agendamento[];
   },
 
   async getById(id: string): Promise<Agendamento> {
     const { data, error } = await supabase
-      .from('agendamentos_completos')
+      .from('agendamentos')
       .select('*')
       .eq('id', id)
       .single()
@@ -342,64 +314,48 @@ export const agendamentoService = {
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Agendamento não encontrado')
     
-    return convertAgendamentoFromSupabase(data)
+    return data as Agendamento
   },
 
   async getByDate(date: string): Promise<Agendamento[]> {
     const { data, error } = await supabase
-      .from('agendamentos_completos')
+      .from('agendamentos')
       .select('*')
       .eq('data_agendamento', date)
     
     if (error) throw new Error(error.message)
     
-    return (data || []).map(convertAgendamentoFromSupabase)
+    return data as Agendamento[]
   },
 
-  async create(agendamento: Omit<Agendamento, 'id' | 'idade' | 'tipo'>): Promise<Agendamento> {
+  async create(agendamento: Omit<Agendamento, 'id' | 'created_at' | 'updated_at'>): Promise<Agendamento> {
     console.log('💾 Salvando agendamento no Supabase...', agendamento);
     
-    // Se tiver os campos novos (especialidade e medico), usar inserção direta
-    if (agendamento.especialidade !== undefined || agendamento.medico !== undefined) {
-      const insertData = {
-        nome_paciente: agendamento.nome_paciente,
-        data_nascimento: agendamento.data_nascimento,
-        data_agendamento: agendamento.data_agendamento,
-        especialidade: agendamento.especialidade || null,
-        medico: agendamento.medico || null,
-        procedimentos: agendamento.procedimentos || null,
-        hospital_id: agendamento.hospital_id || null,
-        cidade_natal: agendamento.cidade_natal || null,
-        telefone: agendamento.telefone || null
-      };
-      
-      const { data, error } = await supabase
-        .from('agendamentos')
-        .insert([insertData])
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('❌ Erro ao salvar agendamento:', error);
-        throw new Error(error.message);
-      }
-      
-      console.log('✅ Agendamento salvo com sucesso!', data);
-      return data as Agendamento;
-    }
+    const insertData = {
+      nome_paciente: agendamento.nome_paciente,
+      data_nascimento: agendamento.data_nascimento,
+      data_agendamento: agendamento.data_agendamento,
+      especialidade: agendamento.especialidade || null,
+      medico: agendamento.medico || null,
+      procedimentos: agendamento.procedimentos || null,
+      hospital_id: agendamento.hospital_id || null,
+      cidade_natal: agendamento.cidade_natal || null,
+      telefone: agendamento.telefone || null
+    };
     
-    // Caso contrário, usar conversão antiga (compatibilidade)
     const { data, error } = await supabase
       .from('agendamentos')
-      .insert(convertAgendamentoToSupabase(agendamento))
+      .insert([insertData])
       .select()
-      .single()
+      .single();
     
-    if (error) throw new Error(error.message)
-    if (!data) throw new Error('Erro ao criar agendamento')
+    if (error) {
+      console.error('❌ Erro ao salvar agendamento:', error);
+      throw new Error(error.message);
+    }
     
-    // Buscar o agendamento completo
-    return this.getById(data.id)
+    console.log('✅ Agendamento salvo com sucesso!', data);
+    return data as Agendamento;
   },
 
   async update(id: string, agendamento: Partial<Omit<Agendamento, 'id' | 'idade' | 'tipo'>>): Promise<Agendamento> {
@@ -477,7 +433,7 @@ export const estatisticasService = {
     
     // Buscar próximos agendamentos
     const { data: proximos, error: proximosError } = await supabase
-      .from('agendamentos_completos')
+      .from('agendamentos')
       .select('*')
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento')
@@ -491,7 +447,7 @@ export const estatisticasService = {
       liberados: stats?.liberados || 0,
       cirurgicos: stats?.cirurgicos || 0,
       ambulatoriais: stats?.ambulatoriais || 0,
-      proximosAgendamentos: (proximos || []).map(convertAgendamentoFromSupabase)
+      proximosAgendamentos: proximos as Agendamento[] || []
     }
   }
 }

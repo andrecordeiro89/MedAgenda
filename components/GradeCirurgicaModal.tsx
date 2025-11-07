@@ -75,41 +75,105 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   // Estados
   const [grades, setGrades] = useState<GradeCirurgicaDia[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [autoSaving, setAutoSaving] = useState(false); // Estado para indicar auto-save
 
-  // Carregar grade do banco ao abrir o modal
+  // Carregar grade DO SUPABASE ao abrir o modal
   useEffect(() => {
     const loadGrade = async () => {
       if (!isOpen) return;
       
       setLoading(true);
       try {
-        const diaSemana = DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado];
-        const gradeData = await simpleGradeCirurgicaService.getGrade(
-          hospitalId,
-          diaSemana,
-          mesReferencia
+        console.log('🔍 Buscando agendamentos do Supabase para as datas:', proximasDatas.map(d => d.toISOString().split('T')[0]));
+        
+        // Buscar agendamentos reais do banco para cada data
+        const gradesCarregadas = await Promise.all(
+          proximasDatas.map(async (data, index) => {
+            const dataFormatada = data.toISOString().split('T')[0];
+            
+            try {
+              const agendamentos = await agendamentoService.getAll(hospitalId);
+              const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+              
+              console.log(`📅 Dia ${dataFormatada}: ${agendamentosDoDia.length} agendamentos`);
+              
+              // Montar itens da grade a partir dos agendamentos (AGRUPADOS)
+              const itens: GradeCirurgicaItem[] = [];
+              
+              // Agrupar por especialidade
+              const gruposPorEspecialidade = new Map<string, {
+                especialidade: string;
+                medico: string;
+                procedimentos: Set<string>;
+              }>();
+              
+              agendamentosDoDia.forEach(agendamento => {
+                if (agendamento.especialidade && agendamento.medico) {
+                  const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+                  
+                  if (!gruposPorEspecialidade.has(chave)) {
+                    gruposPorEspecialidade.set(chave, {
+                      especialidade: agendamento.especialidade,
+                      medico: agendamento.medico,
+                      procedimentos: new Set()
+                    });
+                  }
+                  
+                  // Adicionar procedimento se existir
+                  if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+                    gruposPorEspecialidade.get(chave)!.procedimentos.add(agendamento.procedimentos);
+                  }
+                }
+              });
+              
+              // Montar itens na ordem: especialidade → seus procedimentos
+              gruposPorEspecialidade.forEach((grupo) => {
+                // Adicionar especialidade
+                itens.push({
+                  id: `esp-${Date.now()}-${Math.random()}`,
+                  tipo: 'especialidade',
+                  texto: `${grupo.especialidade} - ${grupo.medico}`,
+                  ordem: itens.length,
+                  pacientes: []
+                });
+                
+                // Adicionar procedimentos desta especialidade
+                grupo.procedimentos.forEach(proc => {
+                  itens.push({
+                    id: `proc-${Date.now()}-${Math.random()}`,
+                    tipo: 'procedimento',
+                    texto: proc,
+                    ordem: itens.length,
+                    pacientes: []
+                  });
+                });
+              });
+              
+              return {
+                id: `grade-${Date.now()}-${index}`,
+                data: dataFormatada,
+                diaSemana: DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado],
+                ordem: index + 1,
+                itens
+              };
+            } catch (error) {
+              console.error(`❌ Erro ao buscar agendamentos do dia ${dataFormatada}:`, error);
+              return {
+                id: `grade-${Date.now()}-${index}`,
+                data: dataFormatada,
+                diaSemana: DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado],
+                ordem: index + 1,
+                itens: []
+              };
+            }
+          })
         );
-
-        if (gradeData && gradeData.dias && gradeData.dias.length > 0) {
-          // Carregar grade existente do banco
-          console.log('✅ Grade carregada do banco:', gradeData);
-          setGrades(gradeData.dias);
-        } else {
-          // Inicializar grade vazia
-          console.log('ℹ️ Nenhuma grade encontrada, inicializando vazia');
-          setGrades(proximasDatas.map((data, index) => ({
-            id: `temp-${Date.now()}-${index}`,
-            data: data.toISOString().split('T')[0],
-            diaSemana: DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado],
-            ordem: index + 1,
-            itens: []
-          })));
-        }
+        
+        console.log('✅ Grades carregadas do Supabase:', gradesCarregadas);
+        setGrades(gradesCarregadas);
+        
       } catch (error) {
-        console.error('❌ Erro ao carregar grade:', error);
-        // Em caso de erro, inicializar vazia
+        console.error('❌ Erro ao carregar grades:', error);
+        // Inicializar vazia em caso de erro
         setGrades(proximasDatas.map((data, index) => ({
           id: `temp-${Date.now()}-${index}`,
           data: data.toISOString().split('T')[0],
@@ -122,8 +186,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }
     };
 
-    loadGrade();
-  }, [isOpen, hospitalId, diaSemanaClicado, mesReferencia, proximasDatas]);
+    if (isOpen) {
+      loadGrade();
+    }
+  }, [isOpen, hospitalId, diaSemanaClicado, mesReferencia]);
 
   // Estado para controlar expansão de procedimentos (gradeIndex_especialidadeId => boolean)
   const [expandedEspecialidades, setExpandedEspecialidades] = useState<Record<string, boolean>>({});
@@ -140,77 +206,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [mostrarCampoMedico, setMostrarCampoMedico] = useState(false); // Controla exibição do campo médico
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false); // Loading ao salvar
 
-  // Função para salvar grade no banco (MANUAL - com alert)
-  const handleSaveGrade = async () => {
-    setSaving(true);
-    try {
-      const diaSemana = DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado];
-      
-      await simpleGradeCirurgicaService.saveGrade({
-        hospitalId,
-        diaSemana,
-        mesReferencia,
-        ativa: true,
-        dias: grades.map((grade, index) => ({
-          data: grade.data,
-          diaSemana: grade.diaSemana,
-          ordem: index + 1,
-          itens: grade.itens.map((item, itemIndex) => ({
-            tipo: item.tipo,
-            texto: item.texto,
-            ordem: itemIndex,
-            pacientes: item.pacientes || [],
-            especialidadeId: item.especialidadeId || undefined, // 🔥 ENVIAR O ID CORRETO
-            procedimentoId: item.procedimentoId || undefined // 🔥 ENVIAR O ID CORRETO
-          }))
-        }))
-      });
+  // Salvamento removido - dados são salvos automaticamente no Supabase ao adicionar
 
-      console.log('✅ Grade salva com sucesso no banco!');
-      alert('Grade salva com sucesso!');
-    } catch (error) {
-      console.error('❌ Erro ao salvar grade:', error);
-      alert('Erro ao salvar grade. Tente novamente.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Função para SALVAR AUTOMATICAMENTE (silencioso - sem alert)
-  const autoSaveGrade = async (updatedGrades: GradeCirurgicaDia[]) => {
-    setAutoSaving(true);
-    try {
-      const diaSemana = DAY_NUMBER_TO_DIA_SEMANA[diaSemanaClicado];
-      
-      await simpleGradeCirurgicaService.saveGrade({
-        hospitalId,
-        diaSemana,
-        mesReferencia,
-        ativa: true,
-        dias: updatedGrades.map((grade, index) => ({
-          data: grade.data,
-          diaSemana: grade.diaSemana,
-          ordem: index + 1,
-          itens: grade.itens.map((item, itemIndex) => ({
-            tipo: item.tipo,
-            texto: item.texto,
-            ordem: itemIndex,
-            pacientes: item.pacientes || [],
-            especialidadeId: item.especialidadeId || undefined, // 🔥 ENVIAR O ID CORRETO
-            procedimentoId: item.procedimentoId || undefined // 🔥 ENVIAR O ID CORRETO
-          }))
-        }))
-      });
-
-      console.log('✅ Auto-save: Grade salva automaticamente!');
-    } catch (error) {
-      console.error('❌ Erro no auto-save:', error);
-      // Não mostra alert - apenas log no console
-    } finally {
-      // Delay curto para mostrar o indicador
-      setTimeout(() => setAutoSaving(false), 500);
-    }
-  };
+  // Auto-save removido - salvamos direto no Supabase ao adicionar cada item
 
   // Iniciar adição de especialidade (abre o dropdown)
   const handleAddEspecialidadeClick = (gradeIndex: number) => {
@@ -267,19 +265,62 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       // Salvar no Supabase
       await agendamentoService.create(novoAgendamento);
       
-      // Adicionar item visual na grade
+      console.log('✅ Especialidade salva! Recarregando dados...');
+      
+      // Recarregar dados do banco (reutiliza dataFormatada já declarada)
+      const agendamentos = await agendamentoService.getAll(hospitalId);
+      const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+      
+      // Reagrupar itens
+      const itens: GradeCirurgicaItem[] = [];
+      const gruposPorEspecialidade = new Map<string, {
+        especialidade: string;
+        medico: string;
+        procedimentos: Set<string>;
+      }>();
+      
+      agendamentosDoDia.forEach(agendamento => {
+        if (agendamento.especialidade && agendamento.medico) {
+          const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+          
+          if (!gruposPorEspecialidade.has(chave)) {
+            gruposPorEspecialidade.set(chave, {
+              especialidade: agendamento.especialidade,
+              medico: agendamento.medico,
+              procedimentos: new Set()
+            });
+          }
+          
+          if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+            gruposPorEspecialidade.get(chave)!.procedimentos.add(agendamento.procedimentos);
+          }
+        }
+      });
+      
+      gruposPorEspecialidade.forEach((grupo) => {
+        itens.push({
+          id: `esp-${Date.now()}-${Math.random()}`,
+          tipo: 'especialidade',
+          texto: `${grupo.especialidade} - ${grupo.medico}`,
+          ordem: itens.length,
+          pacientes: []
+        });
+        
+        grupo.procedimentos.forEach(proc => {
+          itens.push({
+            id: `proc-${Date.now()}-${Math.random()}`,
+            tipo: 'procedimento',
+            texto: proc,
+            ordem: itens.length,
+            pacientes: []
+          });
+        });
+      });
+      
+      // Atualizar grade
       const updatedGrades = grades.map((grade, i) => {
         if (i === addingEspecialidade) {
-          const novoItem: GradeCirurgicaItem = {
-            id: `temp-${Date.now()}-${Math.random()}`,
-            tipo: 'especialidade',
-            texto: `${especialidadeNome} - ${nomeMedico}`,
-            especialidadeId: especialidadeSelecionada,
-            ordem: grade.itens.length,
-            pacientes: []
-          };
-          
-          return { ...grade, itens: [...grade.itens, novoItem] };
+          return { ...grade, itens };
         }
         return grade;
       });
@@ -386,46 +427,111 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setGrades(novasGrades);
   };
 
-  // Função auxiliar para auto-save após edição (chamada no onBlur)
-  const handleBlurItem = async (gradeIndex: number, itemId: string, itemTexto: string, itemTipo: string) => {
-    if (itemTipo === 'procedimento' && itemTexto.trim() !== '') {
-      // Encontrar a especialidade deste procedimento
-      const grade = grades[gradeIndex];
-      let especialidadeAtual = '';
-      let medicoAtual = '';
-      
-      for (const item of grade.itens) {
-        if (item.tipo === 'especialidade') {
-          const [esp, med] = item.texto.split(' - ');
-          especialidadeAtual = esp || '';
-          medicoAtual = med || '';
-        }
-        if (item.id === itemId) {
-          break;
-        }
+  // Função auxiliar para auto-save após edição (chamada on Blur)
+  const handleBlurItem = async (gradeIndex: number, itemId: string) => {
+    const grade = grades[gradeIndex];
+    const item = grade.itens.find(i => i.id === itemId);
+    
+    if (!item || item.tipo !== 'procedimento' || !item.texto.trim()) {
+      return;
+    }
+    
+    // Encontrar a especialidade deste procedimento
+    let especialidadeAtual = '';
+    let medicoAtual = '';
+    
+    for (const gradeItem of grade.itens) {
+      if (gradeItem.tipo === 'especialidade') {
+        const [esp, med] = gradeItem.texto.split(' - ');
+        especialidadeAtual = esp || '';
+        medicoAtual = med || '';
       }
-      
-      if (especialidadeAtual && medicoAtual) {
-        try {
-          const dataSelecionada = proximasDatas[gradeIndex];
-          const dataFormatada = dataSelecionada.toISOString().split('T')[0];
-          
-          await agendamentoService.create({
-            nome_paciente: '',
-            data_nascimento: '2000-01-01',
-            data_agendamento: dataFormatada,
-            especialidade: especialidadeAtual,
-            medico: medicoAtual,
-            procedimentos: itemTexto,
-            hospital_id: hospitalId || null,
-            cidade_natal: null,
-            telefone: null
+      if (gradeItem.id === itemId) {
+        break;
+      }
+    }
+    
+    if (especialidadeAtual && medicoAtual) {
+      try {
+        const dataSelecionada = proximasDatas[gradeIndex];
+        const dataFormatada = dataSelecionada.toISOString().split('T')[0];
+        
+        await agendamentoService.create({
+          nome_paciente: '',
+          data_nascimento: '2000-01-01',
+          data_agendamento: dataFormatada,
+          especialidade: especialidadeAtual,
+          medico: medicoAtual,
+          procedimentos: item.texto,
+          hospital_id: hospitalId || null,
+          cidade_natal: null,
+          telefone: null
+        });
+        
+        console.log('✅ Procedimento salvo! Recarregando...');
+        
+        // Recarregar dados do banco
+        const agendamentos = await agendamentoService.getAll(hospitalId);
+        const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+        
+        // Reagrupar itens
+        const itens: GradeCirurgicaItem[] = [];
+        const gruposPorEspecialidade = new Map<string, {
+          especialidade: string;
+          medico: string;
+          procedimentos: Set<string>;
+        }>();
+        
+        agendamentosDoDia.forEach(agendamento => {
+          if (agendamento.especialidade && agendamento.medico) {
+            const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+            
+            if (!gruposPorEspecialidade.has(chave)) {
+              gruposPorEspecialidade.set(chave, {
+                especialidade: agendamento.especialidade,
+                medico: agendamento.medico,
+                procedimentos: new Set()
+              });
+            }
+            
+            if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+              gruposPorEspecialidade.get(chave)!.procedimentos.add(agendamento.procedimentos);
+            }
+          }
+        });
+        
+        gruposPorEspecialidade.forEach((grupo) => {
+          itens.push({
+            id: `esp-${Date.now()}-${Math.random()}`,
+            tipo: 'especialidade',
+            texto: `${grupo.especialidade} - ${grupo.medico}`,
+            ordem: itens.length,
+            pacientes: []
           });
           
-          console.log('✅ Procedimento salvo no banco:', itemTexto);
-        } catch (error) {
-          console.error('❌ Erro ao salvar procedimento:', error);
-        }
+          grupo.procedimentos.forEach(proc => {
+            itens.push({
+              id: `proc-${Date.now()}-${Math.random()}`,
+              tipo: 'procedimento',
+              texto: proc,
+              ordem: itens.length,
+              pacientes: []
+            });
+          });
+        });
+        
+        // Atualizar grade
+        const updatedGrades = grades.map((g, i) => {
+          if (i === gradeIndex) {
+            return { ...g, itens };
+          }
+          return g;
+        });
+        
+        setGrades(updatedGrades);
+        
+      } catch (error) {
+        console.error('❌ Erro ao salvar procedimento:', error);
       }
     }
   };
@@ -501,107 +607,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     // Atualizar estado local
     setGrades(updatedGrades);
-
-    // 🔥 SALVAR AUTOMATICAMENTE
-    autoSaveGrade(updatedGrades);
   };
 
-  // Replicar procedimentos de uma especialidade específica
-  const handleReplicarProcedimentosEspecialidade = async (gradeOrigemIndex: number, especialidadeId: string) => {
-    const gradeOrigem = grades[gradeOrigemIndex];
-    
-    // Encontrar a especialidade e seus procedimentos
-    const especialidadeIndex = gradeOrigem.itens.findIndex(item => item.id === especialidadeId);
-    if (especialidadeIndex === -1) return;
-    
-    const especialidade = gradeOrigem.itens[especialidadeIndex];
-    const [especialidadeNome, medicoNome] = especialidade.texto.split(' - ');
-    
-    // Coletar procedimentos desta especialidade
-    const procedimentos: GradeCirurgicaItem[] = [];
-    for (let i = especialidadeIndex + 1; i < gradeOrigem.itens.length; i++) {
-      const item = gradeOrigem.itens[i];
-      if (item.tipo === 'especialidade') break;
-      if (item.tipo === 'procedimento') {
-        procedimentos.push(item);
-      }
-    }
-    
-    if (procedimentos.length === 0) return;
-    
-    console.log('🔄 Replicando procedimentos da especialidade:', especialidadeNome);
-    
-    // Replicar para todos os outros dias
-    const updatedGrades = grades.map((grade, gradeIndex) => {
-      // Encontrar a mesma especialidade neste dia
-      const especialidadeNesteDia = grade.itens.find(item => 
-        item.tipo === 'especialidade' && item.texto === especialidade.texto
-      );
-      
-      if (!especialidadeNesteDia) return grade;
-      
-      const indexEspecialidade = grade.itens.indexOf(especialidadeNesteDia);
-      
-      // Encontrar onde termina esta especialidade
-      let insertIndex = indexEspecialidade + 1;
-      while (
-        insertIndex < grade.itens.length && 
-        grade.itens[insertIndex].tipo === 'procedimento'
-      ) {
-        insertIndex++;
-      }
-      
-      // Inserir procedimentos replicados
-      const novosProcedimentos = procedimentos.map(proc => ({
-        ...proc,
-        id: `temp-${Date.now()}-${Math.random()}-${gradeIndex}`,
-        pacientes: [] // Limpar pacientes ao replicar
-      }));
-      
-      const novosItens = [
-        ...grade.itens.slice(0, insertIndex),
-        ...novosProcedimentos,
-        ...grade.itens.slice(insertIndex)
-      ];
-      
-      return {
-        ...grade,
-        itens: novosItens.map((item, idx) => ({ ...item, ordem: idx }))
-      };
-    });
-    
-    setGrades(updatedGrades);
-    
-    // Salvar procedimentos no banco
-    for (let i = 0; i < proximasDatas.length; i++) {
-      const dataSelecionada = proximasDatas[i];
-      const dataFormatada = dataSelecionada.toISOString().split('T')[0];
-      
-      for (const proc of procedimentos) {
-        if (proc.texto.trim() && especialidadeNome && medicoNome) {
-          try {
-            await agendamentoService.create({
-              nome_paciente: '',
-              data_nascimento: '2000-01-01',
-              data_agendamento: dataFormatada,
-              especialidade: especialidadeNome,
-              medico: medicoNome,
-              procedimentos: proc.texto,
-              hospital_id: hospitalId || null,
-              cidade_natal: null,
-              telefone: null
-            });
-          } catch (error) {
-            console.error('❌ Erro ao salvar procedimento replicado:', error);
-          }
-        }
-      }
-    }
-    
-    console.log('✅ Procedimentos replicados!');
-  };
-
-  // Replicar para todas (COM AUTO-SAVE E PERSISTÊNCIA NO BANCO)
+  // Replicar para todas (COM PERSISTÊNCIA NO BANCO)
   const handleReplicarParaTodas = async (gradeOrigemIndex: number) => {
     const gradeOrigem = grades[gradeOrigemIndex];
     
@@ -622,40 +630,123 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     // Atualizar estado local
     setGrades(updatedGrades);
 
-    // 🔥 SALVAR NO BANCO SUPABASE (apenas especialidades)
-    const especialidadesParaSalvar = gradeOrigem.itens.filter(item => item.tipo === 'especialidade');
+    // 🔥 SALVAR NO BANCO SUPABASE (especialidades E procedimentos)
+    console.log('💾 Salvando especialidades e procedimentos replicados no banco...');
     
-    if (especialidadesParaSalvar.length > 0) {
-      console.log('💾 Salvando especialidades replicadas no banco...');
+    for (let i = 0; i < proximasDatas.length; i++) {
+      const dataSelecionada = proximasDatas[i];
+      const dataFormatada = dataSelecionada.toISOString().split('T')[0];
       
-      for (let i = 0; i < proximasDatas.length; i++) {
-        const dataSelecionada = proximasDatas[i];
-        const dataFormatada = dataSelecionada.toISOString().split('T')[0];
-        
-        for (const item of especialidadesParaSalvar) {
-          const [especialidadeNome, medicoNome] = item.texto.split(' - ');
+      let especialidadeAtual = '';
+      let medicoAtual = '';
+      
+      // Percorrer itens e salvar especialidades e procedimentos
+      for (const item of gradeOrigem.itens) {
+        if (item.tipo === 'especialidade') {
+          const [espNome, medNome] = item.texto.split(' - ');
+          especialidadeAtual = espNome || '';
+          medicoAtual = medNome || '';
           
-          if (especialidadeNome && medicoNome) {
+          // Salvar especialidade
+          if (especialidadeAtual && medicoAtual) {
             try {
               await agendamentoService.create({
                 nome_paciente: '',
                 data_nascimento: '2000-01-01',
                 data_agendamento: dataFormatada,
-                especialidade: especialidadeNome,
-                medico: medicoNome,
+                especialidade: especialidadeAtual,
+                medico: medicoAtual,
                 hospital_id: hospitalId || null,
                 cidade_natal: null,
                 telefone: null
               });
             } catch (error) {
-              console.error('❌ Erro ao salvar agendamento replicado:', error);
+              console.error('❌ Erro ao salvar especialidade replicada:', error);
             }
+          }
+        } else if (item.tipo === 'procedimento' && item.texto.trim() && especialidadeAtual && medicoAtual) {
+          // Salvar procedimento
+          try {
+            await agendamentoService.create({
+              nome_paciente: '',
+              data_nascimento: '2000-01-01',
+              data_agendamento: dataFormatada,
+              especialidade: especialidadeAtual,
+              medico: medicoAtual,
+              procedimentos: item.texto,
+              hospital_id: hospitalId || null,
+              cidade_natal: null,
+              telefone: null
+            });
+          } catch (error) {
+            console.error('❌ Erro ao salvar procedimento replicado:', error);
           }
         }
       }
-      
-      console.log('✅ Agendamentos replicados salvos no banco!');
     }
+    
+    console.log('✅ Grade completa replicada e salva no banco! Recarregando...');
+    
+    // Recarregar TODAS as grades do banco
+    const gradesRecarregadas = await Promise.all(
+      proximasDatas.map(async (data) => {
+        const dataFormatada = data.toISOString().split('T')[0];
+        const agendamentos = await agendamentoService.getAll(hospitalId);
+        const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+        
+        const itens: GradeCirurgicaItem[] = [];
+        const gruposPorEspecialidade = new Map<string, {
+          especialidade: string;
+          medico: string;
+          procedimentos: Set<string>;
+        }>();
+        
+        agendamentosDoDia.forEach(agendamento => {
+          if (agendamento.especialidade && agendamento.medico) {
+            const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+            
+            if (!gruposPorEspecialidade.has(chave)) {
+              gruposPorEspecialidade.set(chave, {
+                especialidade: agendamento.especialidade,
+                medico: agendamento.medico,
+                procedimentos: new Set()
+              });
+            }
+            
+            if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+              gruposPorEspecialidade.get(chave)!.procedimentos.add(agendamento.procedimentos);
+            }
+          }
+        });
+        
+        gruposPorEspecialidade.forEach((grupo) => {
+          itens.push({
+            id: `esp-${Date.now()}-${Math.random()}`,
+            tipo: 'especialidade',
+            texto: `${grupo.especialidade} - ${grupo.medico}`,
+            ordem: itens.length,
+            pacientes: []
+          });
+          
+          grupo.procedimentos.forEach(proc => {
+            itens.push({
+              id: `proc-${Date.now()}-${Math.random()}`,
+              tipo: 'procedimento',
+              texto: proc,
+              ordem: itens.length,
+              pacientes: []
+            });
+          });
+        });
+        
+        return {
+          ...grades.find(g => g.data === dataFormatada)!,
+          itens
+        };
+      })
+    );
+    
+    setGrades(gradesRecarregadas);
   };
 
   // Alternar expansão de especialidade
@@ -706,9 +797,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     // Atualizar estado local
     setGrades(updatedGrades);
 
-    // 🔥 SALVAR AUTOMATICAMENTE
-    autoSaveGrade(updatedGrades);
-
     setAddingPaciente(null);
     setNovoPacienteNome('');
   };
@@ -742,9 +830,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     // Atualizar estado local
     setGrades(updatedGrades);
-
-    // 🔥 SALVAR AUTOMATICAMENTE
-    autoSaveGrade(updatedGrades);
   };
 
 
@@ -796,16 +881,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       size="fullscreen"
     >
       <div className="flex flex-col p-4 overflow-y-auto">
-        {/* 🔥 FEEDBACK VISUAL DE AUTO-SAVE */}
-        {autoSaving && (
-          <div className="fixed top-20 right-6 z-50 animate-fade-in">
-            <div className="bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-              <div className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-              <span className="font-medium text-sm">Salvando automaticamente...</span>
-            </div>
-          </div>
-        )}
-
         {/* Indicador de Loading */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -863,7 +938,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                         Especialidade
                       </button>
                       
-                      {grade.itens.length > 0 && (
+                      {index === 0 && grade.itens.length > 0 && (
                         <button
                           onClick={() => handleReplicarParaTodas(index)}
                           className="flex items-center gap-0.5 px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-medium transition-colors"
@@ -1023,7 +1098,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               <Input
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
-                                onBlur={() => handleBlurItem(index, grupo.especialidade!.id, grupo.especialidade!.texto, grupo.especialidade!.tipo)}
                                 placeholder="Ex: Ortopedia - Joelho"
                                 className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-xs focus:bg-white/30 py-0.5 px-1.5"
                               />
@@ -1047,18 +1121,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                 <PlusIcon className="w-2.5 h-2.5" />
                                 Proc.
                               </button>
-
-                              {/* Botão replicar procedimentos */}
-                              {grupo.procedimentos.length > 0 && (
-                                <button
-                                  onClick={() => handleReplicarProcedimentosEspecialidade(index, grupo.especialidade!.id)}
-                                  className="flex items-center gap-0.5 px-1.5 py-0.5 bg-green-500/80 hover:bg-green-600 text-white rounded text-[10px] font-medium transition-colors"
-                                  title="Replicar Procedimentos"
-                                >
-                                  <CopyIcon className="w-2.5 h-2.5" />
-                                  Replicar
-                                </button>
-                              )}
 
                               {/* Botão remover */}
                               <button
@@ -1277,19 +1339,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         </div>
 
             {/* Botões de Ação */}
-            <div className="flex justify-between items-center px-4 py-2 border-t flex-shrink-0 bg-white">
-              <Button
-                onClick={handleSaveGrade}
-                variant="primary"
-                disabled={saving || loading}
-                className="text-xs py-1.5 px-6"
-              >
-                {saving ? 'Salvando...' : '💾 Salvar Grade'}
-              </Button>
+            <div className="flex justify-end items-center px-4 py-2 border-t flex-shrink-0 bg-white">
               <Button
                 onClick={onClose}
                 variant="secondary"
-                disabled={saving}
                 className="text-xs py-1.5 px-4"
               >
                 Fechar
