@@ -3,6 +3,7 @@ import {
   Agendamento, 
   Medico, 
   Procedimento,
+  Especialidade,
   StatusLiberacao,
   TipoAgendamento 
 } from '../types'
@@ -356,6 +357,38 @@ export const agendamentoService = {
   },
 
   async create(agendamento: Omit<Agendamento, 'id' | 'idade' | 'tipo'>): Promise<Agendamento> {
+    console.log('💾 Salvando agendamento no Supabase...', agendamento);
+    
+    // Se tiver os campos novos (especialidade e medico), usar inserção direta
+    if (agendamento.especialidade !== undefined || agendamento.medico !== undefined) {
+      const insertData = {
+        nome_paciente: agendamento.nome_paciente,
+        data_nascimento: agendamento.data_nascimento,
+        data_agendamento: agendamento.data_agendamento,
+        especialidade: agendamento.especialidade || null,
+        medico: agendamento.medico || null,
+        procedimentos: agendamento.procedimentos || null,
+        hospital_id: agendamento.hospital_id || null,
+        cidade_natal: agendamento.cidade_natal || null,
+        telefone: agendamento.telefone || null
+      };
+      
+      const { data, error } = await supabase
+        .from('agendamentos')
+        .insert([insertData])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Erro ao salvar agendamento:', error);
+        throw new Error(error.message);
+      }
+      
+      console.log('✅ Agendamento salvo com sucesso!', data);
+      return data as Agendamento;
+    }
+    
+    // Caso contrário, usar conversão antiga (compatibilidade)
     const { data, error } = await supabase
       .from('agendamentos')
       .insert(convertAgendamentoToSupabase(agendamento))
@@ -464,11 +497,36 @@ export const estatisticasService = {
 }
 
 // ============================================
+// SERVICE: ESPECIALIDADES
+// ============================================
+export const especialidadeService = {
+  // Buscar TODAS as especialidades da tabela
+  async getAll(): Promise<Especialidade[]> {
+    console.log('🔍 Buscando especialidades do Supabase...');
+    
+    const { data, error } = await supabase
+      .from('especialidades')
+      .select('*')
+      .order('nome', { ascending: true });
+    
+    if (error) {
+      console.error('❌ Erro ao buscar especialidades:', error);
+      throw new Error(error.message);
+    }
+    
+    console.log(`✅ ${data?.length || 0} especialidades encontradas no banco`);
+    
+    return data as Especialidade[];
+  }
+};
+
+
+// ============================================
 // FUNÇÃO PARA TESTAR CONEXÃO
 // ============================================
 export const testSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.from('medicos').select('count').limit(1)
+    const { data, error } = await supabase.from('especialidades').select('count').limit(1)
     return !error
   } catch {
     return false

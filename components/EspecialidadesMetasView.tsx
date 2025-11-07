@@ -1,7 +1,10 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { MetaEspecialidade, Especialidade, DiaSemana, Medico, Procedimento } from '../types';
 import { Button, Modal, Input, Select, FormField, Badge, EditIcon, TrashIcon, PlusIcon } from './ui';
-import { simpleMetaEspecialidadeService } from '../services/api-simple';
+// MODO MOCK
+// import { simpleMetaEspecialidadeService } from '../services/api-simple';
+import { mockServices } from '../services/mock-storage';
+const simpleMetaEspecialidadeService = mockServices.metaEspecialidade;
 
 interface EspecialidadesMetasViewProps {
   especialidades: Especialidade[];

@@ -3,24 +3,28 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Agendamento, Medico, Procedimento, Especialidade, MetaEspecialidade } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input, Select } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
-import SigtapProceduresView from './SigtapProceduresView';
 import EspecialidadesMetasView from './EspecialidadesMetasView';
 import { VirtualizedTable } from './VirtualizedTable';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatDate } from '../utils';
-import { 
-    simpleMedicoService,
-    simpleProcedimentoService,
-    simpleAgendamentoService
-} from '../services/api-simple';
+// ============================================================================
+// MODO MOCK - Usando localStorage
+// ============================================================================
+// import { 
+//     simpleMedicoService,
+//     simpleProcedimentoService,
+//     simpleAgendamentoService
+// } from '../services/api-simple';
+
+import { mockServices } from '../services/mock-storage';
+const simpleMedicoService = mockServices.medico;
+const simpleProcedimentoService = mockServices.procedimento;
+const simpleAgendamentoService = mockServices.agendamento;
 import { useAuth } from './PremiumLogin';
-import externalDataService from '../services/external-supabase';
-import { exportAllProceduresToExcel } from '../utils/excelExport';
-import { useDataCache } from '../contexts/DataCacheContext';
 import ExcelImportMedicos from './ExcelImportMedicos';
 import ExcelImportProcedimentos from './ExcelImportProcedimentos';
 
-type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'sigtap' | 'especialidades';
+type ManagementTab = 'agendamentos' | 'medicos' | 'procedimentos' | 'especialidades';
 
 interface ManagementViewProps {
   agendamentos: Agendamento[];
@@ -32,25 +36,8 @@ interface ManagementViewProps {
   onRefresh: () => void;
 }
 
-// Tipo para registros mais usados vindos do Supabase externo
-interface ExternalProcedureRecord {
-  codigo_procedimento_original: string;
-  procedure_description: string;
-  complexity?: string;
-}
-
 const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, metasEspecialidades, hospitalId, onRefresh }) => {
   const { hospitalSelecionado } = useAuth();
-  
-  // Hook do cache
-  const {
-    mostUsedProcedures,
-    setMostUsedProcedures,
-    setMostUsedLoading,
-    setMostUsedError,
-    setMostUsedProgress,
-    isCacheValid
-  } = useDataCache();
   
   // Debug: verificar se especialidades estão chegando no ManagementView
   console.log('🏥 ManagementView - Especialidades recebidas:', especialidades?.length || 0, especialidades);
@@ -75,41 +62,6 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
   
   // Estado para controlar modal de importação de procedimentos
   const [isImportProcedimentosModalOpen, setIsImportProcedimentosModalOpen] = useState(false);
-  
-  // Procedimentos mais usados (externos) - removidos pois agora usamos o cache
-  // const [mostUsedProcedures, setMostUsedProcedures] = useState<ExternalProcedureRecord[]>([]);
-  // const [loadingMostUsed, setLoadingMostUsed] = useState(false);
-  // const [errorMostUsed, setErrorMostUsed] = useState<string | null>(null);
-  const [rawMostUsedCount, setRawMostUsedCount] = useState<number>(0);
-  // Paginação para procedimentos mais usados (únicos)
-  const [mostUsedPage, setMostUsedPage] = useState<number>(1);
-  const [mostUsedPageSize, setMostUsedPageSize] = useState<number>(50);
-  const [mostUsedTotal, setMostUsedTotal] = useState<number>(0);
-  
-  // Filtros para procedimentos mais usados
-  const [filterCodigo, setFilterCodigo] = useState<string>('');
-  // Removido filterDescricao - usando searchTerm do campo geral
-  
-  // Debounced filters para busca instantânea
-  const debouncedFilterCodigo = useDebounce(filterCodigo, 300);
-  // Removido debouncedFilterDescricao - usando searchTerm diretamente
-  
-  // Resetar página quando filtros mudarem (não precisa mais já que filtragem é local)
-  // useEffect(() => {
-  //   if (filterCodigo || searchTerm) {
-  //     setMostUsedPage(1);
-  //   }
-  // }, [filterCodigo, searchTerm]);
-  
-  // Carregamento paginado de registros únicos de procedure_records
-  // Remover o useEffect de paginação - agora usamos apenas loadAllMostUsedProcedures
-  // useEffect(() => {
-  //   const loadMostUsed = async () => {
-  //     if (activeTab !== 'procedimentos') return;
-  //     // Código removido - não precisamos mais de paginação
-  //   };
-  //   loadMostUsed();
-  // }, [activeTab, mostUsedPage, mostUsedPageSize]);
   
   const openModal = (item: Agendamento | Medico | Procedimento | null = null) => {
     setEditingItem(item);
@@ -351,7 +303,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
               Novo {activeTab === 'agendamentos' ? 'Agendamento' : activeTab === 'medicos' ? 'Médico' : 'Procedimento'}
             </Button>
           )}
-          {/* Botão "Novo" não aparece nas abas de Especialidades e SIGTAP pois têm seus próprios controles */}
+          {/* Botão "Novo" não aparece na aba de Especialidades pois tem seus próprios controles */}
         </div>
       </div>
   
@@ -360,7 +312,6 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
         <TabButton tab="medicos" label="Médicos" />
         <TabButton tab="procedimentos" label="Procedimentos" />
         <TabButton tab="especialidades" label="Metas de Especialidades" />
-        <TabButton tab="sigtap" label="Procedimentos SIGTAP" />
       </div>
   
       <div className="bg-white p-4 rounded-b-lg shadow-md">
@@ -622,9 +573,6 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
             />
           )}
 
-          {activeTab === 'sigtap' && (
-            <SigtapProceduresView />
-          )}
         </div>
       </div>
       

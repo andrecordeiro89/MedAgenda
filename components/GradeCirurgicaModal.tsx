@@ -1,7 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon } from './ui';
 import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from '../types';
-import { simpleGradeCirurgicaService } from '../services/api-simple';
+// MODO MOCK
+// import { simpleGradeCirurgicaService } from '../services/api-simple';
+import { mockServices } from '../services/mock-storage';
+const simpleGradeCirurgicaService = mockServices.gradeCirurgica;
+
+// Importar service real de agendamentos do Supabase
+import { agendamentoService } from '../services/supabase';
 
 interface GradeCirurgicaModalProps {
   isOpen: boolean;
@@ -119,12 +125,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     loadGrade();
   }, [isOpen, hospitalId, diaSemanaClicado, mesReferencia, proximasDatas]);
 
-  // Estado para controlar se já houve a primeira edição
-  const [primeiraEdicaoFeita, setPrimeiraEdicaoFeita] = useState(() => {
-    // Se já há itens salvos, considera que já foi feita a primeira edição
-    return grades.some(g => g.itens.length > 0);
-  });
-
   // Estado para controlar expansão de procedimentos (gradeIndex_especialidadeId => boolean)
   const [expandedEspecialidades, setExpandedEspecialidades] = useState<Record<string, boolean>>({});
 
@@ -135,6 +135,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   // Estado para controlar a adição de especialidade
   const [addingEspecialidade, setAddingEspecialidade] = useState<number | null>(null); // índice da grade
   const [especialidadeSelecionada, setEspecialidadeSelecionada] = useState('');
+  const [especialidadeNome, setEspecialidadeNome] = useState(''); // Nome da especialidade selecionada
+  const [nomeMedico, setNomeMedico] = useState(''); // Nome do médico a ser digitado
+  const [mostrarCampoMedico, setMostrarCampoMedico] = useState(false); // Controla exibição do campo médico
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false); // Loading ao salvar
 
   // Função para salvar grade no banco (MANUAL - com alert)
   const handleSaveGrade = async () => {
@@ -211,59 +215,99 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   // Iniciar adição de especialidade (abre o dropdown)
   const handleAddEspecialidadeClick = (gradeIndex: number) => {
     setAddingEspecialidade(gradeIndex);
-    setEspecialidadeSelecionada(''); // Limpar seleção anterior
+    setEspecialidadeSelecionada('');
+    setMostrarCampoMedico(false);
+    setNomeMedico('');
   };
 
-  // Confirmar adição de especialidade (COM AUTO-SAVE)
-  const handleConfirmAddEspecialidade = () => {
-    if (addingEspecialidade === null || !especialidadeSelecionada) return;
-
-    // Buscar o nome da especialidade selecionada
+  // Confirmar especialidade selecionada (MOSTRA CAMPO DE MÉDICO)
+  const handleConfirmEspecialidade = () => {
+    if (!especialidadeSelecionada) return;
+    
     const especialidade = especialidades.find(e => e.id === especialidadeSelecionada);
     if (!especialidade) return;
+    
+    // Salvar nome da especialidade
+    setEspecialidadeNome(especialidade.nome);
+    
+    // Mostrar campo para digitar nome do médico
+    setMostrarCampoMedico(true);
+    
+    console.log('✅ Especialidade selecionada:', especialidade.nome);
+  };
 
-    console.log('✅ Adicionando especialidade:', especialidade);
-
-    // Calcular o novo estado
-    const updatedGrades = grades.map((grade, i) => {
-      if (i === addingEspecialidade) {
-        const novoItem: GradeCirurgicaItem = {
-          id: `temp-${Date.now()}-${Math.random()}`,
-          tipo: 'especialidade',
-          texto: especialidade.nome, // Usar o nome da especialidade do banco
-          especialidadeId: especialidade.id, // 🔥 ADICIONAR ID DA ESPECIALIDADE
-          ordem: grade.itens.length,
-          pacientes: [] // Especialidades não têm pacientes
-        };
-        
-        console.log('📝 Novo item criado:', novoItem);
-        console.log('📋 Itens antes:', grade.itens.length);
-        
-        const novosItens = [...grade.itens, novoItem];
-        console.log('📋 Itens depois:', novosItens.length);
-        
-        return { ...grade, itens: novosItens };
-      }
-      return grade;
-    });
-
-    console.log('🔄 Estado atualizado:', updatedGrades);
-
-    // Atualizar estado local IMEDIATAMENTE
-    setGrades(updatedGrades);
-
-    // 🔥 SALVAR AUTOMATICAMENTE NO BANCO
-    autoSaveGrade(updatedGrades);
-
-    // Limpar estado
-    setAddingEspecialidade(null);
-    setEspecialidadeSelecionada('');
+  // Salvar agendamento no banco (ESPECIALIDADE + MÉDICO)
+  const handleSalvarAgendamento = async () => {
+    if (!especialidadeNome || !nomeMedico || addingEspecialidade === null) {
+      alert('Por favor, preencha a especialidade e o nome do médico');
+      return;
+    }
+    
+    setSalvandoAgendamento(true);
+    
+    try {
+      // Pegar a data do dia selecionado
+      const dataSelecionada = proximasDatas[addingEspecialidade];
+      const dataFormatada = dataSelecionada.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // Criar objeto do agendamento
+      const novoAgendamento = {
+        nome_paciente: '',
+        data_nascimento: '2000-01-01',
+        data_agendamento: dataFormatada,
+        especialidade: especialidadeNome,
+        medico: nomeMedico,
+        hospital_id: hospitalId || null,
+        cidade_natal: null,
+        telefone: null
+      };
+      
+      console.log('💾 Salvando agendamento:', novoAgendamento);
+      
+      // Salvar no Supabase
+      await agendamentoService.create(novoAgendamento);
+      
+      // Adicionar item visual na grade
+      const updatedGrades = grades.map((grade, i) => {
+        if (i === addingEspecialidade) {
+          const novoItem: GradeCirurgicaItem = {
+            id: `temp-${Date.now()}-${Math.random()}`,
+            tipo: 'especialidade',
+            texto: `${especialidadeNome} - ${nomeMedico}`,
+            especialidadeId: especialidadeSelecionada,
+            ordem: grade.itens.length,
+            pacientes: []
+          };
+          
+          return { ...grade, itens: [...grade.itens, novoItem] };
+        }
+        return grade;
+      });
+      
+      setGrades(updatedGrades);
+      
+      // Limpar estados
+      setAddingEspecialidade(null);
+      setEspecialidadeSelecionada('');
+      setEspecialidadeNome('');
+      setNomeMedico('');
+      setMostrarCampoMedico(false);
+      
+    } catch (error) {
+      console.error('❌ Erro ao salvar agendamento:', error);
+      alert('Erro ao salvar agendamento. Verifique o console para mais detalhes.');
+    } finally {
+      setSalvandoAgendamento(false);
+    }
   };
 
   // Cancelar adição de especialidade
   const handleCancelAddEspecialidade = () => {
     setAddingEspecialidade(null);
     setEspecialidadeSelecionada('');
+    setEspecialidadeNome('');
+    setNomeMedico('');
+    setMostrarCampoMedico(false);
   };
 
   // Adicionar procedimento (COM AUTO-SAVE)
@@ -321,15 +365,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     // Atualizar estado local
     setGrades(updatedGrades);
-
-    // 🔥 SALVAR AUTOMATICAMENTE
-    autoSaveGrade(updatedGrades);
   };
 
   // Atualizar texto de um item
   const handleUpdateItem = (gradeIndex: number, itemId: string, novoTexto: string) => {
     // Calcular novo estado
-    let novasGrades = grades.map((grade, i) => {
+    const novasGrades = grades.map((grade, i) => {
       if (i === gradeIndex) {
         return {
           ...grade,
@@ -341,33 +382,52 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       return grade;
     });
 
-    // Se for a primeira edição no primeiro dia e o texto não estiver vazio, replicar para todos
-    if (!primeiraEdicaoFeita && gradeIndex === 0 && novoTexto.trim() !== '') {
-      const primeiroDia = novasGrades[0];
-      if (primeiroDia.itens.some(item => item.texto.trim() !== '')) {
-        setPrimeiraEdicaoFeita(true);
-        // Replicar para todos os outros dias
-        novasGrades = novasGrades.map((grade, i) => {
-          if (i === 0) return grade;
-          return {
-            ...grade,
-            itens: primeiroDia.itens.map(item => ({
-              ...item,
-              id: `temp-${Date.now()}-${Math.random()}-${i}`
-            }))
-          };
-        });
-      }
-    }
-
     // Atualizar estado local
     setGrades(novasGrades);
   };
 
   // Função auxiliar para auto-save após edição (chamada no onBlur)
-  const handleBlurItem = () => {
-    // 🔥 AUTO-SAVE após perder foco do input
-    autoSaveGrade(grades);
+  const handleBlurItem = async (gradeIndex: number, itemId: string, itemTexto: string, itemTipo: string) => {
+    if (itemTipo === 'procedimento' && itemTexto.trim() !== '') {
+      // Encontrar a especialidade deste procedimento
+      const grade = grades[gradeIndex];
+      let especialidadeAtual = '';
+      let medicoAtual = '';
+      
+      for (const item of grade.itens) {
+        if (item.tipo === 'especialidade') {
+          const [esp, med] = item.texto.split(' - ');
+          especialidadeAtual = esp || '';
+          medicoAtual = med || '';
+        }
+        if (item.id === itemId) {
+          break;
+        }
+      }
+      
+      if (especialidadeAtual && medicoAtual) {
+        try {
+          const dataSelecionada = proximasDatas[gradeIndex];
+          const dataFormatada = dataSelecionada.toISOString().split('T')[0];
+          
+          await agendamentoService.create({
+            nome_paciente: '',
+            data_nascimento: '2000-01-01',
+            data_agendamento: dataFormatada,
+            especialidade: especialidadeAtual,
+            medico: medicoAtual,
+            procedimentos: itemTexto,
+            hospital_id: hospitalId || null,
+            cidade_natal: null,
+            telefone: null
+          });
+          
+          console.log('✅ Procedimento salvo no banco:', itemTexto);
+        } catch (error) {
+          console.error('❌ Erro ao salvar procedimento:', error);
+        }
+      }
+    }
   };
 
   // Remover item
@@ -446,8 +506,103 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     autoSaveGrade(updatedGrades);
   };
 
-  // Replicar para todas (COM AUTO-SAVE)
-  const handleReplicarParaTodas = (gradeOrigemIndex: number) => {
+  // Replicar procedimentos de uma especialidade específica
+  const handleReplicarProcedimentosEspecialidade = async (gradeOrigemIndex: number, especialidadeId: string) => {
+    const gradeOrigem = grades[gradeOrigemIndex];
+    
+    // Encontrar a especialidade e seus procedimentos
+    const especialidadeIndex = gradeOrigem.itens.findIndex(item => item.id === especialidadeId);
+    if (especialidadeIndex === -1) return;
+    
+    const especialidade = gradeOrigem.itens[especialidadeIndex];
+    const [especialidadeNome, medicoNome] = especialidade.texto.split(' - ');
+    
+    // Coletar procedimentos desta especialidade
+    const procedimentos: GradeCirurgicaItem[] = [];
+    for (let i = especialidadeIndex + 1; i < gradeOrigem.itens.length; i++) {
+      const item = gradeOrigem.itens[i];
+      if (item.tipo === 'especialidade') break;
+      if (item.tipo === 'procedimento') {
+        procedimentos.push(item);
+      }
+    }
+    
+    if (procedimentos.length === 0) return;
+    
+    console.log('🔄 Replicando procedimentos da especialidade:', especialidadeNome);
+    
+    // Replicar para todos os outros dias
+    const updatedGrades = grades.map((grade, gradeIndex) => {
+      // Encontrar a mesma especialidade neste dia
+      const especialidadeNesteDia = grade.itens.find(item => 
+        item.tipo === 'especialidade' && item.texto === especialidade.texto
+      );
+      
+      if (!especialidadeNesteDia) return grade;
+      
+      const indexEspecialidade = grade.itens.indexOf(especialidadeNesteDia);
+      
+      // Encontrar onde termina esta especialidade
+      let insertIndex = indexEspecialidade + 1;
+      while (
+        insertIndex < grade.itens.length && 
+        grade.itens[insertIndex].tipo === 'procedimento'
+      ) {
+        insertIndex++;
+      }
+      
+      // Inserir procedimentos replicados
+      const novosProcedimentos = procedimentos.map(proc => ({
+        ...proc,
+        id: `temp-${Date.now()}-${Math.random()}-${gradeIndex}`,
+        pacientes: [] // Limpar pacientes ao replicar
+      }));
+      
+      const novosItens = [
+        ...grade.itens.slice(0, insertIndex),
+        ...novosProcedimentos,
+        ...grade.itens.slice(insertIndex)
+      ];
+      
+      return {
+        ...grade,
+        itens: novosItens.map((item, idx) => ({ ...item, ordem: idx }))
+      };
+    });
+    
+    setGrades(updatedGrades);
+    
+    // Salvar procedimentos no banco
+    for (let i = 0; i < proximasDatas.length; i++) {
+      const dataSelecionada = proximasDatas[i];
+      const dataFormatada = dataSelecionada.toISOString().split('T')[0];
+      
+      for (const proc of procedimentos) {
+        if (proc.texto.trim() && especialidadeNome && medicoNome) {
+          try {
+            await agendamentoService.create({
+              nome_paciente: '',
+              data_nascimento: '2000-01-01',
+              data_agendamento: dataFormatada,
+              especialidade: especialidadeNome,
+              medico: medicoNome,
+              procedimentos: proc.texto,
+              hospital_id: hospitalId || null,
+              cidade_natal: null,
+              telefone: null
+            });
+          } catch (error) {
+            console.error('❌ Erro ao salvar procedimento replicado:', error);
+          }
+        }
+      }
+    }
+    
+    console.log('✅ Procedimentos replicados!');
+  };
+
+  // Replicar para todas (COM AUTO-SAVE E PERSISTÊNCIA NO BANCO)
+  const handleReplicarParaTodas = async (gradeOrigemIndex: number) => {
     const gradeOrigem = grades[gradeOrigemIndex];
     
     console.log('🔄 Replicando grade do dia', gradeOrigemIndex, 'para todos os dias');
@@ -457,7 +612,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     const updatedGrades = grades.map((grade, i) => ({
       ...grade,
       itens: gradeOrigem.itens.map(item => ({
-        ...item, // Mantém todos os campos (especialidadeId, procedimentoId, pacientes)
+        ...item,
         id: `temp-${Date.now()}-${Math.random()}-${i}`
       }))
     }));
@@ -467,8 +622,40 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     // Atualizar estado local
     setGrades(updatedGrades);
 
-    // 🔥 SALVAR AUTOMATICAMENTE
-    autoSaveGrade(updatedGrades);
+    // 🔥 SALVAR NO BANCO SUPABASE (apenas especialidades)
+    const especialidadesParaSalvar = gradeOrigem.itens.filter(item => item.tipo === 'especialidade');
+    
+    if (especialidadesParaSalvar.length > 0) {
+      console.log('💾 Salvando especialidades replicadas no banco...');
+      
+      for (let i = 0; i < proximasDatas.length; i++) {
+        const dataSelecionada = proximasDatas[i];
+        const dataFormatada = dataSelecionada.toISOString().split('T')[0];
+        
+        for (const item of especialidadesParaSalvar) {
+          const [especialidadeNome, medicoNome] = item.texto.split(' - ');
+          
+          if (especialidadeNome && medicoNome) {
+            try {
+              await agendamentoService.create({
+                nome_paciente: '',
+                data_nascimento: '2000-01-01',
+                data_agendamento: dataFormatada,
+                especialidade: especialidadeNome,
+                medico: medicoNome,
+                hospital_id: hospitalId || null,
+                cidade_natal: null,
+                telefone: null
+              });
+            } catch (error) {
+              console.error('❌ Erro ao salvar agendamento replicado:', error);
+            }
+          }
+        }
+      }
+      
+      console.log('✅ Agendamentos replicados salvos no banco!');
+    }
   };
 
   // Alternar expansão de especialidade
@@ -693,37 +880,106 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 {/* Dropdown para Adicionar Especialidade */}
                 {addingEspecialidade === index && (
                   <div className="p-3 bg-blue-50 border-b-2 border-blue-200">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold text-blue-900">Selecione a Especialidade:</label>
-                      <select
-                        value={especialidadeSelecionada}
-                        onChange={(e) => setEspecialidadeSelecionada(e.target.value)}
-                        className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                      >
-                        <option value="">-- Selecione --</option>
-                        {especialidades.map(esp => (
-                          <option key={esp.id} value={esp.id}>
-                            {esp.nome}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleConfirmAddEspecialidade}
-                        disabled={!especialidadeSelecionada}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                        title="Confirmar"
-                      >
-                        ✓ OK
-                      </button>
-                      <button
-                        onClick={handleCancelAddEspecialidade}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
-                        title="Cancelar"
-                      >
-                        ✕ Cancelar
-                      </button>
-                    </div>
+                    {!mostrarCampoMedico ? (
+                      // ETAPA 1: Selecionar Especialidade
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-blue-900 whitespace-nowrap">
+                          Especialidade:
+                        </label>
+                        <select
+                          value={especialidadeSelecionada}
+                          onChange={(e) => setEspecialidadeSelecionada(e.target.value)}
+                          className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                        >
+                          <option value="">-- Selecione --</option>
+                          {especialidades.map(esp => (
+                            <option key={esp.id} value={esp.id}>
+                              {esp.nome}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleConfirmEspecialidade}
+                          disabled={!especialidadeSelecionada}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          title="Próximo: Informar Médico"
+                        >
+                          ➜ Próximo
+                        </button>
+                        <button
+                          onClick={handleCancelAddEspecialidade}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
+                          title="Cancelar"
+                        >
+                          ✕ Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      // ETAPA 2: Digitar Nome do Médico
+                      <div className="space-y-2">
+                        {/* Mostrar especialidade selecionada */}
+                        <div className="flex items-center gap-2 pb-2 border-b border-blue-300">
+                          <span className="text-xs text-blue-900">
+                            <strong>Especialidade:</strong> {especialidadeNome}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setMostrarCampoMedico(false);
+                              setNomeMedico('');
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800 underline"
+                          >
+                            Alterar
+                          </button>
+                        </div>
+                        
+                        {/* Campo para digitar nome do médico */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-blue-900 whitespace-nowrap">
+                            Nome do Médico:
+                          </label>
+                          <input
+                            type="text"
+                            value={nomeMedico}
+                            onChange={(e) => setNomeMedico(e.target.value)}
+                            placeholder="Digite o nome do médico"
+                            className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter' && nomeMedico.trim()) {
+                                handleSalvarAgendamento();
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleSalvarAgendamento}
+                            disabled={!nomeMedico.trim() || salvandoAgendamento}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1"
+                            title="Salvar no Banco"
+                          >
+                            {salvandoAgendamento ? (
+                              <>
+                                <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                                Salvando...
+                              </>
+                            ) : (
+                              <>
+                                💾 Salvar
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={handleCancelAddEspecialidade}
+                            disabled={salvandoAgendamento}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors disabled:opacity-50"
+                            title="Cancelar"
+                          >
+                            ✕ Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -767,7 +1023,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               <Input
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
-                                onBlur={handleBlurItem}
+                                onBlur={() => handleBlurItem(index, grupo.especialidade!.id, grupo.especialidade!.texto, grupo.especialidade!.tipo)}
                                 placeholder="Ex: Ortopedia - Joelho"
                                 className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-xs focus:bg-white/30 py-0.5 px-1.5"
                               />
@@ -791,6 +1047,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                 <PlusIcon className="w-2.5 h-2.5" />
                                 Proc.
                               </button>
+
+                              {/* Botão replicar procedimentos */}
+                              {grupo.procedimentos.length > 0 && (
+                                <button
+                                  onClick={() => handleReplicarProcedimentosEspecialidade(index, grupo.especialidade!.id)}
+                                  className="flex items-center gap-0.5 px-1.5 py-0.5 bg-green-500/80 hover:bg-green-600 text-white rounded text-[10px] font-medium transition-colors"
+                                  title="Replicar Procedimentos"
+                                >
+                                  <CopyIcon className="w-2.5 h-2.5" />
+                                  Replicar
+                                </button>
+                              )}
 
                               {/* Botão remover */}
                               <button
@@ -902,7 +1170,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             <Input
                                               value={proc.texto}
                                               onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
-                                              onBlur={handleBlurItem}
+                                              onBlur={() => handleBlurItem(index, proc.id, proc.texto, proc.tipo)}
                                               placeholder="Ex: LCA"
                                               className="w-32 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
                                             />
@@ -943,7 +1211,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             <Input
                                               value={proc.texto}
                                               onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
-                                              onBlur={handleBlurItem}
+                                              onBlur={() => handleBlurItem(index, proc.id, proc.texto, proc.tipo)}
                                               placeholder="Ex: LCA"
                                               className="flex-1 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
                                             />

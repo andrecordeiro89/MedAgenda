@@ -32,21 +32,40 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   // Debug: verificar se metas estão carregadas
   console.log('📊 CalendarView - Metas carregadas:', metasEspecialidades.length);
   
-  // Verificar se há grades configuradas para cada dia da semana
+  // Verificar se há grades configuradas para cada dia do mês sendo visualizado
+  // Só considera configurada se tiver pelo menos UMA ESPECIALIDADE selecionada
   const getDiasComGrade = (): Set<number> => {
     const diasComGrade = new Set<number>();
-    for (let dia = 0; dia <= 6; dia++) {
-      const diaSemanaKey = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][dia];
-      const storageKey = `gradeCirurgica_${hospitalId}_${diaSemanaKey}_${currentDate.getFullYear()}_${currentDate.getMonth() + 2}`;
+    
+    // Percorrer cada dia do mês atual sendo visualizado
+    const daysInCurrentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    
+    for (let day = 1; day <= daysInCurrentMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const diaSemanaKey = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][date.getDay()];
+      
+      // Formato correto da chave: grade_hospitalId_diaSemana_YYYY-MM do dia específico
+      const ano = date.getFullYear();
+      const mes = String(date.getMonth() + 1).padStart(2, '0');
+      const mesReferencia = `${ano}-${mes}`;
+      const storageKey = `grade_${hospitalId}_${diaSemanaKey}_${mesReferencia}`;
+      
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed.some((g: any) => g.itens && g.itens.length > 0)) {
-            diasComGrade.add(dia);
+          // Verificar se há pelo menos UM item do tipo 'especialidade' em qualquer dia
+          const temEspecialidade = parsed.dias?.some((g: any) => 
+            g.itens?.some((item: any) => item.tipo === 'especialidade')
+          );
+          
+          if (temEspecialidade) {
+            // Adicionar o dia da semana (0-6) ao set
+            diasComGrade.add(date.getDay());
           }
         } catch (e) {
-          // Ignorar erros
+          // Ignorar erros de parse
+          console.error('Erro ao verificar grade:', e);
         }
       }
     }
@@ -115,24 +134,63 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const temGrade = diasComGrade.has(date.getDay());
     const diaSemana = diaSemanaMap[date.getDay()];
 
-    // Agrupar agendamentos por médico e contar
-    const agendamentosPorMedico = dayAppointments.reduce((acc, agendamento) => {
-      const medico = medicos.find(m => m.id === agendamento.medicoId);
-      if (medico) {
-        if (!acc[medico.id]) {
-          acc[medico.id] = {
-            medico,
-            count: 0,
-            especialidadeId: medico.especialidadeId || ''
-          };
-        }
-        acc[medico.id].count++;
-      }
-      return acc;
-    }, {} as Record<string, { medico: Medico; count: number; especialidadeId: string }>);
+    // Obter dados da grade cirúrgica para este dia da semana
+    const diaSemanaKey = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][date.getDay()];
+    
+    // Buscar grade do mês do DIA específico (não do mês sendo visualizado)
+    const ano = date.getFullYear();
+    const mes = String(date.getMonth() + 1).padStart(2, '0');
+    const mesReferencia = `${ano}-${mes}`;
+    const storageKey = `grade_${hospitalId}_${diaSemanaKey}_${mesReferencia}`;
+    
+    // Estrutura para armazenar especialidades e seus procedimentos
+    const especialidadesComProcedimentos: Record<string, {
+      nome: string;
+      totalProcedimentos: number;
+      especialidadeId: string;
+    }> = {};
 
-    // Obter metas para este dia da semana (verificar se metasEspecialidades existe)
-    const metasDoDia = metasEspecialidades?.filter(m => m.diaSemana === diaSemana && m.ativo) || [];
+    // Ler a grade cirúrgica do localStorage
+    const savedGrade = localStorage.getItem(storageKey);
+    if (savedGrade) {
+      try {
+        const parsed = JSON.parse(savedGrade);
+        if (parsed.dias && Array.isArray(parsed.dias)) {
+          // Para cada dia na grade
+          parsed.dias.forEach((dia: any) => {
+            if (dia.itens && Array.isArray(dia.itens)) {
+              let especialidadeAtual: string | null = null;
+              let especialidadeNome: string | null = null;
+              let especialidadeId: string | null = null;
+
+              // Percorrer itens da grade
+              dia.itens.forEach((item: any) => {
+                if (item.tipo === 'especialidade') {
+                  // Nova especialidade encontrada
+                  especialidadeAtual = item.texto;
+                  especialidadeNome = item.texto;
+                  especialidadeId = item.especialidadeId || item.texto;
+                  
+                  // Inicializar contador se não existir
+                  if (!especialidadesComProcedimentos[especialidadeId]) {
+                    especialidadesComProcedimentos[especialidadeId] = {
+                      nome: especialidadeNome,
+                      totalProcedimentos: 0,
+                      especialidadeId: especialidadeId
+                    };
+                  }
+                } else if (item.tipo === 'procedimento' && especialidadeAtual && especialidadeId) {
+                  // Contar procedimento para a especialidade atual
+                  especialidadesComProcedimentos[especialidadeId].totalProcedimentos++;
+                }
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Erro ao processar grade:', e);
+      }
+    }
 
     days.push(
       <div
@@ -155,37 +213,36 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           {day}
         </div>
         
-        {/* Barras de progresso por médico/especialidade */}
+        {/* Barras de progresso por especialidade da grade cirúrgica */}
         <div className="mt-1 space-y-0.5">
-          {Object.values(agendamentosPorMedico).map(({ medico, count, especialidadeId }) => {
-            // Buscar meta para esta especialidade neste dia
-            const meta = metasDoDia.find(m => m.especialidadeId === especialidadeId);
-            const metaQuantidade = meta?.quantidadeAgendamentos || 10; // Default 10 se não houver meta
-            const percentual = Math.min((count / metaQuantidade) * 100, 100);
-            const atingiuMeta = count >= metaQuantidade;
+          {Object.values(especialidadesComProcedimentos).map((esp) => {
+            // Definir meta de procedimentos (pode ser ajustável no futuro)
+            const metaProcedimentos = 10; // Meta padrão de procedimentos por especialidade
+            const percentual = Math.min((esp.totalProcedimentos / metaProcedimentos) * 100, 100);
+            const atingiuMeta = esp.totalProcedimentos >= metaProcedimentos;
 
             return (
               <div
-                key={medico.id}
-                className="text-[8px] leading-tight"
-                title={`${medico.nome} - ${count}/${metaQuantidade}`}
+                key={esp.especialidadeId}
+                className="text-[9px] leading-tight"
+                title={`${esp.nome} - ${esp.totalProcedimentos} procedimento(s)`}
               >
-                {/* Nome do médico (truncado) */}
+                {/* Nome da especialidade (truncado) */}
                 <div className="truncate font-medium text-slate-700">
-                  {medico.nome.split(' ')[0]}
+                  {esp.nome}
                 </div>
                 {/* Barra de progresso */}
-                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
-                      atingiuMeta ? 'bg-green-500' : 'bg-red-400'
+                      atingiuMeta ? 'bg-green-500' : 'bg-blue-500'
                     }`}
                     style={{ width: `${percentual}%` }}
                   ></div>
                 </div>
-                {/* Contador */}
-                <div className="text-[7px] text-slate-500 text-center">
-                  {count}/{metaQuantidade}
+                {/* Contador de procedimentos */}
+                <div className="text-[8px] text-slate-600 text-center font-medium">
+                  {esp.totalProcedimentos} proc.
                 </div>
               </div>
             );
@@ -194,13 +251,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
     );
   }
-
-  const LegendItem: React.FC<{color: string, label: string}> = ({color, label}) => (
-    <div className="flex items-center gap-2">
-        <div className={`w-3 h-3 rounded-full ${color}`}></div>
-        <span className="text-sm text-slate-600">{label}</span>
-    </div>
-  );
 
   return (
     <div>
@@ -212,21 +262,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
                 </h3>
                 <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-slate-100"><ChevronRightIcon /></button>
-            </div>
-             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                <p className="text-sm text-blue-800 font-medium mb-2">
-                  💡 <strong>Dica:</strong> Clique em qualquer dia para configurar a Grade Cirúrgica
-                </p>
-                <div className="flex flex-wrap gap-4 justify-center">
-                  <LegendItem color="bg-blue-500" label="Ambulatorial" />
-                  <LegendItem color="bg-red-500" label="Cirúrgico" />
-                  <LegendItem color="bg-green-500" label="Liberado" />
-                  <LegendItem color="bg-orange-500" label="Pendente" />
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span className="text-sm text-slate-600 font-semibold">Grade Configurada</span>
-                  </div>
-                </div>
             </div>
             <div className="grid grid-cols-7 text-center font-semibold text-slate-500 border-t border-l">
                 {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (

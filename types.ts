@@ -1,31 +1,36 @@
 
 export type StatusLiberacao = 'x' | 'v'; // x = pendente, v = liberado
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
-export type View = 'dashboard' | 'calendar' | 'management' | 'avaliacao-anestesica';
+export type View = 'dashboard' | 'calendar';
 
 export interface Agendamento {
-  id: string;
+  id?: string;
   nome_paciente: string; // CAMPO REAL DO BANCO
   data_nascimento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
-  idade?: number; // Calculado no frontend
-  procedimento_id: string; // CAMPO REAL DO BANCO
-  medico_id: string; // CAMPO REAL DO BANCO
-  cidade_natal: string; // CAMPO REAL DO BANCO
-  status_liberacao: StatusLiberacao; // CAMPO REAL DO BANCO (x ou v)
-  telefone: string; // CAMPO REAL DO BANCO
-  whatsapp: string; // CAMPO REAL DO BANCO
+  cidade_natal?: string | null; // CAMPO REAL DO BANCO (nullable)
+  telefone?: string | null; // CAMPO REAL DO BANCO (nullable)
   data_agendamento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
-  hospital_id: string; // CAMPO REAL DO BANCO
+  hospital_id?: string | null; // CAMPO REAL DO BANCO (nullable)
+  especialidade?: string | null; // NOVO CAMPO - Nome da especialidade
+  medico?: string | null; // NOVO CAMPO - Nome do médico
+  procedimentos?: string | null; // NOVO CAMPO - Nome do procedimento
+  created_at?: string;
+  updated_at?: string;
   
-  // Campos auxiliares (populados via JOIN ou calculados)
-  tipo?: TipoAgendamento; // Calculado baseado no procedimento
-  nome?: string; // Alias para nome_paciente (compatibilidade)
-  dataNascimento?: string; // Alias para data_nascimento (compatibilidade)
-  dataAgendamento?: string; // Alias para data_agendamento (compatibilidade)
-  procedimentoId?: string; // Alias para procedimento_id (compatibilidade)
-  medicoId?: string; // Alias para medico_id (compatibilidade)
-  cidadeNatal?: string; // Alias para cidade_natal (compatibilidade)
-  hospitalId?: string; // Alias para hospital_id (compatibilidade)
+  // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
+  idade?: number;
+  procedimento_id?: string;
+  medico_id?: string;
+  status_liberacao?: StatusLiberacao;
+  whatsapp?: string;
+  tipo?: TipoAgendamento;
+  nome?: string;
+  dataNascimento?: string;
+  dataAgendamento?: string;
+  procedimentoId?: string;
+  medicoId?: string;
+  cidadeNatal?: string;
+  hospitalId?: string;
 }
 
 export interface Medico {

@@ -3,24 +3,41 @@ import { View, Agendamento, Medico, Procedimento, Especialidade, MetaEspecialida
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
-import ManagementView from './components/ManagementView';
-import AvaliacaoAnestesicaView from './components/AvaliacaoAnestesicaView';
 import { 
     AuthProvider, 
     useAuth, 
     PremiumLoginSystem,
     useHospitalFilter 
 } from './components/PremiumLogin';
-import { 
-    simpleMedicoService, 
-    simpleProcedimentoService,
-    simpleAgendamentoService,
-    simpleEspecialidadeService,
-    simpleMedicoHospitalService,
-    simpleMetaEspecialidadeService
-} from './services/api-simple';
-import { testSupabaseConnection } from './services/supabase';
-import { DataCacheProvider } from './contexts/DataCacheContext';
+// ============================================================================
+// MODO MOCK - Usando localStorage ao invés de Supabase
+// Descomente as linhas abaixo quando o banco estiver pronto
+// ============================================================================
+// import { 
+//     simpleMedicoService, 
+//     simpleProcedimentoService,
+//     simpleAgendamentoService,
+//     simpleEspecialidadeService,
+//     simpleMedicoHospitalService,
+//     simpleMetaEspecialidadeService
+// } from './services/api-simple';
+// import { testSupabaseConnection } from './services/supabase';
+
+// USANDO SERVIÇOS MOCK (localStorage) + ESPECIALIDADES DO SUPABASE
+import {
+    mockServices,
+    populateSampleData
+} from './services/mock-storage';
+
+// Importar service REAL de especialidades do Supabase
+import { especialidadeService, testSupabaseConnection } from './services/supabase';
+
+// Alias para manter compatibilidade com o código existente
+const simpleMedicoService = mockServices.medico;
+const simpleProcedimentoService = mockServices.procedimento;
+const simpleAgendamentoService = mockServices.agendamento;
+const simpleEspecialidadeService = especialidadeService; // ← AGORA USA SUPABASE!
+const simpleMetaEspecialidadeService = mockServices.metaEspecialidade;
 
 // ============================================================================
 // COMPONENTE PRINCIPAL DA APLICAÇÃO (COM LOGIN PREMIUM)
@@ -204,28 +221,6 @@ const AppContent: React.FC = () => {
                         onRefresh={() => loadData(false)}
                     />
                 );
-            case 'management':
-                return (
-                    <ManagementView
-                        agendamentos={agendamentos}
-                        medicos={medicos}
-                        procedimentos={procedimentos}
-                        especialidades={especialidades}
-                        metasEspecialidades={metasEspecialidades}
-                        hospitalId={hospitalSelecionado?.id || ''}
-                        onRefresh={() => loadData(false)}
-                    />
-                );
-            case 'avaliacao-anestesica':
-                return (
-                    <AvaliacaoAnestesicaView
-                        agendamentos={agendamentos}
-                        medicos={medicos}
-                        procedimentos={procedimentos}
-                        hospitalId={hospitalSelecionado?.id || ''}
-                        onRefresh={() => loadData(false)}
-                    />
-                );
             default:
                 return <div>View não encontrada</div>;
         }
@@ -262,9 +257,7 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <DataCacheProvider>
-                <AppContent />
-            </DataCacheProvider>
+            <AppContent />
         </AuthProvider>
     );
 };
