@@ -327,6 +327,8 @@ export const procedimentoService = {
 // ============================================
 export const agendamentoService = {
   async getAll(hospitalId?: string): Promise<Agendamento[]> {
+    console.log('🔍 agendamentoService.getAll chamado com hospitalId:', hospitalId);
+    
     let query = supabase
       .from('agendamentos')
       .select('*')
@@ -338,9 +340,38 @@ export const agendamentoService = {
     
     const { data, error } = await query;
     
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error('❌ Erro ao buscar agendamentos:', error);
+      throw new Error(error.message);
+    }
     
-    return data as Agendamento[];
+    console.log('✅ agendamentoService.getAll retornou:', data?.length || 0, 'agendamentos');
+    if (data && data.length > 0) {
+      console.log('📋 Primeiro agendamento:', {
+        id: data[0].id,
+        data_agendamento: data[0].data_agendamento,
+        especialidade: data[0].especialidade,
+        procedimentos: data[0].procedimentos,
+        nome_paciente: data[0].nome_paciente,
+        hospital_id: data[0].hospital_id
+      });
+    }
+    
+    // Converter dados do Supabase para o formato esperado pelo frontend
+    // Manter ambos os formatos (data_agendamento e dataAgendamento) para compatibilidade
+    return (data || []).map((item: any) => ({
+      ...item,
+      // Manter campos originais do banco
+      data_agendamento: item.data_agendamento,
+      nome_paciente: item.nome_paciente || '',
+      especialidade: item.especialidade || null,
+      procedimentos: item.procedimentos || null,
+      // Adicionar campos de compatibilidade
+      dataAgendamento: item.data_agendamento,
+      nome: item.nome_paciente || '',
+      hospitalId: item.hospital_id,
+      hospital_id: item.hospital_id
+    })) as Agendamento[];
   },
 
   async getById(id: string): Promise<Agendamento> {

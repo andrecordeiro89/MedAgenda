@@ -31,48 +31,61 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   // Debug: verificar se metas estão carregadas
   console.log('📊 CalendarView - Metas carregadas:', metasEspecialidades.length);
+  console.log('📊 CalendarView - Total agendamentos recebidos:', agendamentos.length);
   
-  // Verificar se há grades configuradas para cada dia do mês sendo visualizado
-  // Só considera configurada se tiver pelo menos UMA ESPECIALIDADE selecionada
-  const getDiasComGrade = (): Set<number> => {
-    const diasComGrade = new Set<number>();
+  // Debug: verificar formato das datas dos agendamentos
+  if (agendamentos.length > 0) {
+    console.log('📊 CalendarView - Primeiros 3 agendamentos:', agendamentos.slice(0, 3).map(a => ({
+      id: a.id,
+      data_agendamento: a.data_agendamento,
+      dataAgendamento: a.dataAgendamento,
+      especialidade: a.especialidade,
+      procedimentos: a.procedimentos,
+      nome_paciente: a.nome_paciente
+    })));
+  }
+  
+  // Verificar se há grade configurada para um dia específico
+  // Grade = agendamentos com data_agendamento = data do dia E procedimentos preenchido (não vazio)
+  // IMPORTANTE: Não contar registros com procedimentos vazio (são linhas de especialidade)
+  const temGradeParaDia = (date: Date): boolean => {
+    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
     
-    // Percorrer cada dia do mês atual sendo visualizado
-    const daysInCurrentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    // Buscar agendamentos deste dia
+    const agendamentosDoDia = agendamentos.filter(a => {
+      const dataAgendamento = a.data_agendamento || a.dataAgendamento;
+      return dataAgendamento === dateString;
+    });
     
-    for (let day = 1; day <= daysInCurrentMonth; day++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-      const diaSemanaKey = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][date.getDay()];
-      
-      // Formato correto da chave: grade_hospitalId_diaSemana_YYYY-MM do dia específico
-      const ano = date.getFullYear();
-      const mes = String(date.getMonth() + 1).padStart(2, '0');
-      const mesReferencia = `${ano}-${mes}`;
-      const storageKey = `grade_${hospitalId}_${diaSemanaKey}_${mesReferencia}`;
-      
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          // Verificar se há pelo menos UM item do tipo 'especialidade' em qualquer dia
-          const temEspecialidade = parsed.dias?.some((g: any) => 
-            g.itens?.some((item: any) => item.tipo === 'especialidade')
-          );
-          
-          if (temEspecialidade) {
-            // Adicionar o dia da semana (0-6) ao set
-            diasComGrade.add(date.getDay());
-          }
-        } catch (e) {
-          // Ignorar erros de parse
-          console.error('Erro ao verificar grade:', e);
-        }
-      }
+    // Debug para o dia 01/12/2025
+    if (dateString === '2025-12-01') {
+      console.log('🔍 DEBUG 01/12/2025 - Agendamentos encontrados:', agendamentosDoDia.length);
+      agendamentosDoDia.forEach((a, idx) => {
+        console.log(`  Agendamento ${idx + 1}:`, {
+          id: a.id,
+          data_agendamento: a.data_agendamento,
+          dataAgendamento: a.dataAgendamento,
+          especialidade: a.especialidade,
+          procedimentos: a.procedimentos,
+          nome_paciente: a.nome_paciente,
+          temProcedimentos: a.procedimentos && a.procedimentos.trim() !== ''
+        });
+      });
     }
-    return diasComGrade;
+    
+    // Verificar se há pelo menos um agendamento com procedimentos preenchido (não vazio)
+    // Isso indica que há uma grade configurada para este dia
+    const temGrade = agendamentosDoDia.some(a => {
+      const temProcedimentos = a.procedimentos && a.procedimentos.trim() !== '';
+      return temProcedimentos;
+    });
+    
+    if (dateString === '2025-12-01') {
+      console.log('🔍 DEBUG 01/12/2025 - temGrade:', temGrade);
+    }
+    
+    return temGrade;
   };
-  
-  const diasComGrade = getDiasComGrade();
 
   const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
@@ -104,7 +117,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   const selectedDateAppointments = selectedDate
     ? agendamentos.filter(
-        a => a.dataAgendamento === selectedDate.toISOString().split('T')[0]
+        a => {
+          const dateStr = selectedDate.toISOString().split('T')[0];
+          return (a.data_agendamento === dateStr || a.dataAgendamento === dateStr);
+        }
       )
     : [];
 
@@ -128,69 +144,79 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     const dateString = date.toISOString().split('T')[0];
-    const dayAppointments = agendamentos.filter(a => a.dataAgendamento === dateString);
+    // Usar data_agendamento (campo real do banco) ou dataAgendamento (compatibilidade)
+    const dayAppointments = agendamentos.filter(a => 
+      (a.data_agendamento === dateString || a.dataAgendamento === dateString)
+    );
 
     const isToday = date.toDateString() === today.toDateString();
-    const temGrade = diasComGrade.has(date.getDay());
+    const temGrade = temGradeParaDia(date);
     const diaSemana = diaSemanaMap[date.getDay()];
 
-    // Obter dados da grade cirúrgica para este dia da semana
-    const diaSemanaKey = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][date.getDay()];
-    
-    // Buscar grade do mês do DIA específico (não do mês sendo visualizado)
-    const ano = date.getFullYear();
-    const mes = String(date.getMonth() + 1).padStart(2, '0');
-    const mesReferencia = `${ano}-${mes}`;
-    const storageKey = `grade_${hospitalId}_${diaSemanaKey}_${mesReferencia}`;
-    
-    // Estrutura para armazenar especialidades e seus procedimentos
+    // Estrutura para armazenar especialidades e seus procedimentos (com pacientes reais)
     const especialidadesComProcedimentos: Record<string, {
       nome: string;
       totalProcedimentos: number;
       especialidadeId: string;
+      meta?: number; // Meta configurada para esta especialidade neste dia
     }> = {};
 
-    // Ler a grade cirúrgica do localStorage
-    const savedGrade = localStorage.getItem(storageKey);
-    if (savedGrade) {
-      try {
-        const parsed = JSON.parse(savedGrade);
-        if (parsed.dias && Array.isArray(parsed.dias)) {
-          // Para cada dia na grade
-          parsed.dias.forEach((dia: any) => {
-            if (dia.itens && Array.isArray(dia.itens)) {
-              let especialidadeAtual: string | null = null;
-              let especialidadeNome: string | null = null;
-              let especialidadeId: string | null = null;
+    // IMPORTANTE: Filtrar apenas agendamentos com procedimentos preenchido (não vazio)
+    // Registros com procedimentos vazio são linhas de especialidade e não devem ser contados
+    const agendamentosComProcedimentos = dayAppointments.filter(a => {
+      const temProcedimentos = a.procedimentos && a.procedimentos.trim() !== '';
+      return temProcedimentos;
+    });
 
-              // Percorrer itens da grade
-              dia.itens.forEach((item: any) => {
-                if (item.tipo === 'especialidade') {
-                  // Nova especialidade encontrada
-                  especialidadeAtual = item.texto;
-                  especialidadeNome = item.texto;
-                  especialidadeId = item.especialidadeId || item.texto;
-                  
-                  // Inicializar contador se não existir
-                  if (!especialidadesComProcedimentos[especialidadeId]) {
-                    especialidadesComProcedimentos[especialidadeId] = {
-                      nome: especialidadeNome,
-                      totalProcedimentos: 0,
-                      especialidadeId: especialidadeId
-                    };
-                  }
-                } else if (item.tipo === 'procedimento' && especialidadeAtual && especialidadeId) {
-                  // Contar procedimento para a especialidade atual
-                  especialidadesComProcedimentos[especialidadeId].totalProcedimentos++;
-                }
-              });
-            }
-          });
-        }
-      } catch (e) {
-        console.error('Erro ao processar grade:', e);
-      }
+    // Debug para o dia 01/12/2025
+    if (dateString === '2025-12-01') {
+      console.log('🔍 DEBUG 01/12/2025 - Barras de progresso:');
+      console.log('  Total agendamentos do dia:', dayAppointments.length);
+      console.log('  Agendamentos com procedimentos:', agendamentosComProcedimentos.length);
+      agendamentosComProcedimentos.forEach((a, idx) => {
+        console.log(`  Procedimento ${idx + 1}:`, {
+          especialidade: a.especialidade,
+          procedimentos: a.procedimentos,
+          nome_paciente: a.nome_paciente,
+          temPaciente: a.nome_paciente && a.nome_paciente.trim() !== ''
+        });
+      });
     }
+
+    // Agrupar por especialidade
+    agendamentosComProcedimentos.forEach(agendamento => {
+      if (!agendamento.especialidade) return;
+      
+      // Buscar especialidade no array para obter o ID
+      const especialidade = especialidades.find(e => e.nome === agendamento.especialidade);
+      const especialidadeId = especialidade?.id || agendamento.especialidade;
+      const especialidadeNome = agendamento.especialidade;
+      
+      // Inicializar contador se não existir
+      if (!especialidadesComProcedimentos[especialidadeId]) {
+        // Buscar meta configurada para esta especialidade neste dia da semana
+        const meta = metasEspecialidades.find(m => 
+          m.especialidadeId === especialidadeId && 
+          m.diaSemana === diaSemana && 
+          m.ativo === true &&
+          m.hospitalId === hospitalId
+        );
+        
+        especialidadesComProcedimentos[especialidadeId] = {
+          nome: especialidadeNome,
+          totalProcedimentos: 0,
+          especialidadeId: especialidadeId,
+          meta: meta?.quantidadeAgendamentos
+        };
+      }
+      
+      // Contar apenas procedimentos com pacientes reais (nome_paciente preenchido)
+      // Isso mostra o progresso real em relação à meta
+      const temPaciente = agendamento.nome_paciente && agendamento.nome_paciente.trim() !== '';
+      if (temPaciente) {
+        especialidadesComProcedimentos[especialidadeId].totalProcedimentos++;
+      }
+    });
 
     days.push(
       <div
@@ -213,19 +239,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           {day}
         </div>
         
-        {/* Barras de progresso por especialidade da grade cirúrgica */}
+        {/* Barras de progresso por especialidade (com dados reais e metas configuradas) */}
         <div className="mt-1 space-y-0.5">
+          {dateString === '2025-12-01' && console.log('🔍 DEBUG 01/12/2025 - Especialidades para barras:', Object.keys(especialidadesComProcedimentos).length, Object.values(especialidadesComProcedimentos))}
           {Object.values(especialidadesComProcedimentos).map((esp) => {
-            // Definir meta de procedimentos (pode ser ajustável no futuro)
-            const metaProcedimentos = 10; // Meta padrão de procedimentos por especialidade
-            const percentual = Math.min((esp.totalProcedimentos / metaProcedimentos) * 100, 100);
-            const atingiuMeta = esp.totalProcedimentos >= metaProcedimentos;
+            // Usar meta configurada ou padrão de 10 se não houver meta
+            const metaProcedimentos = esp.meta || 10;
+            const percentual = metaProcedimentos > 0 
+              ? Math.min((esp.totalProcedimentos / metaProcedimentos) * 100, 100)
+              : 0;
+            const atingiuMeta = metaProcedimentos > 0 && esp.totalProcedimentos >= metaProcedimentos;
+            const faltam = Math.max(0, metaProcedimentos - esp.totalProcedimentos);
 
             return (
               <div
                 key={esp.especialidadeId}
                 className="text-[9px] leading-tight"
-                title={`${esp.nome} - ${esp.totalProcedimentos} procedimento(s)`}
+                title={`${esp.nome} - ${esp.totalProcedimentos} de ${metaProcedimentos} procedimento(s)${faltam > 0 ? ` (faltam ${faltam})` : ' - Meta atingida!'}`}
               >
                 {/* Nome da especialidade (truncado) */}
                 <div className="truncate font-medium text-slate-700">
@@ -235,14 +265,18 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                 <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
-                      atingiuMeta ? 'bg-green-500' : 'bg-blue-500'
+                      atingiuMeta ? 'bg-green-500' : 
+                      percentual >= 75 ? 'bg-yellow-500' : 
+                      'bg-blue-500'
                     }`}
                     style={{ width: `${percentual}%` }}
                   ></div>
                 </div>
                 {/* Contador de procedimentos */}
-                <div className="text-[8px] text-slate-600 text-center font-medium">
-                  {esp.totalProcedimentos} proc.
+                <div className={`text-[8px] text-center font-medium ${
+                  atingiuMeta ? 'text-green-700 font-bold' : 'text-slate-600'
+                }`}>
+                  {esp.totalProcedimentos}/{metaProcedimentos}
                 </div>
               </div>
             );

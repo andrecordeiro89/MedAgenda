@@ -31,13 +31,13 @@ import {
     populateSampleData
 } from './services/mock-storage';
 
-// Importar service REAL de especialidades do Supabase
-import { especialidadeService, testSupabaseConnection } from './services/supabase';
+// Importar services REAIS do Supabase
+import { especialidadeService, agendamentoService, testSupabaseConnection } from './services/supabase';
 
 // Alias para manter compatibilidade com o código existente
 const simpleMedicoService = mockServices.medico;
 const simpleProcedimentoService = mockServices.procedimento;
-const simpleAgendamentoService = mockServices.agendamento;
+const simpleAgendamentoService = agendamentoService; // ← AGORA USA SUPABASE REAL!
 const simpleEspecialidadeService = especialidadeService; // ← AGORA USA SUPABASE!
 const simpleMetaEspecialidadeService = mockServices.metaEspecialidade;
 
