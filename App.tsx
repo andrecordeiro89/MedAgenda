@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
 import DocumentacaoView from './components/DocumentacaoView';
+import FaturamentoView from './components/FaturamentoView';
 import { 
     AuthProvider, 
     useAuth, 
@@ -225,6 +226,12 @@ const AppContent: React.FC = () => {
             case 'documentacao':
                 return (
                     <DocumentacaoView 
+                        hospitalId={hospitalSelecionado?.id || ''}
+                    />
+                );
+            case 'faturamento':
+                return (
+                    <FaturamentoView 
                         hospitalId={hospitalSelecionado?.id || ''}
                     />
                 );

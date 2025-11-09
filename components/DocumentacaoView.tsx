@@ -8,6 +8,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<'todos' | 'pendentes' | 'liberados'>('todos');
   
+  // Estado para controlar linhas expandidas
+  const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
+  
+  // Estado para controlar agrupamento por status
+  const [agruparPorStatus, setAgruparPorStatus] = useState(false);
+  
+  // Estados para filtros de busca
+  const [filtroStatus, setFiltroStatus] = useState<string>('');
+  const [filtroPaciente, setFiltroPaciente] = useState<string>('');
+  const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
+  const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
+  const [filtroMedico, setFiltroMedico] = useState<string>('');
+  
   // Estados do modal de upload
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha'>('documentos');
@@ -46,29 +59,15 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
-  // Filtrar agendamentos
-  const agendamentosFiltrados = agendamentos.filter(ag => {
-    if (filtro === 'todos') return true;
-    if (filtro === 'pendentes') {
-      // Pendente se NÃO tem docs OU não tem ficha
-      return !(ag.documentos_ok === true) || !(ag.ficha_pre_anestesica_ok === true);
-    }
-    if (filtro === 'liberados') {
-      // Liberado se tem docs E ficha
-      return ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
-    }
-    return true;
-  });
-
   // Status do paciente
   const getStatusPaciente = (ag: Agendamento) => {
     const temDocs = ag.documentos_ok === true;
     const temFicha = ag.ficha_pre_anestesica_ok === true;
     
-    if (temDocs && temFicha) return { texto: 'LIBERADO', cor: 'bg-green-100 text-green-800' };
-    if (temDocs && !temFicha) return { texto: 'AGUARDANDO FICHA', cor: 'bg-yellow-100 text-yellow-800' };
-    if (!temDocs) return { texto: 'AGUARDANDO DOCS', cor: 'bg-red-100 text-red-800' };
-    return { texto: 'PENDENTE', cor: 'bg-gray-100 text-gray-800' };
+    if (temDocs && temFicha) return { texto: 'LIBERADO', cor: 'bg-green-100 text-green-800', grupo: 'liberado' };
+    if (temDocs && !temFicha) return { texto: 'AGUARDANDO FICHA', cor: 'bg-yellow-100 text-yellow-800', grupo: 'aguardando_ficha' };
+    if (!temDocs) return { texto: 'AGUARDANDO DOCS', cor: 'bg-red-100 text-red-800', grupo: 'aguardando_docs' };
+    return { texto: 'PENDENTE', cor: 'bg-gray-100 text-gray-800', grupo: 'aguardando_docs' };
   };
 
   // Formatar data
@@ -86,6 +85,92 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     } catch {
       return dataStr || '-';
     }
+  };
+
+  // Filtrar agendamentos
+  const agendamentosFiltrados = agendamentos.filter(ag => {
+    // Filtro por status geral (Todos, Pendentes, Liberados)
+    if (filtro === 'pendentes') {
+      const pendente = !(ag.documentos_ok === true) || !(ag.ficha_pre_anestesica_ok === true);
+      if (!pendente) return false;
+    }
+    if (filtro === 'liberados') {
+      const liberado = ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
+      if (!liberado) return false;
+    }
+    
+    // Filtro por status específico
+    if (filtroStatus) {
+      const status = getStatusPaciente(ag);
+      // Comparação exata (case-insensitive)
+      if (status.texto.toUpperCase() !== filtroStatus.toUpperCase()) return false;
+    }
+    
+    // Filtro por paciente
+    if (filtroPaciente) {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').toLowerCase();
+      if (!nomePaciente.includes(filtroPaciente.toLowerCase())) return false;
+    }
+    
+    // Filtro por data consulta
+    if (filtroDataConsulta) {
+      const dataConsulta = formatarData(ag.data_consulta).toLowerCase();
+      if (!dataConsulta.includes(filtroDataConsulta.toLowerCase())) return false;
+    }
+    
+    // Filtro por data cirurgia
+    if (filtroDataCirurgia) {
+      const dataCirurgia = formatarData(ag.data_agendamento || ag.dataAgendamento).toLowerCase();
+      if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
+    }
+    
+    // Filtro por médico
+    if (filtroMedico) {
+      const medico = (ag.medico || '').toLowerCase();
+      if (!medico.includes(filtroMedico.toLowerCase())) return false;
+    }
+    
+    return true;
+  });
+  
+  // Limpar todos os filtros
+  const limparFiltros = () => {
+    setFiltroStatus('');
+    setFiltroPaciente('');
+    setFiltroDataConsulta('');
+    setFiltroDataCirurgia('');
+    setFiltroMedico('');
+  };
+  
+  // Verificar se há filtros ativos
+  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMedico;
+
+  // Agrupar agendamentos por status
+  const agendamentosAgrupados = () => {
+    if (!agruparPorStatus) {
+      return { semGrupo: agendamentosFiltrados };
+    }
+
+    const grupos: Record<string, Agendamento[]> = {
+      aguardando_docs: [],
+      aguardando_ficha: [],
+      liberado: []
+    };
+
+    agendamentosFiltrados.forEach(ag => {
+      const status = getStatusPaciente(ag);
+      grupos[status.grupo] = grupos[status.grupo] || [];
+      grupos[status.grupo].push(ag);
+    });
+
+    return grupos;
+  };
+
+  // Toggle agrupamento por status
+  const toggleAgruparPorStatus = () => {
+    setAgruparPorStatus(prev => !prev);
+    // Recolher todas as linhas ao alternar agrupamento
+    setLinhasExpandidas(new Set());
   };
 
   // Abrir modal de upload
@@ -324,6 +409,192 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
+  // Toggle expandir/recolher linha
+  const toggleExpandirLinha = (agendamentoId: string | undefined) => {
+    if (!agendamentoId) return;
+    setLinhasExpandidas(prev => {
+      const novo = new Set(prev);
+      if (novo.has(agendamentoId)) {
+        novo.delete(agendamentoId);
+      } else {
+        novo.add(agendamentoId);
+      }
+      return novo;
+    });
+  };
+
+  // Verificar se linha está expandida
+  const isLinhaExpandida = (agendamentoId: string | undefined) => {
+    return agendamentoId ? linhasExpandidas.has(agendamentoId) : false;
+  };
+
+  // Renderizar linha de agendamento
+  const renderizarLinhaAgendamento = (ag: Agendamento) => {
+    const status = getStatusPaciente(ag);
+    const expandida = isLinhaExpandida(ag.id);
+    
+    return (
+      <React.Fragment key={ag.id}>
+        {/* Linha principal */}
+        <tr className="hover:bg-gray-50">
+          {/* Status */}
+          <td className="px-4 py-4 whitespace-nowrap">
+            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
+              {status.texto}
+            </span>
+          </td>
+        
+          {/* Paciente */}
+          <td className="px-4 py-4 whitespace-nowrap">
+            <div className="text-sm font-medium text-gray-900">
+              {ag.nome_paciente || ag.nome || '-'}
+            </div>
+          </td>
+          
+          {/* Data Consulta */}
+          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatarData(ag.data_consulta)}
+          </td>
+          
+          {/* Data Cirurgia */}
+          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatarData(ag.data_agendamento || ag.dataAgendamento)}
+          </td>
+          
+          {/* Ações */}
+          <td className="px-4 py-4 whitespace-nowrap text-sm">
+            <div className="flex flex-col gap-2">
+              {/* Documentos Recepção */}
+              <div className="flex items-center gap-2">
+                {ag.documentos_ok === true ? (
+                  <button
+                    onClick={() => handleAbrirModalUpload(ag)}
+                    className="text-green-600 text-xs flex items-center gap-1 hover:underline cursor-pointer"
+                    title="Ver/Adicionar documentos"
+                  >
+                    ✓ Docs OK
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleAbrirModalUpload(ag)}
+                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    📎 Anexar Docs
+                  </button>
+                )}
+              </div>
+              
+              {/* Ficha Pré-Anestésica */}
+              <div className="flex items-center gap-2">
+                {ag.ficha_pre_anestesica_ok === true ? (
+                  <button
+                    onClick={() => {
+                      setAbaAtiva('ficha');
+                      handleAbrirModalUpload(ag);
+                    }}
+                    className="text-green-600 text-xs flex items-center gap-1 hover:underline cursor-pointer"
+                    title="Ver ficha pré-anestésica"
+                  >
+                    ✓ Ficha OK
+                  </button>
+                ) : ag.documentos_ok === true ? (
+                  <button
+                    onClick={() => {
+                      setAbaAtiva('ficha');
+                      handleAbrirModalUpload(ag);
+                    }}
+                    className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
+                  >
+                    📋 Anexar Ficha
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-400">Aguardando docs</span>
+                )}
+              </div>
+            </div>
+          </td>
+          
+          {/* Botão Expandir/Recolher */}
+          <td className="px-4 py-4 whitespace-nowrap">
+            <button
+              onClick={() => toggleExpandirLinha(ag.id)}
+              className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title={expandida ? 'Recolher detalhes' : 'Expandir detalhes'}
+            >
+              <svg 
+                className={`w-5 h-5 transition-transform ${expandida ? 'rotate-90' : ''}`}
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </td>
+        </tr>
+        
+        {/* Linha expandida com detalhes */}
+        {expandida && (
+          <tr className="bg-gray-50">
+            <td colSpan={6} className="px-4 py-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {/* Nascimento */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Nascimento
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {formatarData(ag.data_nascimento || ag.dataNascimento)}
+                  </div>
+                </div>
+                
+                {/* Cidade */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Cidade
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {ag.cidade_natal || ag.cidadeNatal || '-'}
+                  </div>
+                </div>
+                
+                {/* Telefone */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Telefone
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {ag.telefone || '-'}
+                  </div>
+                </div>
+                
+                {/* Médico */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Médico
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {ag.medico || '-'}
+                  </div>
+                </div>
+                
+                {/* Procedimento */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Procedimento
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {ag.procedimentos || '-'}
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  };
+
   // Remover ficha pré-anestésica
   const handleRemoverFicha = async () => {
     if (!agendamentoSelecionado || !agendamentoSelecionado.id || !fichaAnexada) return;
@@ -397,8 +668,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-3 mb-6">
+      {/* Filtros Rápidos */}
+      <div className="flex gap-3 mb-4">
         <button
           onClick={() => setFiltro('todos')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -431,6 +702,108 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </button>
       </div>
 
+      {/* Seção de Filtros de Busca */}
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">🔍 Filtros de Busca</h3>
+          {temFiltrosAtivos && (
+            <button
+              onClick={limparFiltros}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Limpar filtros
+            </button>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Filtro Status */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Status
+            </label>
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white"
+            >
+              <option value="">Todos os status</option>
+              <option value="AGUARDANDO DOCS">Aguardando Docs</option>
+              <option value="AGUARDANDO FICHA">Aguardando Ficha</option>
+              <option value="LIBERADO">Liberado</option>
+            </select>
+          </div>
+          
+          {/* Filtro Paciente */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Paciente
+            </label>
+            <input
+              type="text"
+              value={filtroPaciente}
+              onChange={(e) => setFiltroPaciente(e.target.value)}
+              placeholder="Nome do paciente..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          
+          {/* Filtro Data Consulta */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Data Consulta
+            </label>
+            <input
+              type="text"
+              value={filtroDataConsulta}
+              onChange={(e) => setFiltroDataConsulta(e.target.value)}
+              placeholder="DD/MM/AAAA"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          
+          {/* Filtro Data Cirurgia */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Data Cirurgia
+            </label>
+            <input
+              type="text"
+              value={filtroDataCirurgia}
+              onChange={(e) => setFiltroDataCirurgia(e.target.value)}
+              placeholder="DD/MM/AAAA"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          
+          {/* Filtro Médico */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Médico
+            </label>
+            <input
+              type="text"
+              value={filtroMedico}
+              onChange={(e) => setFiltroMedico(e.target.value)}
+              placeholder="Nome do médico..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+        </div>
+        
+        {/* Indicador de resultados filtrados */}
+        {temFiltrosAtivos && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <p className="text-xs text-gray-600">
+              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentos.length}</span> agendamentos
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Loading */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -447,167 +820,99 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={toggleAgruparPorStatus}
+                      title={agruparPorStatus ? 'Clique para desagrupar' : 'Clique para agrupar por status'}
+                    >
+                      <div className="flex items-center gap-2">
+                        Status
+                        {agruparPorStatus && (
+                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                          </svg>
+                        )}
+                      </div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Paciente
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Nascimento
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Cidade
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Telefone
+                      Data Consulta
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Data Cirurgia
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Médico
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Procedimento
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Data Consulta
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Ações
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                      {/* Botão expandir */}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {agendamentosFiltrados.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <p className="text-gray-500 font-medium">Nenhum agendamento encontrado</p>
-                          <p className="text-sm text-gray-400">
-                            {filtro === 'todos' 
-                              ? 'Não há pacientes agendados no sistema.' 
-                              : filtro === 'pendentes'
-                              ? 'Não há pacientes pendentes de documentação.'
-                              : 'Não há pacientes liberados para cirurgia.'}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    agendamentosFiltrados.map((ag) => {
-                      const status = getStatusPaciente(ag);
+                  {(() => {
+                    const grupos = agendamentosAgrupados();
+                    
+                    // Se não está agrupado
+                    if (!agruparPorStatus) {
+                      const lista = grupos.semGrupo || [];
+                      if (lista.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <p className="text-gray-500 font-medium">Nenhum agendamento encontrado</p>
+                                <p className="text-sm text-gray-400">
+                                  {filtro === 'todos' 
+                                    ? 'Não há pacientes agendados no sistema.' 
+                                    : filtro === 'pendentes'
+                                    ? 'Não há pacientes pendentes de documentação.'
+                                    : 'Não há pacientes liberados para cirurgia.'}
+                                </p>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+                      
+                      return lista.map((ag) => renderizarLinhaAgendamento(ag));
+                    }
+                    
+                    // Se está agrupado
+                    const gruposOrdenados = [
+                      { chave: 'aguardando_docs', titulo: 'Aguardando Docs', cor: 'bg-red-50 border-red-200' },
+                      { chave: 'aguardando_ficha', titulo: 'Aguardando Ficha', cor: 'bg-yellow-50 border-yellow-200' },
+                      { chave: 'liberado', titulo: 'Liberado', cor: 'bg-green-50 border-green-200' }
+                    ];
+                    
+                    return gruposOrdenados.map((grupoInfo) => {
+                      const agendamentosGrupo = grupos[grupoInfo.chave] || [];
+                      if (agendamentosGrupo.length === 0) return null;
+                      
                       return (
-                        <tr key={ag.id} className="hover:bg-gray-50">
-                          {/* Status */}
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
-                              {status.texto}
-                            </span>
-                          </td>
-                          
-                          {/* Paciente */}
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {ag.nome_paciente || ag.nome || '-'}
-                            </div>
-                          </td>
-                          
-                          {/* Nascimento */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatarData(ag.data_nascimento || ag.dataNascimento)}
-                          </td>
-                          
-                          {/* Cidade */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {ag.cidade_natal || ag.cidadeNatal || '-'}
-                          </td>
-                          
-                          {/* Telefone */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {ag.telefone || '-'}
-                          </td>
-                          
-                          {/* Data Cirurgia */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatarData(ag.data_agendamento || ag.dataAgendamento)}
-                          </td>
-                          
-                          {/* Médico */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {ag.medico || '-'}
-                          </td>
-                          
-                          {/* Procedimento */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {ag.procedimentos || '-'}
-                          </td>
-                          
-                          {/* Data Consulta */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatarData(ag.data_consulta)}
-                          </td>
-                          
-                          {/* Ações */}
-                          <td className="px-4 py-4 whitespace-nowrap text-sm">
-                            <div className="flex flex-col gap-2">
-                              {/* Documentos Recepção */}
-                              <div className="flex items-center gap-2">
-                                {ag.documentos_ok === true ? (
-                                  <button
-                                    onClick={() => handleAbrirModalUpload(ag)}
-                                    className="text-green-600 text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                                    title="Ver/Adicionar documentos"
-                                  >
-                                    ✓ Docs OK
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleAbrirModalUpload(ag)}
-                                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                                  >
-                                    📎 Anexar Docs
-                                  </button>
-                                )}
+                        <React.Fragment key={grupoInfo.chave}>
+                          {/* Cabeçalho do grupo */}
+                          <tr className={`${grupoInfo.cor} border-t-2 border-b-2`}>
+                            <td colSpan={6} className="px-4 py-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-gray-800">{grupoInfo.titulo}</span>
+                                  <span className="text-sm text-gray-600">({agendamentosGrupo.length})</span>
+                                </div>
                               </div>
-                              
-                              {/* Ficha Pré-Anestésica */}
-                              <div className="flex items-center gap-2">
-                                {ag.ficha_pre_anestesica_ok === true ? (
-                                  <button
-                                    onClick={() => {
-                                      setAbaAtiva('ficha');
-                                      handleAbrirModalUpload(ag);
-                                    }}
-                                    className="text-green-600 text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                                    title="Ver ficha pré-anestésica"
-                                  >
-                                    ✓ Ficha OK
-                                  </button>
-                                ) : ag.documentos_ok === true ? (
-                                  <button
-                                    onClick={() => {
-                                      setAbaAtiva('ficha');
-                                      handleAbrirModalUpload(ag);
-                                    }}
-                                    className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
-                                  >
-                                    📋 Anexar Ficha
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-gray-400">Aguardando docs</span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                          </tr>
+                          {/* Linhas do grupo */}
+                          {agendamentosGrupo.map((ag) => renderizarLinhaAgendamento(ag))}
+                        </React.Fragment>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
