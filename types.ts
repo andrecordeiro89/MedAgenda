@@ -10,6 +10,7 @@ export interface Agendamento {
   cidade_natal?: string | null; // CAMPO REAL DO BANCO (nullable)
   telefone?: string | null; // CAMPO REAL DO BANCO (nullable)
   data_agendamento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
+  data_consulta?: string | null; // NOVO CAMPO - Data da consulta médica (YYYY-MM-DD)
   hospital_id?: string | null; // CAMPO REAL DO BANCO (nullable)
   especialidade?: string | null; // NOVO CAMPO - Nome da especialidade
   medico?: string | null; // NOVO CAMPO - Nome do médico
@@ -107,14 +108,25 @@ export interface Procedimento {
 }
 
 // Interfaces para Grade Cirúrgica
+
+// Dados completos do paciente para exibição
+export interface PacienteGrade {
+    nome: string;
+    dataNascimento: string; // YYYY-MM-DD
+    cidade?: string | null;
+    telefone?: string | null;
+    dataConsulta?: string | null;
+}
+
 export interface GradeCirurgicaItem {
     id: string;
     tipo: 'especialidade' | 'procedimento';
     texto: string;
     ordem: number;
-    pacientes?: string[]; // Lista de nomes de pacientes vinculados ao procedimento
+    pacientes?: PacienteGrade[]; // Lista de pacientes com dados completos
     especialidadeId?: string; // ID da especialidade (quando tipo='especialidade')
     procedimentoId?: string; // ID do procedimento (quando tipo='procedimento')
+    agendamentoId?: string; // ID do agendamento no banco (para UPDATE)
 }
 
 export interface GradeCirurgicaDia {

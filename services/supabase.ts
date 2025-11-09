@@ -335,6 +335,7 @@ export const agendamentoService = {
       nome_paciente: agendamento.nome_paciente,
       data_nascimento: agendamento.data_nascimento,
       data_agendamento: agendamento.data_agendamento,
+      data_consulta: agendamento.data_consulta || null,
       especialidade: agendamento.especialidade || null,
       medico: agendamento.medico || null,
       procedimentos: agendamento.procedimentos || null,
@@ -359,29 +360,65 @@ export const agendamentoService = {
   },
 
   async update(id: string, agendamento: Partial<Omit<Agendamento, 'id' | 'idade' | 'tipo'>>): Promise<Agendamento> {
+    console.log('🔄 Atualizando agendamento no Supabase...', { id, agendamento });
+    
     const updateData: any = {}
+    // Campos antigos (compatibilidade)
     if (agendamento.nome !== undefined) updateData.nome_paciente = agendamento.nome
     if (agendamento.dataNascimento !== undefined) updateData.data_nascimento = agendamento.dataNascimento
     if (agendamento.cidadeNatal !== undefined) updateData.cidade_natal = agendamento.cidadeNatal
-    if (agendamento.telefone !== undefined) updateData.telefone = agendamento.telefone
     if (agendamento.whatsapp !== undefined) updateData.whatsapp = agendamento.whatsapp
     if (agendamento.dataAgendamento !== undefined) updateData.data_agendamento = agendamento.dataAgendamento
     if (agendamento.statusLiberacao !== undefined) updateData.status_liberacao = agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente'
     if (agendamento.medicoId !== undefined) updateData.medico_id = agendamento.medicoId
     if (agendamento.procedimentoId !== undefined) updateData.procedimento_id = agendamento.procedimentoId
+    
+    // Novos campos diretos
+    if (agendamento.nome_paciente !== undefined) updateData.nome_paciente = agendamento.nome_paciente
+    if (agendamento.data_nascimento !== undefined) updateData.data_nascimento = agendamento.data_nascimento
+    if (agendamento.telefone !== undefined) updateData.telefone = agendamento.telefone
+    if (agendamento.cidade_natal !== undefined) updateData.cidade_natal = agendamento.cidade_natal
+    if (agendamento.data_consulta !== undefined) updateData.data_consulta = agendamento.data_consulta
+    if (agendamento.especialidade !== undefined) updateData.especialidade = agendamento.especialidade
+    if (agendamento.medico !== undefined) updateData.medico = agendamento.medico
+    if (agendamento.procedimentos !== undefined) updateData.procedimentos = agendamento.procedimentos
 
-    const { data, error } = await supabase
-      .from('agendamentos')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
-    
-    if (error) throw new Error(error.message)
-    if (!data) throw new Error('Agendamento não encontrado')
-    
-    // Buscar o agendamento completo
-    return this.getById(data.id)
+    try {
+      const { data, error } = await supabase
+        .from('agendamentos')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Erro ao atualizar agendamento:', error);
+        throw new Error(error.message);
+      }
+      if (!data) throw new Error('Agendamento não encontrado')
+      
+      console.log('✅ Agendamento atualizado com sucesso!', data);
+      return data as Agendamento;
+    } catch (error: any) {
+      // Se o erro for sobre updated_at, tentar sem trigger
+      if (error.message?.includes('updated_at')) {
+        console.warn('⚠️ Tentando UPDATE sem updated_at...');
+        
+        // Tentar novamente com raw SQL se possível
+        const { data, error: error2 } = await supabase
+          .from('agendamentos')
+          .update(updateData)
+          .eq('id', id)
+          .select()
+          .single()
+        
+        if (error2) throw new Error(error2.message);
+        if (!data) throw new Error('Agendamento não encontrado')
+        
+        return data as Agendamento;
+      }
+      throw error;
+    }
   },
 
   async delete(id: string): Promise<void> {
