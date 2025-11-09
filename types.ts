@@ -1,7 +1,7 @@
 
 export type StatusLiberacao = 'x' | 'v'; // x = pendente, v = liberado
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
-export type View = 'dashboard' | 'calendar';
+export type View = 'dashboard' | 'calendar' | 'documentacao';
 
 export interface Agendamento {
   id?: string;
@@ -17,6 +17,15 @@ export interface Agendamento {
   procedimentos?: string | null; // NOVO CAMPO - Nome do procedimento
   created_at?: string;
   updated_at?: string;
+  
+  // Campos de documentação (fluxo pré-cirúrgico)
+  documentos_ok?: boolean; // Indica se documentos foram anexados pela recepção
+  documentos_urls?: string | null; // JSON com URLs dos documentos (ECG, exames, etc.)
+  documentos_data?: string | null; // Data/hora do upload dos documentos
+  ficha_pre_anestesica_ok?: boolean; // Indica se ficha pré-anestésica foi anexada
+  ficha_pre_anestesica_url?: string | null; // URL da ficha pré-anestésica
+  ficha_pre_anestesica_data?: string | null; // Data/hora do upload da ficha
+  observacoes?: string | null; // Observações gerais
   
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;

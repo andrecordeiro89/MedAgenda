@@ -3,6 +3,7 @@ import { View, Agendamento, Medico, Procedimento, Especialidade, MetaEspecialida
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CalendarView from './components/CalendarView';
+import DocumentacaoView from './components/DocumentacaoView';
 import { 
     AuthProvider, 
     useAuth, 
@@ -219,6 +220,12 @@ const AppContent: React.FC = () => {
                         metasEspecialidades={metasEspecialidades}
                         hospitalId={hospitalSelecionado?.id || ''}
                         onRefresh={() => loadData(false)}
+                    />
+                );
+            case 'documentacao':
+                return (
+                    <DocumentacaoView 
+                        hospitalId={hospitalSelecionado?.id || ''}
                     />
                 );
             default:
