@@ -28,13 +28,18 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       const dados = await agendamentoService.getAll(hospitalId);
       console.log('💰 Agendamentos carregados para faturamento:', dados);
       
-      // Filtrar apenas os liberados
-      const liberados = dados.filter(ag => 
-        ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true
+      // Filtrar liberados e aguardando ficha (documentos OK)
+      const paraFaturamento = dados.filter(ag => 
+        ag.documentos_ok === true // Tem documentos OK (pode estar liberado ou aguardando ficha)
       );
       
-      console.log('✅ Total de liberados:', liberados.length);
-      setAgendamentos(liberados);
+      const liberados = paraFaturamento.filter(ag => ag.ficha_pre_anestesica_ok === true).length;
+      const aguardandoFicha = paraFaturamento.filter(ag => !(ag.ficha_pre_anestesica_ok === true)).length;
+      
+      console.log('✅ Total para faturamento:', paraFaturamento.length);
+      console.log('   - Liberados:', liberados);
+      console.log('   - Aguardando Ficha:', aguardandoFicha);
+      setAgendamentos(paraFaturamento);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
@@ -136,10 +141,19 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       const temDocumentos = ag.documentos_urls && ag.documentos_urls.trim() !== '';
       const temFicha = ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '';
 
-      if (!temDocumentos && !temFicha) {
+      if (!temDocumentos) {
         alert('⚠️ Nenhum documento disponível para download');
         setDownloading(null);
         return;
+      }
+      
+      // Se não tem ficha, avisar mas permitir download dos documentos
+      if (!temFicha) {
+        const continuar = confirm('⚠️ Ficha pré-anestésica ainda não foi anexada. Deseja baixar apenas os documentos disponíveis?');
+        if (!continuar) {
+          setDownloading(null);
+          return;
+        }
       }
 
       // Criar instância do JSZip
@@ -203,9 +217,20 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
   };
 
+  // Status do paciente (mesma lógica da tela Documentação)
+  const getStatusPaciente = (ag: Agendamento) => {
+    const temDocs = ag.documentos_ok === true;
+    const temFicha = ag.ficha_pre_anestesica_ok === true;
+    
+    if (temDocs && temFicha) return { texto: 'LIBERADO', cor: 'bg-green-100 text-green-800' };
+    if (temDocs && !temFicha) return { texto: 'AGUARDANDO FICHA', cor: 'bg-yellow-100 text-yellow-800' };
+    return { texto: 'AGUARDANDO DOCS', cor: 'bg-red-100 text-red-800' };
+  };
+
   // Renderizar linha de agendamento
   const renderizarLinhaAgendamento = (ag: Agendamento) => {
     const expandida = isLinhaExpandida(ag.id);
+    const status = getStatusPaciente(ag);
     
     return (
       <React.Fragment key={ag.id}>
@@ -213,8 +238,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         <tr className="hover:bg-gray-50">
           {/* Status */}
           <td className="px-4 py-4 whitespace-nowrap">
-            <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">
-              LIBERADO
+            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
+              {status.texto}
             </span>
           </td>
         
@@ -392,7 +417,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         <div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">💰 Faturamento G-SUS</h1>
           <p className="text-gray-600">
-            Download de documentos para entrada no sistema G-SUS
+            Download de documentos para entrada no sistema G-SUS (Liberados e Aguardando Ficha)
           </p>
         </div>
         <button
@@ -503,7 +528,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-gray-600">Carregando agendamentos liberados...</p>
+            <p className="text-gray-600">Carregando agendamentos para faturamento...</p>
           </div>
         </div>
       ) : (
@@ -542,9 +567,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          <p className="text-gray-500 font-medium">Nenhum agendamento liberado encontrado</p>
+                          <p className="text-gray-500 font-medium">Nenhum agendamento encontrado</p>
                           <p className="text-sm text-gray-400">
-                            Não há pacientes liberados para faturamento no momento.
+                            Não há pacientes com documentos OK para faturamento no momento.
                           </p>
                         </div>
                       </td>
@@ -561,9 +586,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <h3 className="font-semibold text-gray-800 mb-2">📌 Informações sobre Faturamento:</h3>
             <ul className="space-y-1 text-sm text-gray-700">
-              <li>• Esta tela exibe apenas pacientes <strong>liberados</strong> para cirurgia</li>
+              <li>• Esta tela exibe pacientes <strong>liberados</strong> e <strong>aguardando ficha</strong> (com documentos OK)</li>
               <li>• Use o botão <strong>"Download G-SUS"</strong> para baixar todos os documentos necessários</li>
-              <li>• Os documentos serão baixados automaticamente para dar entrada no sistema G-SUS</li>
+              <li>• Os documentos serão baixados automaticamente em formato ZIP para dar entrada no sistema G-SUS</li>
+              <li>• Pacientes <strong>aguardando ficha</strong> podem ter apenas os documentos baixados (ficha será adicionada depois)</li>
               <li>• Você pode expandir a linha para ver detalhes e acessar documentos individuais</li>
             </ul>
           </div>

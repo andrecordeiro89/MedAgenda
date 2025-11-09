@@ -22,7 +22,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 // ============================================
 interface SupabaseMedico {
   id: string
-  nome: string
+  nome_medico: string // Campo real do banco
+  nome?: string // Compatibilidade (fallback)
   especialidade: string
   crm: string
   telefone: string
@@ -72,7 +73,7 @@ interface AgendamentoCompleto extends SupabaseAgendamento {
 // ============================================
 export const convertMedicoFromSupabase = (medico: SupabaseMedico): Medico => ({
   id: medico.id,
-  nome: medico.nome,
+  nome: medico.nome_medico || medico.nome || '', // Usar nome_medico como principal
   especialidade: medico.especialidade,
   crm: medico.crm,
   telefone: medico.telefone,
@@ -81,11 +82,12 @@ export const convertMedicoFromSupabase = (medico: SupabaseMedico): Medico => ({
 })
 
 export const convertMedicoToSupabase = (medico: Omit<Medico, 'id'>): Omit<SupabaseMedico, 'id' | 'created_at' | 'updated_at'> => ({
-  nome: medico.nome,
+  nome_medico: medico.nome,
   especialidade: medico.especialidade,
   crm: medico.crm,
   telefone: medico.telefone,
   email: medico.email,
+  hospital_id: medico.hospitalId,
 })
 
 export const convertProcedimentoFromSupabase = (procedimento: SupabaseProcedimento): Procedimento => ({
@@ -136,12 +138,48 @@ export const convertAgendamentoToSupabase = (agendamento: Omit<Agendamento, 'id'
 // SERVIÇOS PARA MÉDICOS
 // ============================================
 export const medicoService = {
-  async getAll(search?: string): Promise<Medico[]> {
-    let query = supabase.from('medicos').select('*').order('nome')
+  async getAll(hospitalId?: string, search?: string): Promise<Medico[]> {
+    console.log('🔍 medicoService.getAll chamado com:', { hospitalId, search });
     
-    if (search) {
-      query = query.or(`nome.ilike.%${search}%,especialidade.ilike.%${search}%`)
+    let query = supabase.from('medicos').select('*').order('nome_medico')
+    
+    // Filtrar por hospital_id se fornecido
+    if (hospitalId) {
+      console.log('🏥 Filtrando por hospital_id:', hospitalId);
+      query = query.eq('hospital_id', hospitalId)
+    } else {
+      console.warn('⚠️ hospitalId não fornecido, buscando todos os médicos');
     }
+    
+    // Buscar por nome_medico se fornecido
+    if (search) {
+      query = query.ilike('nome_medico', `%${search}%`)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) {
+      console.error('❌ Erro na query de médicos:', error);
+      throw new Error(error.message)
+    }
+    
+    console.log('📊 Médicos retornados do Supabase:', data?.length || 0);
+    if (data && data.length > 0) {
+      console.log('👨‍⚕️ Primeiros médicos:', data.slice(0, 3).map(m => ({ id: m.id, nome_medico: m.nome_medico, hospital_id: m.hospital_id })));
+    }
+    
+    return (data || []).map(convertMedicoFromSupabase)
+  },
+  
+  // Função específica para buscar médicos por nome (para autocomplete)
+  async searchByName(hospitalId: string, searchTerm: string): Promise<Medico[]> {
+    let query = supabase
+      .from('medicos')
+      .select('*')
+      .eq('hospital_id', hospitalId)
+      .ilike('nome_medico', `%${searchTerm}%`)
+      .order('nome_medico')
+      .limit(20) // Limitar resultados para performance
     
     const { data, error } = await query
     if (error) throw new Error(error.message)
@@ -177,11 +215,12 @@ export const medicoService = {
 
   async update(id: string, medico: Partial<Omit<Medico, 'id'>>): Promise<Medico> {
     const updateData: any = {}
-    if (medico.nome !== undefined) updateData.nome = medico.nome
+    if (medico.nome !== undefined) updateData.nome_medico = medico.nome
     if (medico.especialidade !== undefined) updateData.especialidade = medico.especialidade
     if (medico.crm !== undefined) updateData.crm = medico.crm
     if (medico.telefone !== undefined) updateData.telefone = medico.telefone
     if (medico.email !== undefined) updateData.email = medico.email
+    if (medico.hospitalId !== undefined) updateData.hospital_id = medico.hospitalId
 
     const { data, error } = await supabase
       .from('medicos')

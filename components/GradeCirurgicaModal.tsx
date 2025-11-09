@@ -6,8 +6,9 @@ import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from 
 import { mockServices } from '../services/mock-storage';
 const simpleGradeCirurgicaService = mockServices.gradeCirurgica;
 
-// Importar service real de agendamentos do Supabase
-import { agendamentoService } from '../services/supabase';
+// Importar service real de agendamentos e médicos do Supabase
+import { agendamentoService, medicoService } from '../services/supabase';
+import { Medico } from '../types';
 
 interface GradeCirurgicaModalProps {
   isOpen: boolean;
@@ -271,6 +272,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     titulo: string;
     mensagem: string;
     onConfirm: () => void;
+    tipo?: 'info' | 'sucesso' | 'erro' | 'aviso';
   } | null>(null);
 
   // Helper para mostrar alerta elegante
@@ -288,14 +290,58 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [etapaAtual, setEtapaAtual] = useState<1 | 2 | 3>(1); // Etapa 1=Especialidade, 2=Médico, 3=Procedimentos
   const [especialidadeSelecionada, setEspecialidadeSelecionada] = useState('');
   const [especialidadeNome, setEspecialidadeNome] = useState(''); // Nome da especialidade selecionada
-  const [nomeMedico, setNomeMedico] = useState(''); // Nome do médico a ser digitado
+  const [medicoSelecionado, setMedicoSelecionado] = useState(''); // ID do médico selecionado
+  const [medicoNomeSelecionado, setMedicoNomeSelecionado] = useState(''); // Nome do médico selecionado (para evitar perder quando limpar lista)
+  const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]); // Lista de médicos do hospital
+  const [carregandoMedicos, setCarregandoMedicos] = useState(false); // Loading ao carregar médicos
   const [procedimentosTemp, setProcedimentosTemp] = useState<Array<{id: string, nome: string}>>([]);
   const [novoProcedimentoNome, setNovoProcedimentoNome] = useState('');
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false); // Loading ao salvar
 
+  // Função auxiliar para mostrar mensagens personalizadas (substitui alert nativo)
+  const mostrarMensagem = (titulo: string, mensagem: string, tipo: 'info' | 'sucesso' | 'erro' | 'aviso' = 'info') => {
+    setConfirmacaoData({
+      titulo,
+      mensagem,
+      tipo,
+      onConfirm: () => setModalConfirmacao(false)
+    });
+    setModalConfirmacao(true);
+  };
+
   // Salvamento removido - dados são salvos automaticamente no Supabase ao adicionar
 
   // Auto-save removido - salvamos direto no Supabase ao adicionar cada item
+
+  // Carregar médicos do hospital quando entrar na etapa 2
+  useEffect(() => {
+    const carregarMedicos = async () => {
+      if (etapaAtual === 2 && hospitalId) {
+        setCarregandoMedicos(true);
+        try {
+          console.log('🔍 Buscando médicos para hospitalId:', hospitalId);
+          const medicos = await medicoService.getAll(hospitalId);
+          console.log('👨‍⚕️ Médicos encontrados:', medicos);
+          console.log('📊 Total de médicos:', medicos.length);
+          setMedicosDisponiveis(medicos);
+          
+          if (medicos.length === 0) {
+            console.warn('⚠️ Nenhum médico encontrado para o hospital:', hospitalId);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao carregar médicos:', error);
+          setMedicosDisponiveis([]);
+        } finally {
+          setCarregandoMedicos(false);
+        }
+      } else {
+        // Limpar médicos quando sair da etapa 2
+        setMedicosDisponiveis([]);
+      }
+    };
+    
+    carregarMedicos();
+  }, [etapaAtual, hospitalId]);
 
   // ETAPA 1: Iniciar adição de especialidade (abre o dropdown)
   const handleAddEspecialidadeClick = (gradeIndex: number) => {
@@ -303,7 +349,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setEtapaAtual(1);
     setEspecialidadeSelecionada('');
     setEspecialidadeNome('');
-    setNomeMedico('');
+    setMedicoSelecionado('');
+    setMedicoNomeSelecionado('');
+    setMedicosDisponiveis([]);
     setProcedimentosTemp([]);
     setNovoProcedimentoNome('');
   };
@@ -326,21 +374,50 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // ETAPA 2 → ETAPA 3: Confirmar médico e ir para procedimentos
   const handleConfirmMedico = () => {
-    if (!nomeMedico.trim()) {
-      alert('Por favor, digite o nome do médico');
+    if (!medicoSelecionado) {
+      mostrarMensagem('⚠️ Atenção', 'Por favor, selecione um médico', 'aviso');
       return;
     }
     
+    const medico = medicosDisponiveis.find(m => m.id === medicoSelecionado);
+    if (!medico) {
+      mostrarMensagem('❌ Erro', 'Médico não encontrado. Por favor, selecione novamente.', 'erro');
+      return;
+    }
+    
+    // Armazenar o nome do médico para usar depois mesmo se a lista for limpa
+    setMedicoNomeSelecionado(medico.nome);
+    console.log('✅ Etapa 2 concluída - Médico:', medico.nome);
+    
     // Avançar para etapa 3 (Procedimentos)
     setEtapaAtual(3);
+  };
+  
+  // Obter nome do médico selecionado
+  const getNomeMedicoSelecionado = () => {
+    // Primeiro tentar usar o nome armazenado (mais confiável)
+    if (medicoNomeSelecionado) {
+      return medicoNomeSelecionado;
+    }
     
-    console.log('✅ Etapa 2 concluída - Médico:', nomeMedico);
+    // Se não tiver nome armazenado, buscar na lista
+    if (!medicoSelecionado) {
+      return '';
+    }
+    
+    if (medicosDisponiveis.length === 0) {
+      console.warn('⚠️ medicosDisponiveis está vazio, usando nome armazenado');
+      return medicoNomeSelecionado || '';
+    }
+    
+    const medico = medicosDisponiveis.find(m => m.id === medicoSelecionado);
+    return medico?.nome || medicoNomeSelecionado || '';
   };
 
   // ETAPA 3: Adicionar procedimento à lista temporária
   const handleAddProcedimentoTemp = () => {
     if (!novoProcedimentoNome.trim()) {
-      alert('Por favor, digite o nome do procedimento');
+      mostrarMensagem('⚠️ Atenção', 'Por favor, digite o nome do procedimento', 'aviso');
       return;
     }
     
@@ -369,10 +446,22 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // ETAPA 3: Salvar tudo no banco (ESPECIALIDADE + MÉDICO + PROCEDIMENTOS)
   const handleSalvarAgendamento = async () => {
-    if (!especialidadeNome || !nomeMedico || addingEspecialidade === null) {
-      alert('Por favor, preencha a especialidade e o nome do médico');
+    // Validar antes de obter o nome do médico
+    if (!especialidadeNome || !medicoSelecionado || addingEspecialidade === null) {
+      console.error('❌ Validação falhou:', { especialidadeNome, medicoSelecionado, addingEspecialidade });
+      mostrarMensagem('⚠️ Atenção', 'Por favor, preencha a especialidade e selecione um médico', 'aviso');
       return;
     }
+    
+    const nomeMedico = getNomeMedicoSelecionado();
+    
+    if (!nomeMedico) {
+      console.error('❌ Nome do médico não encontrado:', { medicoSelecionado, medicosDisponiveis: medicosDisponiveis.length });
+      mostrarMensagem('❌ Erro', 'Médico selecionado não encontrado. Por favor, selecione novamente.', 'erro');
+      return;
+    }
+    
+    console.log('✅ Validação OK:', { especialidadeNome, medicoSelecionado, nomeMedico });
     
     setSalvandoAgendamento(true);
     
@@ -478,20 +567,148 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       
       setGrades(updatedGrades);
       
-      // Limpar estados
+      // Limpar estados mas MANTER o formulário aberto para adicionar mais especialidades
+      // IMPORTANTE: Limpar apenas após salvar com sucesso
+      setEtapaAtual(1);
+      setEspecialidadeSelecionada('');
+      setEspecialidadeNome('');
+      setMedicoSelecionado('');
+      setMedicoNomeSelecionado(''); // Limpar também o nome armazenado
+      setProcedimentosTemp([]);
+      setNovoProcedimentoNome('');
+      // Limpar também a lista de médicos para recarregar na próxima vez
+      setMedicosDisponiveis([]);
+      // NÃO fechar o formulário: setAddingEspecialidade(null) removido
+      
+      console.log('✨ Especialidade salva! Você pode adicionar mais especialidades.');
+      
+    } catch (error) {
+      console.error('❌ Erro ao salvar:', error);
+      mostrarMensagem('❌ Erro ao Salvar', `Erro ao salvar os dados. Verifique o console para mais detalhes.${error instanceof Error ? '\n\n' + error.message : ''}`, 'erro');
+    } finally {
+      setSalvandoAgendamento(false);
+    }
+  };
+
+  // Salvar e fechar o formulário
+  const handleSalvarEFechar = async () => {
+    const nomeMedico = getNomeMedicoSelecionado();
+    
+    if (!especialidadeNome || !medicoSelecionado || !nomeMedico || addingEspecialidade === null) {
+      mostrarMensagem('⚠️ Atenção', 'Por favor, preencha a especialidade e selecione um médico', 'aviso');
+      return;
+    }
+    
+    setSalvandoAgendamento(true);
+    
+    try {
+      // Reutilizar a mesma lógica de handleSalvarAgendamento
+      const dataSelecionada = proximasDatas[addingEspecialidade];
+      const dataFormatada = dataSelecionada.toISOString().split('T')[0];
+      
+      console.log('💾 Salvando especialidade, médico e procedimentos...');
+      
+      // 1. Salvar especialidade
+      await agendamentoService.create({
+        nome_paciente: '',
+        data_nascimento: '2000-01-01',
+        data_agendamento: dataFormatada,
+        especialidade: especialidadeNome,
+        medico: nomeMedico,
+        hospital_id: hospitalId || null,
+        cidade_natal: null,
+        telefone: null
+      });
+      
+      // 2. Salvar cada procedimento
+      for (const procedimento of procedimentosTemp) {
+        await agendamentoService.create({
+          nome_paciente: '',
+          data_nascimento: '2000-01-01',
+          data_agendamento: dataFormatada,
+          especialidade: especialidadeNome,
+          medico: nomeMedico,
+          procedimentos: procedimento.nome,
+          hospital_id: hospitalId || null,
+          cidade_natal: null,
+          telefone: null
+        });
+      }
+      
+      // 3. Recarregar dados do banco
+      const agendamentos = await agendamentoService.getAll(hospitalId);
+      const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+      
+      // Reagrupar itens
+      const itens: GradeCirurgicaItem[] = [];
+      const gruposPorEspecialidade = new Map<string, {
+        especialidade: string;
+        medico: string;
+        procedimentos: string[];
+      }>();
+      
+      agendamentosDoDia.forEach(agendamento => {
+        if (agendamento.especialidade && agendamento.medico) {
+          const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+          
+          if (!gruposPorEspecialidade.has(chave)) {
+            gruposPorEspecialidade.set(chave, {
+              especialidade: agendamento.especialidade,
+              medico: agendamento.medico,
+              procedimentos: []
+            });
+          }
+          
+          if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+            gruposPorEspecialidade.get(chave)!.procedimentos.push(agendamento.procedimentos);
+          }
+        }
+      });
+      
+      gruposPorEspecialidade.forEach((grupo) => {
+        itens.push({
+          id: `esp-${Date.now()}-${Math.random()}`,
+          tipo: 'especialidade',
+          texto: `${grupo.especialidade} - ${grupo.medico}`,
+          ordem: itens.length,
+          pacientes: []
+        });
+        
+        grupo.procedimentos.forEach((proc, idx) => {
+          itens.push({
+            id: `proc-${Date.now()}-${Math.random()}-${idx}`,
+            tipo: 'procedimento',
+            texto: proc,
+            ordem: itens.length,
+            pacientes: []
+          });
+        });
+      });
+      
+      // Atualizar grade
+      const updatedGrades = grades.map((grade, i) => {
+        if (i === addingEspecialidade) {
+          return { ...grade, itens };
+        }
+        return grade;
+      });
+      
+      setGrades(updatedGrades);
+      
+      // Limpar estados e FECHAR o formulário
       setAddingEspecialidade(null);
       setEtapaAtual(1);
       setEspecialidadeSelecionada('');
       setEspecialidadeNome('');
-      setNomeMedico('');
+      setMedicoSelecionado('');
       setProcedimentosTemp([]);
       setNovoProcedimentoNome('');
       
-      console.log('✨ Processo concluído com sucesso!');
+      console.log('✨ Especialidade salva e formulário fechado!');
       
     } catch (error) {
       console.error('❌ Erro ao salvar:', error);
-      alert('Erro ao salvar. Verifique o console para mais detalhes.');
+      mostrarMensagem('❌ Erro ao Salvar', `Erro ao salvar os dados. Verifique o console para mais detalhes.${error instanceof Error ? '\n\n' + error.message : ''}`, 'erro');
     } finally {
       setSalvandoAgendamento(false);
     }
@@ -503,7 +720,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setEtapaAtual(1);
     setEspecialidadeSelecionada('');
     setEspecialidadeNome('');
-    setNomeMedico('');
+    setMedicoSelecionado('');
+    setMedicoNomeSelecionado('');
     setProcedimentosTemp([]);
     setNovoProcedimentoNome('');
   };
@@ -693,19 +911,143 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }
   };
 
-  // Remover item
-  const handleRemoveItem = (gradeIndex: number, itemId: string) => {
-    setGrades(prev => prev.map((grade, i) => {
-      if (i === gradeIndex) {
-        const novosItens = grade.itens.filter(item => item.id !== itemId);
-        // Reordenar
-        return {
-          ...grade,
-          itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
-        };
+  // Remover item (COM DELEÇÃO NO BANCO)
+  const handleRemoveItem = async (gradeIndex: number, itemId: string) => {
+    const grade = grades[gradeIndex];
+    const item = grade.itens.find(i => i.id === itemId);
+    
+    if (!item) return;
+    
+    // Se o item tem agendamentoId, deletar do banco
+    if (item.agendamentoId) {
+      // Abrir modal de confirmação
+      const itemNome = item.tipo === 'especialidade' ? 'especialidade' : 'procedimento';
+      setConfirmacaoData({
+        titulo: '🗑️ Remover Item',
+        mensagem: `Deseja realmente remover este ${itemNome}? Esta ação não pode ser desfeita.`,
+        onConfirm: async () => {
+          setModalConfirmacao(false);
+          
+          try {
+            console.log('🗑️ Deletando agendamento do banco...', { agendamentoId: item.agendamentoId });
+            await agendamentoService.delete(item.agendamentoId);
+            console.log('✅ Item deletado do banco com sucesso!');
+            
+            // Atualizar UI removendo o item
+            setGrades(prev => prev.map((grade, i) => {
+              if (i === gradeIndex) {
+                const novosItens = grade.itens.filter(item => item.id !== itemId);
+                // Reordenar
+                return {
+                  ...grade,
+                  itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
+                };
+              }
+              return grade;
+            }));
+          } catch (error) {
+            console.error('❌ Erro ao deletar item:', error);
+            setConfirmacaoData({
+              titulo: '❌ Erro',
+              mensagem: `Erro ao deletar item: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+              onConfirm: () => setModalConfirmacao(false)
+            });
+            setModalConfirmacao(true);
+          }
+        }
+      });
+      setModalConfirmacao(true);
+    } else {
+      // Se não tem agendamentoId, apenas remover da UI (item temporário)
+      setGrades(prev => prev.map((grade, i) => {
+        if (i === gradeIndex) {
+          const novosItens = grade.itens.filter(item => item.id !== itemId);
+          // Reordenar
+          return {
+            ...grade,
+            itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
+          };
+        }
+        return grade;
+      }));
+    }
+  };
+
+  // Limpar Grade: Deletar todos os itens do banco
+  const handleLimparGrade = async (gradeIndex: number) => {
+    const grade = grades[gradeIndex];
+    const dataFormatada = proximasDatas[gradeIndex].toISOString().split('T')[0];
+    
+    // Buscar TODOS os agendamentos daquela data no banco
+    // Isso garante que deletamos tanto especialidades quanto procedimentos
+    let agendamentosDoDia: any[] = [];
+    try {
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      agendamentosDoDia = todosAgendamentos.filter(a => a.data_agendamento === dataFormatada);
+      console.log('🔍 Agendamentos encontrados para deletar:', agendamentosDoDia.length);
+    } catch (error) {
+      console.error('❌ Erro ao buscar agendamentos:', error);
+      mostrarMensagem('❌ Erro', 'Erro ao buscar agendamentos. Tente novamente.', 'erro');
+      return;
+    }
+    
+    if (agendamentosDoDia.length === 0) {
+      // Se não há agendamentos no banco, apenas limpar a UI
+      setGrades(prev => prev.map((g, i) => {
+        if (i === gradeIndex) {
+          return { ...g, itens: [] };
+        }
+        return g;
+      }));
+      console.log('ℹ️ Nenhum agendamento encontrado no banco para esta data');
+      return;
+    }
+    
+    // Abrir modal de confirmação
+    setConfirmacaoData({
+      titulo: '🗑️ Limpar Grade',
+      mensagem: `Deseja realmente limpar toda a grade do dia ${dataFormatada}? Isso irá deletar ${agendamentosDoDia.length} registro(s) do banco de dados. Esta ação não pode ser desfeita.`,
+      onConfirm: async () => {
+        setModalConfirmacao(false);
+        
+        try {
+          console.log('🗑️ Deletando todos os agendamentos da grade...', { 
+            gradeIndex, 
+            dataFormatada, 
+            totalAgendamentos: agendamentosDoDia.length,
+            ids: agendamentosDoDia.map(a => a.id)
+          });
+          
+          // Deletar TODOS os agendamentos daquela data
+          const promises = agendamentosDoDia.map(agendamento => {
+            return agendamentoService.delete(agendamento.id);
+          });
+          
+          await Promise.all(promises);
+          console.log('✅ Grade limpa com sucesso!', { totalDeletados: agendamentosDoDia.length });
+          
+          // Atualizar UI limpando todos os itens
+          setGrades(prev => prev.map((g, i) => {
+            if (i === gradeIndex) {
+              return { ...g, itens: [] };
+            }
+            return g;
+          }));
+          
+          // Mostrar mensagem de sucesso
+          mostrarMensagem('✅ Sucesso', `Grade limpa com sucesso! ${agendamentosDoDia.length} registro(s) deletado(s) do banco de dados.`, 'sucesso');
+        } catch (error) {
+          console.error('❌ Erro ao limpar grade:', error);
+          setConfirmacaoData({
+            titulo: '❌ Erro',
+            mensagem: `Erro ao limpar grade: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+            onConfirm: () => setModalConfirmacao(false)
+          });
+          setModalConfirmacao(true);
+        }
       }
-      return grade;
-    }));
+    });
+    setModalConfirmacao(true);
   };
 
   // Mover item para cima
@@ -1311,6 +1653,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                         Especialidade
                       </button>
                       
+                      {/* Botão Limpar Grade: Deletar todos os itens do banco */}
+                      {grade.itens.length > 0 && (
+                        <button
+                          onClick={() => handleLimparGrade(index)}
+                          className="flex items-center gap-0.5 px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-medium transition-colors"
+                          title="Limpar Grade (deletar todos os itens do banco)"
+                        >
+                          <TrashIcon className="w-2.5 h-2.5" />
+                          Limpar Grade
+                        </button>
+                      )}
+                      
                       {/* Botão Replicar: Só aparece no primeiro dia SE houver procedimentos E não houver pacientes */}
                       {index === 0 && grade.itens.length > 0 && !gradeTemPacientes(grade) && (
                         <button
@@ -1409,27 +1763,37 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                           </button>
                         </div>
                         
-                        {/* Campo para digitar nome do médico */}
+                        {/* Campo para selecionar médico */}
                         <div className="flex items-center gap-2">
                           <label className="text-xs font-semibold text-blue-900 whitespace-nowrap">
                             Nome do Médico:
                           </label>
-                          <input
-                            type="text"
-                            value={nomeMedico}
-                            onChange={(e) => setNomeMedico(e.target.value)}
-                            placeholder="Digite o nome do médico"
-                            className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            autoFocus
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter' && nomeMedico.trim()) {
-                                handleConfirmMedico();
-                              }
-                            }}
-                          />
+                          {carregandoMedicos ? (
+                            <div className="flex-1 text-xs text-gray-500 px-2 py-1">
+                              Carregando médicos...
+                            </div>
+                          ) : medicosDisponiveis.length === 0 ? (
+                            <div className="flex-1 text-xs text-red-500 px-2 py-1">
+                              Nenhum médico encontrado para este hospital
+                            </div>
+                          ) : (
+                            <select
+                              value={medicoSelecionado}
+                              onChange={(e) => setMedicoSelecionado(e.target.value)}
+                              className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              autoFocus
+                            >
+                              <option value="">Selecione um médico...</option>
+                              {medicosDisponiveis.map((medico) => (
+                                <option key={medico.id} value={medico.id}>
+                                  {medico.nome}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           <button
                             onClick={handleConfirmMedico}
-                            disabled={!nomeMedico.trim()}
+                            disabled={!medicoSelecionado || carregandoMedicos}
                             className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                             title="Próximo: Adicionar Procedimentos"
                           >
@@ -1456,7 +1820,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                           </span>
                           <span className="text-xs text-blue-900">•</span>
                           <span className="text-xs text-blue-900">
-                            <strong>Médico:</strong> {nomeMedico}
+                            <strong>Médico:</strong> {getNomeMedicoSelecionado()}
                           </span>
                           <button
                             onClick={handleVoltarEtapa}
@@ -1525,7 +1889,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                             onClick={handleSalvarAgendamento}
                             disabled={salvandoAgendamento || procedimentosTemp.length === 0}
                             className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1"
-                            title="Salvar tudo no banco"
+                            title="Salvar e continuar adicionando especialidades"
                           >
                             {salvandoAgendamento ? (
                               <>
@@ -1534,7 +1898,24 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               </>
                             ) : (
                               <>
-                                💾 Salvar Grade ({procedimentosTemp.length} proc.)
+                                💾 Salvar e Continuar ({procedimentosTemp.length} proc.)
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={handleSalvarEFechar}
+                            disabled={salvandoAgendamento || procedimentosTemp.length === 0}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1"
+                            title="Salvar e fechar o formulário"
+                          >
+                            {salvandoAgendamento ? (
+                              <>
+                                <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                                Salvando...
+                              </>
+                            ) : (
+                              <>
+                                ✅ Salvar e Fechar
                               </>
                             )}
                           </button>
@@ -1977,12 +2358,46 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         title={confirmacaoData.titulo}
       >
         <div className="p-6">
-          <p className="text-gray-700 mb-6 text-center text-base">
+          {/* Ícone e cor baseado no tipo */}
+          <div className={`flex items-center justify-center mb-4 ${
+            confirmacaoData.tipo === 'sucesso' ? 'text-green-600' :
+            confirmacaoData.tipo === 'erro' ? 'text-red-600' :
+            confirmacaoData.tipo === 'aviso' ? 'text-yellow-600' :
+            'text-blue-600'
+          }`}>
+            {confirmacaoData.tipo === 'sucesso' && (
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {confirmacaoData.tipo === 'erro' && (
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {confirmacaoData.tipo === 'aviso' && (
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            )}
+            {(!confirmacaoData.tipo || confirmacaoData.tipo === 'info') && (
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+          </div>
+          
+          <p className={`mb-6 text-center text-base ${
+            confirmacaoData.tipo === 'sucesso' ? 'text-green-700' :
+            confirmacaoData.tipo === 'erro' ? 'text-red-700' :
+            confirmacaoData.tipo === 'aviso' ? 'text-yellow-700' :
+            'text-gray-700'
+          }`}>
             {confirmacaoData.mensagem}
           </p>
           
           <div className="flex justify-end gap-3">
-            {confirmacaoData.titulo.includes('Remover') ? (
+            {confirmacaoData.titulo.includes('Remover') || confirmacaoData.titulo.includes('Limpar') ? (
               <>
                 <Button
                   onClick={() => setModalConfirmacao(false)}
@@ -1995,13 +2410,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   onClick={confirmacaoData.onConfirm}
                   className="bg-red-600 hover:bg-red-700 text-white px-6"
                 >
-                  Sim, Remover
+                  {confirmacaoData.titulo.includes('Limpar') ? 'Sim, Limpar' : 'Sim, Remover'}
                 </Button>
               </>
             ) : (
               <Button
                 onClick={confirmacaoData.onConfirm}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                className={`px-6 ${
+                  confirmacaoData.tipo === 'sucesso' ? 'bg-green-600 hover:bg-green-700' :
+                  confirmacaoData.tipo === 'erro' ? 'bg-red-600 hover:bg-red-700' :
+                  confirmacaoData.tipo === 'aviso' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                  'bg-blue-600 hover:bg-blue-700'
+                } text-white`}
               >
                 OK
               </Button>
