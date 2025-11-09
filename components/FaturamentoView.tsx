@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { agendamentoService } from '../services/supabase';
 import { Agendamento } from '../types';
+import JSZip from 'jszip';
 
 export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null); // ID do agendamento sendo baixado
   
   // Estado para controlar linhas expandidas
   const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
@@ -114,73 +116,90 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     return agendamentoId ? linhasExpandidas.has(agendamentoId) : false;
   };
 
-  // Download de documentos
-  const handleDownloadDocumentos = async (ag: Agendamento) => {
-    if (!ag.documentos_urls) {
-      alert('⚠️ Nenhum documento disponível para download');
-      return;
+  // Função auxiliar para baixar arquivo e retornar como blob
+  const fetchFileAsBlob = async (url: string): Promise<Blob> => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Erro ao baixar arquivo: ${response.statusText}`);
     }
+    return await response.blob();
+  };
 
+  // Download de todos os documentos em um ZIP
+  const handleDownloadTodos = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    
+    setDownloading(ag.id);
+    
     try {
-      const urls = JSON.parse(ag.documentos_urls);
-      if (!Array.isArray(urls) || urls.length === 0) {
+      // Verificar se há documentos para baixar
+      const temDocumentos = ag.documentos_urls && ag.documentos_urls.trim() !== '';
+      const temFicha = ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '';
+
+      if (!temDocumentos && !temFicha) {
         alert('⚠️ Nenhum documento disponível para download');
+        setDownloading(null);
         return;
       }
 
-      // Baixar cada documento
-      for (const url of urls) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.download = url.split('/').pop() || 'documento';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Pequeno delay entre downloads para evitar bloqueio do navegador
-        await new Promise(resolve => setTimeout(resolve, 300));
+      // Criar instância do JSZip
+      const zip = new JSZip();
+      const nomePaciente = (ag.nome_paciente || ag.nome || 'Paciente').replace(/[^a-zA-Z0-9]/g, '_');
+      const dataCirurgia = formatarData(ag.data_agendamento || ag.dataAgendamento).replace(/\//g, '-');
+      const nomeArquivoZip = `G-SUS_${nomePaciente}_${dataCirurgia}.zip`;
+
+      // Adicionar documentos ao ZIP
+      if (temDocumentos) {
+        try {
+          const urls = JSON.parse(ag.documentos_urls);
+          if (Array.isArray(urls) && urls.length > 0) {
+            for (let i = 0; i < urls.length; i++) {
+              const url = urls[i];
+              try {
+                const blob = await fetchFileAsBlob(url);
+                const nomeArquivo = url.split('/').pop() || `documento_${i + 1}.pdf`;
+                zip.file(`documentos/${nomeArquivo}`, blob);
+              } catch (error) {
+                console.error(`Erro ao baixar documento ${i + 1}:`, error);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao processar documentos_urls:', error);
+        }
       }
-    } catch (error) {
-      console.error('Erro ao fazer download:', error);
-      alert('❌ Erro ao fazer download dos documentos');
-    }
-  };
 
-  // Download da ficha pré-anestésica
-  const handleDownloadFicha = (ag: Agendamento) => {
-    if (!ag.ficha_pre_anestesica_url) {
-      alert('⚠️ Ficha pré-anestésica não disponível');
-      return;
-    }
+      // Adicionar ficha pré-anestésica ao ZIP
+      if (temFicha && ag.ficha_pre_anestesica_url) {
+        try {
+          const blob = await fetchFileAsBlob(ag.ficha_pre_anestesica_url);
+          const nomeFicha = ag.ficha_pre_anestesica_url.split('/').pop() || 'ficha-pre-anestesica.pdf';
+          zip.file(`ficha-pre-anestesica/${nomeFicha}`, blob);
+        } catch (error) {
+          console.error('Erro ao baixar ficha pré-anestésica:', error);
+        }
+      }
 
-    try {
+      // Gerar o arquivo ZIP
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Criar link de download e fazer o download
       const link = document.createElement('a');
-      link.href = ag.ficha_pre_anestesica_url;
-      link.target = '_blank';
-      link.download = ag.ficha_pre_anestesica_url.split('/').pop() || 'ficha-pre-anestesica.pdf';
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = nomeArquivoZip;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (error) {
-      console.error('Erro ao fazer download:', error);
-      alert('❌ Erro ao fazer download da ficha pré-anestésica');
-    }
-  };
+      
+      // Limpar a URL do objeto
+      URL.revokeObjectURL(link.href);
 
-  // Download de todos os documentos (documentos + ficha)
-  const handleDownloadTodos = async (ag: Agendamento) => {
-    // Baixar documentos primeiro
-    if (ag.documentos_urls) {
-      await handleDownloadDocumentos(ag);
-    }
-    
-    // Aguardar um pouco antes de baixar a ficha
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Baixar ficha
-    if (ag.ficha_pre_anestesica_url) {
-      handleDownloadFicha(ag);
+      console.log('✅ ZIP criado e baixado com sucesso:', nomeArquivoZip);
+    } catch (error) {
+      console.error('Erro ao criar ZIP:', error);
+      alert('❌ Erro ao criar arquivo ZIP. Por favor, tente novamente.');
+    } finally {
+      setDownloading(null);
     }
   };
 
@@ -221,13 +240,23 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => handleDownloadTodos(ag)}
-                className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                title="Download de todos os documentos"
+                disabled={downloading === ag.id}
+                className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+                title="Download de todos os documentos em ZIP"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download G-SUS
+                {downloading === ag.id ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                    Gerando ZIP...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download G-SUS
+                  </>
+                )}
               </button>
             </div>
           </td>
