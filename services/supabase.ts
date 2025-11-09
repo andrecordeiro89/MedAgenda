@@ -382,6 +382,15 @@ export const agendamentoService = {
     if (agendamento.especialidade !== undefined) updateData.especialidade = agendamento.especialidade
     if (agendamento.medico !== undefined) updateData.medico = agendamento.medico
     if (agendamento.procedimentos !== undefined) updateData.procedimentos = agendamento.procedimentos
+    
+    // Campos de documentação
+    if (agendamento.documentos_ok !== undefined) updateData.documentos_ok = agendamento.documentos_ok
+    if (agendamento.documentos_urls !== undefined) updateData.documentos_urls = agendamento.documentos_urls
+    if (agendamento.documentos_data !== undefined) updateData.documentos_data = agendamento.documentos_data
+    if (agendamento.ficha_pre_anestesica_ok !== undefined) updateData.ficha_pre_anestesica_ok = agendamento.ficha_pre_anestesica_ok
+    if (agendamento.ficha_pre_anestesica_url !== undefined) updateData.ficha_pre_anestesica_url = agendamento.ficha_pre_anestesica_url
+    if (agendamento.ficha_pre_anestesica_data !== undefined) updateData.ficha_pre_anestesica_data = agendamento.ficha_pre_anestesica_data
+    if (agendamento.observacoes !== undefined) updateData.observacoes = agendamento.observacoes
 
     try {
       const { data, error } = await supabase
