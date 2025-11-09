@@ -151,7 +151,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
         // Upload para Supabase Storage
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('documentos-medicos')
+          .from('Documentos')
           .upload(filePath, arquivo, {
             cacheControl: '3600',
             upsert: false
@@ -164,7 +164,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
         // Obter URL pública do arquivo
         const { data: urlData } = supabase.storage
-          .from('documentos-medicos')
+          .from('Documentos')
           .getPublicUrl(filePath);
 
         if (urlData?.publicUrl) {
@@ -227,21 +227,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
       // Upload para Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documentos-medicos')
+        .from('Documentos')
         .upload(filePath, arquivoFichaSelecionado, {
           cacheControl: '3600',
           upsert: false
         });
 
-      if (uploadError) {
-        console.error('Erro ao fazer upload:', uploadError);
-        throw new Error(`Erro ao fazer upload da ficha: ${uploadError.message}`);
-      }
+        if (uploadError) {
+          console.error('Erro ao fazer upload:', uploadError);
+          throw new Error(`Erro ao fazer upload da ficha: ${uploadError.message}`);
+        }
 
-      // Obter URL pública do arquivo
-      const { data: urlData } = supabase.storage
-        .from('documentos-medicos')
-        .getPublicUrl(filePath);
+        // Obter URL pública do arquivo
+        const { data: urlData } = supabase.storage
+          .from('Documentos')
+          .getPublicUrl(filePath);
 
       if (!urlData?.publicUrl) {
         throw new Error('Erro ao obter URL do arquivo');
@@ -289,11 +289,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       // Extrair caminho do arquivo da URL para deletar do storage
       const urlObj = new URL(url);
       const pathParts = urlObj.pathname.split('/');
-      const filePath = pathParts.slice(pathParts.indexOf('documentos-medicos') + 1).join('/');
+      const filePath = pathParts.slice(pathParts.indexOf('Documentos') + 1).join('/');
 
       // Deletar do storage
       const { error: deleteError } = await supabase.storage
-        .from('documentos-medicos')
+        .from('Documentos')
         .remove([filePath]);
 
       if (deleteError) {
@@ -338,7 +338,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
       // Deletar do storage
       const { error: deleteError } = await supabase.storage
-        .from('documentos-medicos')
+        .from('Documentos')
         .remove([filePath]);
 
       if (deleteError) {
