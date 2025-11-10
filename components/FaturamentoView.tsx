@@ -28,8 +28,22 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       const dados = await agendamentoService.getAll(hospitalId);
       console.log('💰 Agendamentos carregados para faturamento:', dados);
       
+      // Filtrar registros de grade cirúrgica (não devem aparecer na tela de Faturamento)
+      const semGradeCirurgica = dados.filter(ag => {
+        // Se tem flag is_grade_cirurgica = true, excluir
+        if (ag.is_grade_cirurgica === true) {
+          return false;
+        }
+        // Se não tem procedimentos E não tem nome_paciente, é linha de grade (compatibilidade)
+        if ((!ag.procedimentos || ag.procedimentos.trim() === '') && 
+            (!ag.nome_paciente || ag.nome_paciente.trim() === '')) {
+          return false;
+        }
+        return true;
+      });
+      
       // Filtrar liberados e aguardando ficha (documentos OK)
-      const paraFaturamento = dados.filter(ag => 
+      const paraFaturamento = semGradeCirurgica.filter(ag => 
         ag.documentos_ok === true // Tem documentos OK (pode estar liberado ou aguardando ficha)
       );
       

@@ -411,7 +411,8 @@ export const agendamentoService = {
       procedimentos: agendamento.procedimentos || null,
       hospital_id: agendamento.hospital_id || null,
       cidade_natal: agendamento.cidade_natal || null,
-      telefone: agendamento.telefone || null
+      telefone: agendamento.telefone || null,
+      is_grade_cirurgica: agendamento.is_grade_cirurgica || false
     };
     
     const { data, error } = await supabase
@@ -461,6 +462,9 @@ export const agendamentoService = {
     if (agendamento.ficha_pre_anestesica_url !== undefined) updateData.ficha_pre_anestesica_url = agendamento.ficha_pre_anestesica_url
     if (agendamento.ficha_pre_anestesica_data !== undefined) updateData.ficha_pre_anestesica_data = agendamento.ficha_pre_anestesica_data
     if (agendamento.observacoes !== undefined) updateData.observacoes = agendamento.observacoes
+    
+    // Campo de grade cirúrgica
+    if (agendamento.is_grade_cirurgica !== undefined) updateData.is_grade_cirurgica = agendamento.is_grade_cirurgica
 
     try {
       const { data, error } = await supabase

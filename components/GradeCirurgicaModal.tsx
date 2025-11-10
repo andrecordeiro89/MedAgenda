@@ -128,13 +128,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               }>();
               
               agendamentosDoDia.forEach(agendamento => {
-                if (agendamento.especialidade && agendamento.medico) {
-                  const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+                if (agendamento.especialidade) {
+                  // Chave inclui médico se existir, senão usa apenas especialidade
+                  const medicoKey = agendamento.medico || '(sem médico)';
+                  const chave = `${agendamento.especialidade}|||${medicoKey}`;
                   
                   if (!gruposPorEspecialidade.has(chave)) {
                     gruposPorEspecialidade.set(chave, {
                       especialidade: agendamento.especialidade,
-                      medico: agendamento.medico,
+                      medico: agendamento.medico || null, // Pode ser null
                       procedimentos: []
                     });
                   }
@@ -164,11 +166,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               
               // Montar itens na ordem: especialidade → seus procedimentos
               gruposPorEspecialidade.forEach((grupo) => {
+                // Exibir apenas especialidade se não houver médico
+                const textoEspecialidade = grupo.medico 
+                  ? `${grupo.especialidade} - ${grupo.medico}`
+                  : grupo.especialidade;
+                
                 // Adicionar especialidade
                 itens.push({
                   id: `esp-${Date.now()}-${Math.random()}`,
                   tipo: 'especialidade',
-                  texto: `${grupo.especialidade} - ${grupo.medico}`,
+                  texto: textoEspecialidade,
                   ordem: itens.length,
                   pacientes: []
                 });
@@ -356,7 +363,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setNovoProcedimentoNome('');
   };
 
-  // ETAPA 1 → ETAPA 2: Confirmar especialidade e ir para médico
+  // ETAPA 1 → ETAPA 2 ou 3: Confirmar especialidade e ir para médico (ou pular para procedimentos)
   const handleConfirmEspecialidade = () => {
     if (!especialidadeSelecionada) return;
     
@@ -366,28 +373,50 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     // Salvar nome da especialidade
     setEspecialidadeNome(especialidade.nome);
     
-    // Avançar para etapa 2 (Médico)
+    // Avançar para etapa 2 (Médico) - pode ser pulado depois
     setEtapaAtual(2);
     
     console.log('✅ Etapa 1 concluída - Especialidade:', especialidade.nome);
   };
 
-  // ETAPA 2 → ETAPA 3: Confirmar médico e ir para procedimentos
+  // ETAPA 1 → ETAPA 3: Pular médico e ir direto para procedimentos
+  const handlePularMedico = () => {
+    if (!especialidadeSelecionada) return;
+    
+    const especialidade = especialidades.find(e => e.id === especialidadeSelecionada);
+    if (!especialidade) return;
+    
+    // Salvar nome da especialidade
+    setEspecialidadeNome(especialidade.nome);
+    
+    // Limpar médico selecionado
+    setMedicoSelecionado('');
+    setMedicoNomeSelecionado('');
+    
+    // Avançar direto para etapa 3 (Procedimentos)
+    setEtapaAtual(3);
+    
+    console.log('✅ Etapa 1 concluída - Especialidade:', especialidade.nome, '(sem médico)');
+  };
+
+  // ETAPA 2 → ETAPA 3: Confirmar médico (opcional) e ir para procedimentos
   const handleConfirmMedico = () => {
-    if (!medicoSelecionado) {
-      mostrarMensagem('⚠️ Atenção', 'Por favor, selecione um médico', 'aviso');
-      return;
+    // Médico é opcional agora - pode avançar sem selecionar
+    if (medicoSelecionado) {
+      const medico = medicosDisponiveis.find(m => m.id === medicoSelecionado);
+      if (medico) {
+        // Armazenar o nome do médico para usar depois mesmo se a lista for limpa
+        setMedicoNomeSelecionado(medico.nome);
+        console.log('✅ Etapa 2 concluída - Médico:', medico.nome);
+      } else {
+        console.warn('⚠️ Médico selecionado não encontrado, continuando sem médico');
+        setMedicoNomeSelecionado('');
+      }
+    } else {
+      // Sem médico selecionado - permitir continuar
+      setMedicoNomeSelecionado('');
+      console.log('✅ Etapa 2 concluída - Sem médico (equipe médica)');
     }
-    
-    const medico = medicosDisponiveis.find(m => m.id === medicoSelecionado);
-    if (!medico) {
-      mostrarMensagem('❌ Erro', 'Médico não encontrado. Por favor, selecione novamente.', 'erro');
-      return;
-    }
-    
-    // Armazenar o nome do médico para usar depois mesmo se a lista for limpa
-    setMedicoNomeSelecionado(medico.nome);
-    console.log('✅ Etapa 2 concluída - Médico:', medico.nome);
     
     // Avançar para etapa 3 (Procedimentos)
     setEtapaAtual(3);
@@ -444,24 +473,19 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }
   };
 
-  // ETAPA 3: Salvar tudo no banco (ESPECIALIDADE + MÉDICO + PROCEDIMENTOS)
+  // ETAPA 3: Salvar tudo no banco (ESPECIALIDADE + MÉDICO OPCIONAL + PROCEDIMENTOS)
   const handleSalvarAgendamento = async () => {
-    // Validar antes de obter o nome do médico
-    if (!especialidadeNome || !medicoSelecionado || addingEspecialidade === null) {
-      console.error('❌ Validação falhou:', { especialidadeNome, medicoSelecionado, addingEspecialidade });
-      mostrarMensagem('⚠️ Atenção', 'Por favor, preencha a especialidade e selecione um médico', 'aviso');
+    // Validar apenas especialidade (médico é opcional agora)
+    if (!especialidadeNome || addingEspecialidade === null) {
+      console.error('❌ Validação falhou:', { especialidadeNome, addingEspecialidade });
+      mostrarMensagem('⚠️ Atenção', 'Por favor, preencha a especialidade', 'aviso');
       return;
     }
     
-    const nomeMedico = getNomeMedicoSelecionado();
+    // Médico é opcional - pode ser vazio para equipes médicas
+    const nomeMedico = getNomeMedicoSelecionado() || null;
     
-    if (!nomeMedico) {
-      console.error('❌ Nome do médico não encontrado:', { medicoSelecionado, medicosDisponiveis: medicosDisponiveis.length });
-      mostrarMensagem('❌ Erro', 'Médico selecionado não encontrado. Por favor, selecione novamente.', 'erro');
-      return;
-    }
-    
-    console.log('✅ Validação OK:', { especialidadeNome, medicoSelecionado, nomeMedico });
+    console.log('✅ Validação OK:', { especialidadeNome, medicoSelecionado, nomeMedico: nomeMedico || '(sem médico - equipe)' });
     
     setSalvandoAgendamento(true);
     
@@ -472,7 +496,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       
       console.log('💾 Salvando especialidade, médico e procedimentos...');
       
-      // 1. Salvar especialidade (sem procedimentos)
+      // 1. Salvar especialidade (sem procedimentos) - MARCADO COMO GRADE CIRÚRGICA
       await agendamentoService.create({
         nome_paciente: '',
         data_nascimento: '2000-01-01',
@@ -481,7 +505,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         medico: nomeMedico,
         hospital_id: hospitalId || null,
         cidade_natal: null,
-        telefone: null
+        telefone: null,
+        is_grade_cirurgica: true // Marca como registro de grade cirúrgica
       });
       
       console.log('✅ Especialidade salva!');
@@ -518,13 +543,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }>();
       
       agendamentosDoDia.forEach(agendamento => {
-        if (agendamento.especialidade && agendamento.medico) {
-          const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+        if (agendamento.especialidade) {
+          // Chave inclui médico se existir, senão usa apenas especialidade
+          const medicoKey = agendamento.medico || '(sem médico)';
+          const chave = `${agendamento.especialidade}|||${medicoKey}`;
           
           if (!gruposPorEspecialidade.has(chave)) {
             gruposPorEspecialidade.set(chave, {
               especialidade: agendamento.especialidade,
-              medico: agendamento.medico,
+              medico: agendamento.medico || null, // Pode ser null
               procedimentos: []
             });
           }
@@ -537,10 +564,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
       
       gruposPorEspecialidade.forEach((grupo) => {
+        // Exibir apenas especialidade se não houver médico
+        const textoEspecialidade = grupo.medico 
+          ? `${grupo.especialidade} - ${grupo.medico}`
+          : grupo.especialidade;
+        
         itens.push({
           id: `esp-${Date.now()}-${Math.random()}`,
           tipo: 'especialidade',
-          texto: `${grupo.especialidade} - ${grupo.medico}`,
+          texto: textoEspecialidade,
           ordem: itens.length,
           pacientes: []
         });
@@ -592,10 +624,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // Salvar e fechar o formulário
   const handleSalvarEFechar = async () => {
-    const nomeMedico = getNomeMedicoSelecionado();
+    // Médico é opcional agora
+    const nomeMedico = getNomeMedicoSelecionado() || null;
     
-    if (!especialidadeNome || !medicoSelecionado || !nomeMedico || addingEspecialidade === null) {
-      mostrarMensagem('⚠️ Atenção', 'Por favor, preencha a especialidade e selecione um médico', 'aviso');
+    if (!especialidadeNome || addingEspecialidade === null) {
+      mostrarMensagem('⚠️ Atenção', 'Por favor, preencha a especialidade', 'aviso');
       return;
     }
     
@@ -608,16 +641,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       
       console.log('💾 Salvando especialidade, médico e procedimentos...');
       
-      // 1. Salvar especialidade
+      // 1. Salvar especialidade (sem procedimentos) - MARCADO COMO GRADE CIRÚRGICA
       await agendamentoService.create({
         nome_paciente: '',
         data_nascimento: '2000-01-01',
         data_agendamento: dataFormatada,
         especialidade: especialidadeNome,
-        medico: nomeMedico,
+        medico: nomeMedico || null, // Médico opcional (null para equipes)
         hospital_id: hospitalId || null,
         cidade_natal: null,
-        telefone: null
+        telefone: null,
+        is_grade_cirurgica: true // Marca como registro de grade cirúrgica
       });
       
       // 2. Salvar cada procedimento
@@ -627,7 +661,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_nascimento: '2000-01-01',
           data_agendamento: dataFormatada,
           especialidade: especialidadeNome,
-          medico: nomeMedico,
+          medico: nomeMedico || null, // Médico opcional (null para equipes)
           procedimentos: procedimento.nome,
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -648,13 +682,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }>();
       
       agendamentosDoDia.forEach(agendamento => {
-        if (agendamento.especialidade && agendamento.medico) {
-          const chave = `${agendamento.especialidade}|||${agendamento.medico}`;
+        if (agendamento.especialidade) {
+          // Chave inclui médico se existir, senão usa apenas especialidade
+          const medicoKey = agendamento.medico || '(sem médico)';
+          const chave = `${agendamento.especialidade}|||${medicoKey}`;
           
           if (!gruposPorEspecialidade.has(chave)) {
             gruposPorEspecialidade.set(chave, {
               especialidade: agendamento.especialidade,
-              medico: agendamento.medico,
+              medico: agendamento.medico || null, // Pode ser null
               procedimentos: []
             });
           }
@@ -666,10 +702,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
       
       gruposPorEspecialidade.forEach((grupo) => {
+        // Exibir apenas especialidade se não houver médico
+        const textoEspecialidade = grupo.medico 
+          ? `${grupo.especialidade} - ${grupo.medico}`
+          : grupo.especialidade;
+        
         itens.push({
           id: `esp-${Date.now()}-${Math.random()}`,
           tipo: 'especialidade',
-          texto: `${grupo.especialidade} - ${grupo.medico}`,
+          texto: textoEspecialidade,
           ordem: itens.length,
           pacientes: []
         });
@@ -813,20 +854,29 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     
     // Encontrar a especialidade deste procedimento
     let especialidadeAtual = '';
-    let medicoAtual = '';
+    let medicoAtual: string | null = null;
     
     for (const gradeItem of grade.itens) {
       if (gradeItem.tipo === 'especialidade') {
-        const [esp, med] = gradeItem.texto.split(' - ');
-        especialidadeAtual = esp || '';
-        medicoAtual = med || '';
+        // Se tem " - " no texto, separa especialidade e médico
+        // Se não tem, é apenas especialidade (equipe médica)
+        if (gradeItem.texto.includes(' - ')) {
+          const [esp, med] = gradeItem.texto.split(' - ');
+          especialidadeAtual = esp || '';
+          medicoAtual = med || null;
+        } else {
+          // Apenas especialidade, sem médico
+          especialidadeAtual = gradeItem.texto;
+          medicoAtual = null;
+        }
       }
       if (gradeItem.id === itemId) {
         break;
       }
     }
     
-    if (especialidadeAtual && medicoAtual) {
+    // Validar apenas especialidade (médico é opcional)
+    if (especialidadeAtual) {
       try {
         const dataSelecionada = proximasDatas[gradeIndex];
         const dataFormatada = dataSelecionada.toISOString().split('T')[0];
@@ -836,7 +886,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_nascimento: '2000-01-01',
           data_agendamento: dataFormatada,
           especialidade: especialidadeAtual,
-          medico: medicoAtual,
+          medico: medicoAtual || null, // Médico opcional (null para equipes)
           procedimentos: item.texto,
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -1161,41 +1211,50 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       const dataFormatada = dataSelecionada.toISOString().split('T')[0];
       
       let especialidadeAtual = '';
-      let medicoAtual = '';
+      let medicoAtual: string | null = null;
       
       // Percorrer itens limpos e salvar especialidades e procedimentos (SEM pacientes)
       for (const item of itensLimpos) {
         if (item.tipo === 'especialidade') {
-          const [espNome, medNome] = item.texto.split(' - ');
-          especialidadeAtual = espNome || '';
-          medicoAtual = medNome || '';
+          // Se tem " - " no texto, separa especialidade e médico
+          // Se não tem, é apenas especialidade (equipe médica)
+          if (item.texto.includes(' - ')) {
+            const [espNome, medNome] = item.texto.split(' - ');
+            especialidadeAtual = espNome || '';
+            medicoAtual = medNome || null;
+          } else {
+            // Apenas especialidade, sem médico
+            especialidadeAtual = item.texto;
+            medicoAtual = null;
+          }
           
-          // Salvar especialidade
-          if (especialidadeAtual && medicoAtual) {
+          // Salvar especialidade (médico é opcional)
+          if (especialidadeAtual) {
             try {
               await agendamentoService.create({
                 nome_paciente: '',
                 data_nascimento: '2000-01-01',
                 data_agendamento: dataFormatada,
                 especialidade: especialidadeAtual,
-                medico: medicoAtual,
+                medico: medicoAtual || null, // Médico opcional (null para equipes)
                 hospital_id: hospitalId || null,
                 cidade_natal: null,
-                telefone: null
+                telefone: null,
+                is_grade_cirurgica: true // Marca como registro de grade cirúrgica (replicação)
               });
             } catch (error) {
               console.error('❌ Erro ao salvar especialidade replicada:', error);
             }
           }
-        } else if (item.tipo === 'procedimento' && item.texto.trim() && especialidadeAtual && medicoAtual) {
-          // Salvar procedimento
+        } else if (item.tipo === 'procedimento' && item.texto.trim() && especialidadeAtual) {
+          // Salvar procedimento (médico é opcional)
           try {
             await agendamentoService.create({
               nome_paciente: '',
               data_nascimento: '2000-01-01',
               data_agendamento: dataFormatada,
               especialidade: especialidadeAtual,
-              medico: medicoAtual,
+              medico: medicoAtual || null, // Médico opcional (null para equipes)
               procedimentos: item.texto,
               hospital_id: hospitalId || null,
               cidade_natal: null,
@@ -1700,7 +1759,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       </div>
                       <div className="w-4 h-0.5 bg-gray-300"></div>
                       <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${etapaAtual === 2 ? 'bg-blue-600 text-white' : etapaAtual > 2 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
-                        {etapaAtual > 2 ? '✓' : '2'} Médico
+                        {etapaAtual > 2 ? '✓' : '2'} Médico <span className="text-[10px] opacity-75">(opcional)</span>
                       </div>
                       <div className="w-4 h-0.5 bg-gray-300"></div>
                       <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${etapaAtual === 3 ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
@@ -1732,9 +1791,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                             onClick={handleConfirmEspecialidade}
                             disabled={!especialidadeSelecionada}
                             className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            title="Próximo: Informar Médico"
+                            title="Próximo: Informar Médico (opcional)"
                           >
                             ➜ Próximo
+                          </button>
+                          <button
+                            onClick={handlePularMedico}
+                            disabled={!especialidadeSelecionada}
+                            className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            title="Pular Médico: Ir direto para Procedimentos (para equipes médicas)"
+                          >
+                            ⏭ Pular Médico
                           </button>
                           <button
                             onClick={handleCancelAddEspecialidade}
@@ -1793,11 +1860,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                           )}
                           <button
                             onClick={handleConfirmMedico}
-                            disabled={!medicoSelecionado || carregandoMedicos}
+                            disabled={carregandoMedicos}
                             className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            title="Próximo: Adicionar Procedimentos"
+                            title="Próximo: Adicionar Procedimentos (médico é opcional)"
                           >
-                            ➜ Próximo
+                            ➜ {medicoSelecionado ? 'Próximo' : 'Continuar sem Médico'}
                           </button>
                           <button
                             onClick={handleCancelAddEspecialidade}
@@ -1813,15 +1880,27 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     {/* ETAPA 3: Adicionar Procedimentos (SIMPLIFICADO) */}
                     {etapaAtual === 3 && (
                       <div className="space-y-3">
-                        {/* Resumo: Especialidade e Médico */}
+                        {/* Resumo: Especialidade e Médico (opcional) */}
                         <div className="flex items-center gap-2 pb-2 border-b border-blue-300">
                           <span className="text-xs text-blue-900">
                             <strong>Especialidade:</strong> {especialidadeNome}
                           </span>
-                          <span className="text-xs text-blue-900">•</span>
-                          <span className="text-xs text-blue-900">
-                            <strong>Médico:</strong> {getNomeMedicoSelecionado()}
-                          </span>
+                          {getNomeMedicoSelecionado() && (
+                            <>
+                              <span className="text-xs text-blue-900">•</span>
+                              <span className="text-xs text-blue-900">
+                                <strong>Médico:</strong> {getNomeMedicoSelecionado()}
+                              </span>
+                            </>
+                          )}
+                          {!getNomeMedicoSelecionado() && (
+                            <>
+                              <span className="text-xs text-blue-900">•</span>
+                              <span className="text-xs text-purple-600 italic">
+                                <strong>Equipe Médica</strong> (sem médico específico)
+                              </span>
+                            </>
+                          )}
                           <button
                             onClick={handleVoltarEtapa}
                             className="text-xs text-blue-600 hover:text-blue-800 underline ml-auto"

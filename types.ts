@@ -27,6 +27,9 @@ export interface Agendamento {
   ficha_pre_anestesica_data?: string | null; // Data/hora do upload da ficha
   observacoes?: string | null; // Observações gerais
   
+  // Campo para identificar registros de grade cirúrgica
+  is_grade_cirurgica?: boolean; // Indica se é apenas estrutura de grade (não aparece em Documentação)
+  
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;
   procedimento_id?: string;

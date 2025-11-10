@@ -50,8 +50,23 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       console.log('📋 Agendamentos carregados:', dados);
       console.log('📊 Total de registros:', dados.length);
       
-      // Mostrar TODOS os agendamentos, mesmo com campos faltando
-      setAgendamentos(dados);
+      // Filtrar registros de grade cirúrgica (não devem aparecer na tela de Documentação)
+      // Registros de grade: is_grade_cirurgica = true OU (procedimentos IS NULL E nome_paciente = '')
+      const agendamentosFiltrados = dados.filter(ag => {
+        // Se tem flag is_grade_cirurgica = true, excluir
+        if (ag.is_grade_cirurgica === true) {
+          return false;
+        }
+        // Se não tem procedimentos E não tem nome_paciente, é linha de grade (compatibilidade)
+        if ((!ag.procedimentos || ag.procedimentos.trim() === '') && 
+            (!ag.nome_paciente || ag.nome_paciente.trim() === '')) {
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('📋 Agendamentos após filtrar grade cirúrgica:', agendamentosFiltrados.length);
+      setAgendamentos(agendamentosFiltrados);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
