@@ -486,7 +486,8 @@ export const agendamentoService = {
       cidade_natal: agendamento.cidade_natal || null,
       telefone: agendamento.telefone || null,
       is_grade_cirurgica: agendamento.is_grade_cirurgica || false,
-      status_liberacao: statusLiberacao // Sempre define um valor (padrão: 'anestesista')
+      status_liberacao: statusLiberacao, // Sempre define um valor (padrão: 'anestesista')
+      confirmacao: agendamento.confirmacao || 'Aguardando' // Padrão: 'Aguardando'
     };
     
     console.log('📋 Status liberação definido:', statusLiberacao);
@@ -541,6 +542,9 @@ export const agendamentoService = {
     
     // Status de liberação (campo direto)
     if (agendamento.status_liberacao !== undefined) updateData.status_liberacao = agendamento.status_liberacao
+    
+    // Confirmação
+    if (agendamento.confirmacao !== undefined) updateData.confirmacao = agendamento.confirmacao
     
     // Campo de grade cirúrgica
     if (agendamento.is_grade_cirurgica !== undefined) updateData.is_grade_cirurgica = agendamento.is_grade_cirurgica

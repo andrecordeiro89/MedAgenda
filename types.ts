@@ -35,6 +35,7 @@ export interface Agendamento {
   procedimento_id?: string;
   medico_id?: string;
   status_liberacao?: StatusLiberacao;
+  confirmacao?: string; // Status de confirmação: 'Aguardando' ou 'Confirmado'
   whatsapp?: string;
   tipo?: TipoAgendamento;
   nome?: string;

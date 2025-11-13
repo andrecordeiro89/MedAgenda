@@ -491,6 +491,23 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </select>
           </td>
           
+          {/* Confirmação */}
+          <td className="px-4 py-4 whitespace-nowrap">
+            <select
+              value={ag.confirmacao || 'Aguardando'}
+              onChange={(e) => handleAtualizarConfirmacao(ag.id, e.target.value)}
+              className={`text-xs px-2 py-1 border-2 rounded focus:outline-none focus:ring-1 bg-white ${
+                (ag.confirmacao || 'Aguardando') === 'Confirmado'
+                  ? 'border-green-500 focus:ring-green-500'
+                  : 'border-red-500 focus:ring-red-500'
+              }`}
+              title="Status de confirmação do paciente"
+            >
+              <option value="Aguardando">Aguardando</option>
+              <option value="Confirmado">Confirmado</option>
+            </select>
+          </td>
+          
           {/* Ações */}
           <td className="px-4 py-4 whitespace-nowrap text-sm">
             <div className="flex flex-col gap-2">
@@ -566,7 +583,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         {/* Linha expandida com detalhes */}
         {expandida && (
           <tr className="bg-gray-50">
-            <td colSpan={7} className="px-4 py-4">
+            <td colSpan={8} className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Nascimento */}
                 <div>
@@ -643,6 +660,27 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     } catch (error: any) {
       console.error('Erro ao atualizar status de liberação:', error);
       alert(`❌ Erro ao atualizar status: ${error.message}`);
+    }
+  };
+
+  // Atualizar confirmação
+  const handleAtualizarConfirmacao = async (agendamentoId: string | undefined, novaConfirmacao: string) => {
+    if (!agendamentoId) return;
+    
+    try {
+      await agendamentoService.update(agendamentoId, {
+        confirmacao: novaConfirmacao
+      });
+      
+      // Atualizar estado local
+      setAgendamentos(prev => prev.map(ag => 
+        ag.id === agendamentoId
+          ? { ...ag, confirmacao: novaConfirmacao }
+          : ag
+      ));
+    } catch (error: any) {
+      console.error('Erro ao atualizar confirmação:', error);
+      alert(`❌ Erro ao atualizar confirmação: ${error.message}`);
     }
   };
 
@@ -895,7 +933,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       Data Cirurgia
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status Liberação
+                      Anestesista
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Confirmação
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Ações
@@ -915,7 +956,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       if (lista.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={7} className="px-4 py-8 text-center">
+                            <td colSpan={8} className="px-4 py-8 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -952,7 +993,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         <React.Fragment key={grupoInfo.chave}>
                           {/* Cabeçalho do grupo */}
                           <tr className={`${grupoInfo.cor} border-t-2 border-b-2`}>
-                            <td colSpan={7} className="px-4 py-3">
+                            <td colSpan={8} className="px-4 py-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-gray-800">{grupoInfo.titulo}</span>
