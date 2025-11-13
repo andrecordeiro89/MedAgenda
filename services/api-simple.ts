@@ -1,7 +1,7 @@
 // Sistema simples de API que funciona diretamente com Supabase
 // Filtra dados por hospital sem autenticação real
 
-import { supabase } from './supabase';
+import { supabase, getAllRecordsWithPagination } from './supabase';
 import { Agendamento, Medico, Procedimento, StatusLiberacao, Especialidade, MedicoHospital, Hospital, MetaEspecialidade, DiaSemana } from '../types';
 
 // Mapeamento de hospitais (mesmo que no PremiumLogin)
@@ -33,7 +33,7 @@ function convertSupabaseToAgendamento(data: any): Agendamento {
 function convertSupabaseToMedico(data: any): Medico {
   return {
     id: data.id,
-    nome: data.nome,
+    nome: data.nome_medico || data.nome, // Usar nome_medico como principal (campo real do banco)
     especialidade: data.especialidade,
     crm: data.crm,
     telefone: data.telefone,
@@ -65,18 +65,14 @@ function convertSupabaseToEspecialidade(data: any): Especialidade {
 // Serviços simplificados
 export class SimpleAgendamentoService {
   async getAll(hospitalId: string): Promise<Agendamento[]> {
-    const { data, error } = await supabase
-      .from('agendamentos')
-      .select('*')
-      .eq('hospital_id', hospitalId)
-      .order('data_agendamento', { ascending: true });
+    // Usar paginação automática para buscar TODOS os registros
+    const allAgendamentos = await getAllRecordsWithPagination<any>('agendamentos', {
+      filter: (query) => query.eq('hospital_id', hospitalId),
+      orderBy: 'data_agendamento',
+      ascending: true
+    });
 
-    if (error) {
-      console.error('Erro ao buscar agendamentos:', error);
-      return [];
-    }
-
-    return data?.map(convertSupabaseToAgendamento) || [];
+    return allAgendamentos.map(convertSupabaseToAgendamento);
   }
 
   async getByDate(date: string, hospitalId: string): Promise<Agendamento[]> {
@@ -167,27 +163,23 @@ export class SimpleMedicoService {
     // VOLTA AO MODELO SIMPLES ORIGINAL - buscar médicos direto da tabela medicos
     console.log('🏥 Buscando médicos para hospital_id:', hospitalId);
     
-    const { data, error } = await supabase
-      .from('medicos')
-      .select('*')
-      .eq('hospital_id', hospitalId)
-      .order('nome', { ascending: true });
+    // Usar paginação automática para buscar TODOS os registros
+    const allMedicos = await getAllRecordsWithPagination<any>('medicos', {
+      filter: (query) => query.eq('hospital_id', hospitalId),
+      orderBy: 'nome_medico', // Campo real do banco
+      ascending: true
+    });
 
-    if (error) {
-      console.error('❌ Erro ao buscar médicos:', error);
-      return [];
-    }
+    console.log('✅ Médicos encontrados:', allMedicos.length);
+    console.log('📋 Médicos:', allMedicos.map(m => ({ nome: m.nome_medico || m.nome, hospital_id: m.hospital_id })));
 
-    console.log('✅ Médicos encontrados:', data?.length || 0);
-    console.log('📋 Médicos:', data?.map(m => ({ nome: m.nome, hospital_id: m.hospital_id })));
-
-    return data?.map(convertSupabaseToMedico) || [];
+    return allMedicos.map(convertSupabaseToMedico);
   }
 
   async create(medico: Omit<Medico, 'id'>, hospitalId: string): Promise<Medico> {
     // VOLTA AO MODELO SIMPLES ORIGINAL - incluir hospital_id direto
     const supabaseData = {
-      nome: medico.nome,
+      nome_medico: medico.nome, // Usar nome_medico (campo real do banco)
       especialidade: medico.especialidade,
       crm: medico.crm,
       telefone: medico.telefone,
@@ -212,7 +204,7 @@ export class SimpleMedicoService {
     const supabaseData: any = {};
     
     // VOLTA AO MODELO SIMPLES ORIGINAL
-    if (medico.nome) supabaseData.nome = medico.nome;
+    if (medico.nome) supabaseData.nome_medico = medico.nome; // Usar nome_medico (campo real do banco)
     if (medico.especialidade) supabaseData.especialidade = medico.especialidade;
     if (medico.crm) supabaseData.crm = medico.crm;
     if (medico.telefone) supabaseData.telefone = medico.telefone;
@@ -252,21 +244,17 @@ export class SimpleProcedimentoService {
   async getAll(hospitalId: string): Promise<Procedimento[]> {
     console.log('🔍 Buscando procedimentos para hospital_id:', hospitalId);
     
-    const { data, error } = await supabase
-      .from('procedimentos')
-      .select('*')
-      .eq('hospital_id', hospitalId)
-      .order('nome', { ascending: true });
+    // Usar paginação automática para buscar TODOS os registros
+    const allProcedimentos = await getAllRecordsWithPagination<any>('procedimentos', {
+      filter: (query) => query.eq('hospital_id', hospitalId),
+      orderBy: 'nome',
+      ascending: true
+    });
 
-    if (error) {
-      console.error('❌ Erro ao buscar procedimentos:', error);
-      return [];
-    }
-
-    console.log('✅ Procedimentos encontrados:', data?.length || 0);
-    console.log('📋 Dados brutos do Supabase:', data);
+    console.log('✅ Procedimentos encontrados:', allProcedimentos.length);
+    console.log('📋 Dados brutos do Supabase:', allProcedimentos);
     
-    const procedimentos = data?.map(convertSupabaseToProcedimento) || [];
+    const procedimentos = allProcedimentos.map(convertSupabaseToProcedimento);
     console.log('📦 Procedimentos convertidos:', procedimentos);
     
     return procedimentos;
@@ -340,16 +328,13 @@ export class SimpleProcedimentoService {
 // Serviço de Especialidades
 export class SimpleEspecialidadeService {
   async getAll(): Promise<Especialidade[]> {
-    const { data, error } = await supabase
-      .from('especialidades')
-      .select('*')
-      .order('nome');
+    // Usar paginação automática para buscar TODAS as especialidades
+    const allEspecialidades = await getAllRecordsWithPagination<any>('especialidades', {
+      orderBy: 'nome',
+      ascending: true
+    });
 
-    if (error) {
-      throw new Error(`Erro ao buscar especialidades: ${error.message}`);
-    }
-
-    return data.map(convertSupabaseToEspecialidade);
+    return allEspecialidades.map(convertSupabaseToEspecialidade);
   }
 
   async create(especialidade: Omit<Especialidade, 'id'>): Promise<Especialidade> {

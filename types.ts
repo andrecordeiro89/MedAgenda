@@ -139,6 +139,8 @@ export interface GradeCirurgicaItem {
     especialidadeId?: string; // ID da especialidade (quando tipo='especialidade')
     procedimentoId?: string; // ID do procedimento (quando tipo='procedimento')
     agendamentoId?: string; // ID do agendamento no banco (para UPDATE)
+    medicoId?: string; // ID do médico associado ao procedimento (quando tipo='procedimento')
+    medicoNome?: string; // Nome do médico associado ao procedimento (para exibição)
 }
 
 export interface GradeCirurgicaDia {

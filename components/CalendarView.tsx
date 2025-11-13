@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Agendamento, Medico, Procedimento, GradeCirurgicaDia, Especialidade, MetaEspecialidade, DiaSemana } from '../types';
 import { ChevronLeftIcon, ChevronRightIcon, Modal } from './ui';
-import { formatDate } from '../utils';
+import { formatDate, formatDateLocal, compareDates } from '../utils';
 import GradeCirurgicaModal from './GradeCirurgicaModal';
 
 interface CalendarViewProps {
@@ -49,12 +49,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   // Grade = agendamentos com data_agendamento = data do dia E procedimentos preenchido (não vazio)
   // IMPORTANTE: Não contar registros com procedimentos vazio (são linhas de especialidade)
   const temGradeParaDia = (date: Date): boolean => {
-    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateString = formatDateLocal(date); // YYYY-MM-DD (formato local, sem problemas de timezone)
     
     // Buscar agendamentos deste dia
     const agendamentosDoDia = agendamentos.filter(a => {
       const dataAgendamento = a.data_agendamento || a.dataAgendamento;
-      return dataAgendamento === dateString;
+      // Usar compareDates para evitar problemas de timezone
+      return compareDates(dataAgendamento || '', dateString);
     });
     
     // Debug para o dia 01/12/2025
@@ -118,8 +119,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const selectedDateAppointments = selectedDate
     ? agendamentos.filter(
         a => {
-          const dateStr = selectedDate.toISOString().split('T')[0];
-          return (a.data_agendamento === dateStr || a.dataAgendamento === dateStr);
+          const dateStr = formatDateLocal(selectedDate);
+          const dataAgendamento = a.data_agendamento || a.dataAgendamento;
+          return dataAgendamento && compareDates(dataAgendamento, dateStr);
         }
       )
     : [];
@@ -143,11 +145,54 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    const dateString = date.toISOString().split('T')[0];
+    const dateString = formatDateLocal(date); // YYYY-MM-DD (formato local, sem problemas de timezone)
+    
+    // Debug para fevereiro de 2025 (segundas-feiras)
+    const isFebruary2025 = currentDate.getFullYear() === 2025 && currentDate.getMonth() === 1; // Mês 1 = fevereiro
+    const isMonday = date.getDay() === 1; // 1 = segunda-feira
+    
+    if (isFebruary2025 && isMonday) {
+      console.log(`🔍 DEBUG FEVEREIRO 2025 - Segunda-feira ${dateString}:`);
+      console.log(`  Data formatada: ${dateString}`);
+      console.log(`  Total agendamentos no array: ${agendamentos.length}`);
+      
+      // Verificar agendamentos que deveriam aparecer neste dia
+      const agendamentosFevereiro = agendamentos.filter(a => {
+        const dataAgendamento = a.data_agendamento || a.dataAgendamento;
+        return dataAgendamento && dataAgendamento.includes('2025-02');
+      });
+      console.log(`  Agendamentos de fevereiro/2025: ${agendamentosFevereiro.length}`);
+      
+      if (agendamentosFevereiro.length > 0) {
+        const segundasFevereiro = agendamentosFevereiro.filter(a => {
+          const dataAgendamento = a.data_agendamento || a.dataAgendamento;
+          if (!dataAgendamento) return false;
+          
+          // Verificar se é segunda-feira
+          const dataObj = new Date(dataAgendamento + 'T00:00:00');
+          return dataObj.getDay() === 1; // Segunda-feira
+        });
+        console.log(`  Agendamentos de segundas de fevereiro: ${segundasFevereiro.length}`);
+        segundasFevereiro.slice(0, 3).forEach((a, idx) => {
+          console.log(`    Agendamento ${idx + 1}:`, {
+            data_agendamento: a.data_agendamento,
+            dataAgendamento: a.dataAgendamento,
+            especialidade: a.especialidade,
+            procedimentos: a.procedimentos,
+            nome_paciente: a.nome_paciente,
+            temProcedimentos: a.procedimentos && a.procedimentos.trim() !== ''
+          });
+        });
+      }
+    }
+    
     // Usar data_agendamento (campo real do banco) ou dataAgendamento (compatibilidade)
-    const dayAppointments = agendamentos.filter(a => 
-      (a.data_agendamento === dateString || a.dataAgendamento === dateString)
-    );
+    // Usar compareDates para evitar problemas de timezone
+    const dayAppointments = agendamentos.filter(a => {
+      const dataAgendamento = a.data_agendamento || a.dataAgendamento;
+      if (!dataAgendamento) return false;
+      return compareDates(dataAgendamento, dateString);
+    });
 
     const isToday = date.toDateString() === today.toDateString();
     const temGrade = temGradeParaDia(date);
@@ -185,12 +230,32 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
     // Agrupar por especialidade
     agendamentosComProcedimentos.forEach(agendamento => {
-      if (!agendamento.especialidade) return;
+      if (!agendamento.especialidade) {
+        // Debug: agendamentos sem especialidade
+        if (isFebruary2025 && isMonday) {
+          console.log(`  ⚠️ Agendamento sem especialidade:`, {
+            id: agendamento.id,
+            nome_paciente: agendamento.nome_paciente,
+            procedimentos: agendamento.procedimentos
+          });
+        }
+        return;
+      }
       
       // Buscar especialidade no array para obter o ID
       const especialidade = especialidades.find(e => e.nome === agendamento.especialidade);
       const especialidadeId = especialidade?.id || agendamento.especialidade;
       const especialidadeNome = agendamento.especialidade;
+      
+      // Debug para fevereiro
+      if (isFebruary2025 && isMonday) {
+        console.log(`  📋 Processando agendamento:`, {
+          especialidade: especialidadeNome,
+          especialidadeId: especialidadeId,
+          nome_paciente: agendamento.nome_paciente,
+          temPaciente: agendamento.nome_paciente && agendamento.nome_paciente.trim() !== ''
+        });
+      }
       
       // Inicializar contador se não existir
       if (!especialidadesComProcedimentos[especialidadeId]) {
@@ -201,6 +266,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           m.ativo === true &&
           m.hospitalId === hospitalId
         );
+        
+        // Debug para fevereiro
+        if (isFebruary2025 && isMonday) {
+          console.log(`  🔍 Buscando meta para:`, {
+            especialidadeId: especialidadeId,
+            especialidadeNome: especialidadeNome,
+            diaSemana: diaSemana,
+            hospitalId: hospitalId,
+            totalMetas: metasEspecialidades.length,
+            metaEncontrada: meta ? meta.quantidadeAgendamentos : null,
+            todasMetasParaEspecialidade: metasEspecialidades.filter(m => m.especialidadeId === especialidadeId)
+          });
+        }
         
         especialidadesComProcedimentos[especialidadeId] = {
           nome: especialidadeNome,
@@ -241,7 +319,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         
         {/* Barras de progresso por especialidade (com dados reais e metas configuradas) */}
         <div className="mt-1 space-y-0.5">
-          {dateString === '2025-12-01' && console.log('🔍 DEBUG 01/12/2025 - Especialidades para barras:', Object.keys(especialidadesComProcedimentos).length, Object.values(especialidadesComProcedimentos))}
+          {(dateString === '2025-12-01' || (isFebruary2025 && isMonday)) && console.log(`🔍 DEBUG ${dateString} - Especialidades para barras:`, Object.keys(especialidadesComProcedimentos).length, Object.values(especialidadesComProcedimentos))}
           {Object.values(especialidadesComProcedimentos).map((esp) => {
             // Usar meta configurada ou padrão de 10 se não houver meta
             const metaProcedimentos = esp.meta || 10;

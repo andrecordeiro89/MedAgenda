@@ -69,6 +69,77 @@ interface AgendamentoCompleto extends SupabaseAgendamento {
 }
 
 // ============================================
+// HELPER: BUSCAR TODOS OS REGISTROS COM PAGINAÇÃO AUTOMÁTICA
+// ============================================
+// O Supabase limita automaticamente a 1000 registros por query
+// Esta função busca todos os registros usando paginação automática
+export async function getAllRecordsWithPagination<T>(
+  tableName: string,
+  options?: {
+    filter?: (query: any) => any;
+    orderBy?: string;
+    ascending?: boolean;
+  }
+): Promise<T[]> {
+  const BATCH_SIZE = 1000; // Tamanho do lote (limite do Supabase)
+  const allRecords: T[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  console.log(`🔄 Buscando TODOS os registros de ${tableName} com paginação automática...`);
+
+  while (hasMore) {
+    let query = supabase
+      .from(tableName)
+      .select('*')
+      .range(from, from + BATCH_SIZE - 1);
+
+    // Aplicar filtros se fornecidos
+    if (options?.filter) {
+      query = options.filter(query);
+    }
+
+    // Aplicar ordenação se fornecida
+    if (options?.orderBy) {
+      query = query.order(options.orderBy, { ascending: options?.ascending ?? true });
+    } else {
+      // Ordenação padrão por id se não especificada
+      query = query.order('id', { ascending: true });
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error(`❌ Erro ao buscar ${tableName} (lote ${from}-${from + BATCH_SIZE - 1}):`, error);
+      throw new Error(error.message);
+    }
+
+    if (data && data.length > 0) {
+      allRecords.push(...(data as T[]));
+      console.log(`📦 Lote ${Math.floor(from / BATCH_SIZE) + 1}: ${data.length} registros (Total: ${allRecords.length})`);
+
+      // Se retornou menos que o tamanho do lote, não há mais registros
+      if (data.length < BATCH_SIZE) {
+        hasMore = false;
+      } else {
+        from += BATCH_SIZE;
+      }
+    } else {
+      hasMore = false;
+    }
+
+    // Limite de segurança para evitar loops infinitos (máximo 1 milhão de registros)
+    if (from > 1000000) {
+      console.warn('⚠️ Limite de segurança atingido (1 milhão de registros)');
+      hasMore = false;
+    }
+  }
+
+  console.log(`✅ Total de registros de ${tableName} carregados: ${allRecords.length}`);
+  return allRecords;
+}
+
+// ============================================
 // FUNÇÕES DE CONVERSÃO
 // ============================================
 export const convertMedicoFromSupabase = (medico: SupabaseMedico): Medico => ({
@@ -141,34 +212,33 @@ export const medicoService = {
   async getAll(hospitalId?: string, search?: string): Promise<Medico[]> {
     console.log('🔍 medicoService.getAll chamado com:', { hospitalId, search });
     
-    let query = supabase.from('medicos').select('*').order('nome_medico')
+    // Usar paginação automática para buscar TODOS os registros
+    const allMedicos = await getAllRecordsWithPagination<SupabaseMedico>('medicos', {
+      filter: (query) => {
+        let filteredQuery = query;
+        // Filtrar por hospital_id se fornecido
+        if (hospitalId) {
+          console.log('🏥 Filtrando por hospital_id:', hospitalId);
+          filteredQuery = filteredQuery.eq('hospital_id', hospitalId);
+        } else {
+          console.warn('⚠️ hospitalId não fornecido, buscando todos os médicos');
+        }
+        // Buscar por nome_medico se fornecido
+        if (search) {
+          filteredQuery = filteredQuery.ilike('nome_medico', `%${search}%`);
+        }
+        return filteredQuery;
+      },
+      orderBy: 'nome_medico',
+      ascending: true
+    });
     
-    // Filtrar por hospital_id se fornecido
-    if (hospitalId) {
-      console.log('🏥 Filtrando por hospital_id:', hospitalId);
-      query = query.eq('hospital_id', hospitalId)
-    } else {
-      console.warn('⚠️ hospitalId não fornecido, buscando todos os médicos');
+    console.log('📊 Médicos retornados do Supabase:', allMedicos.length);
+    if (allMedicos.length > 0) {
+      console.log('👨‍⚕️ Primeiros médicos:', allMedicos.slice(0, 3).map(m => ({ id: m.id, nome_medico: m.nome_medico, hospital_id: m.hospital_id })));
     }
     
-    // Buscar por nome_medico se fornecido
-    if (search) {
-      query = query.ilike('nome_medico', `%${search}%`)
-    }
-    
-    const { data, error } = await query
-    
-    if (error) {
-      console.error('❌ Erro na query de médicos:', error);
-      throw new Error(error.message)
-    }
-    
-    console.log('📊 Médicos retornados do Supabase:', data?.length || 0);
-    if (data && data.length > 0) {
-      console.log('👨‍⚕️ Primeiros médicos:', data.slice(0, 3).map(m => ({ id: m.id, nome_medico: m.nome_medico, hospital_id: m.hospital_id })));
-    }
-    
-    return (data || []).map(convertMedicoFromSupabase)
+    return allMedicos.map(convertMedicoFromSupabase)
   },
   
   // Função específica para buscar médicos por nome (para autocomplete)
@@ -250,20 +320,23 @@ export const medicoService = {
 // ============================================
 export const procedimentoService = {
   async getAll(search?: string, tipo?: TipoAgendamento): Promise<Procedimento[]> {
-    let query = supabase.from('procedimentos').select('*').order('nome')
+    // Usar paginação automática para buscar TODOS os registros
+    const allProcedimentos = await getAllRecordsWithPagination<SupabaseProcedimento>('procedimentos', {
+      filter: (query) => {
+        let filteredQuery = query;
+        if (search) {
+          filteredQuery = filteredQuery.ilike('nome', `%${search}%`);
+        }
+        if (tipo) {
+          filteredQuery = filteredQuery.eq('tipo', tipo);
+        }
+        return filteredQuery;
+      },
+      orderBy: 'nome',
+      ascending: true
+    });
     
-    if (search) {
-      query = query.ilike('nome', `%${search}%`)
-    }
-    
-    if (tipo) {
-      query = query.eq('tipo', tipo)
-    }
-    
-    const { data, error } = await query
-    if (error) throw new Error(error.message)
-    
-    return (data || []).map(convertProcedimentoFromSupabase)
+    return allProcedimentos.map(convertProcedimentoFromSupabase)
   },
 
   async getById(id: string): Promise<Procedimento> {
@@ -329,37 +402,34 @@ export const agendamentoService = {
   async getAll(hospitalId?: string): Promise<Agendamento[]> {
     console.log('🔍 agendamentoService.getAll chamado com hospitalId:', hospitalId);
     
-    let query = supabase
-      .from('agendamentos')
-      .select('*')
-      .order('data_agendamento', { ascending: true });
+    // Usar paginação automática para buscar TODOS os registros
+    const allAgendamentos = await getAllRecordsWithPagination<any>('agendamentos', {
+      filter: (query) => {
+        let filteredQuery = query;
+        if (hospitalId) {
+          filteredQuery = filteredQuery.eq('hospital_id', hospitalId);
+        }
+        return filteredQuery;
+      },
+      orderBy: 'data_agendamento',
+      ascending: true
+    });
     
-    if (hospitalId) {
-      query = query.eq('hospital_id', hospitalId);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error('❌ Erro ao buscar agendamentos:', error);
-      throw new Error(error.message);
-    }
-    
-    console.log('✅ agendamentoService.getAll retornou:', data?.length || 0, 'agendamentos');
-    if (data && data.length > 0) {
+    console.log('✅ agendamentoService.getAll retornou:', allAgendamentos.length, 'agendamentos');
+    if (allAgendamentos.length > 0) {
       console.log('📋 Primeiro agendamento:', {
-        id: data[0].id,
-        data_agendamento: data[0].data_agendamento,
-        especialidade: data[0].especialidade,
-        procedimentos: data[0].procedimentos,
-        nome_paciente: data[0].nome_paciente,
-        hospital_id: data[0].hospital_id
+        id: allAgendamentos[0].id,
+        data_agendamento: allAgendamentos[0].data_agendamento,
+        especialidade: allAgendamentos[0].especialidade,
+        procedimentos: allAgendamentos[0].procedimentos,
+        nome_paciente: allAgendamentos[0].nome_paciente,
+        hospital_id: allAgendamentos[0].hospital_id
       });
     }
     
     // Converter dados do Supabase para o formato esperado pelo frontend
     // Manter ambos os formatos (data_agendamento e dataAgendamento) para compatibilidade
-    return (data || []).map((item: any) => ({
+    return allAgendamentos.map((item: any) => ({
       ...item,
       // Manter campos originais do banco
       data_agendamento: item.data_agendamento,
@@ -580,19 +650,15 @@ export const especialidadeService = {
   async getAll(): Promise<Especialidade[]> {
     console.log('🔍 Buscando especialidades do Supabase...');
     
-    const { data, error } = await supabase
-      .from('especialidades')
-      .select('*')
-      .order('nome', { ascending: true });
+    // Usar paginação automática para buscar TODAS as especialidades
+    const allEspecialidades = await getAllRecordsWithPagination<Especialidade>('especialidades', {
+      orderBy: 'nome',
+      ascending: true
+    });
     
-    if (error) {
-      console.error('❌ Erro ao buscar especialidades:', error);
-      throw new Error(error.message);
-    }
+    console.log(`✅ ${allEspecialidades.length} especialidades encontradas no banco`);
     
-    console.log(`✅ ${data?.length || 0} especialidades encontradas no banco`);
-    
-    return data as Especialidade[];
+    return allEspecialidades;
   }
 };
 

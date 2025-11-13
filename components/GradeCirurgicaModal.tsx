@@ -87,6 +87,30 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [grades, setGrades] = useState<GradeCirurgicaDia[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Carregar médicos do hospital ao abrir o modal
+  useEffect(() => {
+    const loadMedicos = async () => {
+      if (!isOpen || !hospitalId) return;
+      
+      setCarregandoMedicosParaProcedimentos(true);
+      try {
+        console.log('👨‍⚕️ Carregando médicos do hospital:', hospitalId);
+        const medicos = await medicoService.getAll(hospitalId);
+        console.log('✅ Médicos carregados:', medicos.length);
+        setMedicosParaProcedimentos(medicos);
+      } catch (error) {
+        console.error('❌ Erro ao carregar médicos:', error);
+        setMedicosParaProcedimentos([]);
+      } finally {
+        setCarregandoMedicosParaProcedimentos(false);
+      }
+    };
+    
+    if (isOpen) {
+      loadMedicos();
+    }
+  }, [isOpen, hospitalId]);
+
   // Carregar grade DO SUPABASE ao abrir o modal
   useEffect(() => {
     const loadGrade = async () => {
@@ -148,6 +172,22 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       agendamentoId: agendamento.id
                     };
                     
+                    // Incluir médico associado ao procedimento (se houver)
+                    if (agendamento.medico) {
+                      // Buscar médico pelo nome para obter o ID (usar medicosParaProcedimentos se disponível)
+                      let medicoEncontrado = null;
+                      if (medicosParaProcedimentos.length > 0) {
+                        medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === agendamento.medico);
+                      }
+                      if (medicoEncontrado) {
+                        procedimentoData.medicoId = medicoEncontrado.id;
+                        procedimentoData.medicoNome = agendamento.medico;
+                      } else {
+                        // Se não encontrar pelo nome, usar apenas o nome
+                        procedimentoData.medicoNome = agendamento.medico;
+                      }
+                    }
+                    
                     // Se tem paciente cadastrado, incluir os dados
                     if (agendamento.nome_paciente && agendamento.nome_paciente.trim()) {
                       procedimentoData.paciente = {
@@ -199,7 +239,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     texto: proc.nome,
                     ordem: itens.length,
                     pacientes: pacientes,
-                    agendamentoId: proc.agendamentoId
+                    agendamentoId: proc.agendamentoId,
+                    medicoId: proc.medicoId,
+                    medicoNome: proc.medicoNome
                   });
                 });
               });
@@ -256,6 +298,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // Estado para controlar expansão de procedimentos (gradeIndex_especialidadeId => boolean)
   const [expandedEspecialidades, setExpandedEspecialidades] = useState<Record<string, boolean>>({});
+  
+  // Estado para controlar expansão de dados do paciente por procedimento (gradeIndex_itemId => boolean)
+  const [expandedProcedimentos, setExpandedProcedimentos] = useState<Record<string, boolean>>({});
 
   // Estado para controlar qual procedimento está adicionando paciente (MODAL)
   const [modalPacienteAberto, setModalPacienteAberto] = useState(false);
@@ -304,6 +349,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [procedimentosTemp, setProcedimentosTemp] = useState<Array<{id: string, nome: string}>>([]);
   const [novoProcedimentoNome, setNovoProcedimentoNome] = useState('');
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false); // Loading ao salvar
+  
+  // Estado para médicos disponíveis (carregados uma vez ao abrir o modal)
+  const [medicosParaProcedimentos, setMedicosParaProcedimentos] = useState<Medico[]>([]);
+  const [carregandoMedicosParaProcedimentos, setCarregandoMedicosParaProcedimentos] = useState(false);
 
   // Função auxiliar para mostrar mensagens personalizadas (substitui alert nativo)
   const mostrarMensagem = (titulo: string, mensagem: string, tipo: 'info' | 'sucesso' | 'erro' | 'aviso' = 'info') => {
@@ -824,6 +873,59 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setGrades(updatedGrades);
   };
 
+  // Atualizar médico associado ao procedimento
+  const handleUpdateMedicoProcedimento = async (gradeIndex: number, itemId: string, medicoId: string) => {
+    const grade = grades[gradeIndex];
+    const item = grade.itens.find(i => i.id === itemId);
+    
+    if (!item || item.tipo !== 'procedimento' || !item.agendamentoId) {
+      console.warn('⚠️ Item não encontrado ou não é um procedimento com agendamentoId');
+      return;
+    }
+    
+    // Buscar nome do médico
+    const medico = medicosParaProcedimentos.find(m => m.id === medicoId);
+    const medicoNome = medico ? medico.nome : null;
+    
+    // Atualizar estado local
+    setGrades(prev => prev.map((g, i) => {
+      if (i === gradeIndex) {
+        return {
+          ...g,
+          itens: g.itens.map(it => {
+            if (it.id === itemId) {
+              return {
+                ...it,
+                medicoId: medicoId || undefined,
+                medicoNome: medicoNome || undefined
+              };
+            }
+            return it;
+          })
+        };
+      }
+      return g;
+    }));
+    
+    // Salvar no banco
+    try {
+      console.log('💾 Atualizando médico do procedimento no banco...', {
+        agendamentoId: item.agendamentoId,
+        medicoId,
+        medicoNome
+      });
+      
+      await agendamentoService.update(item.agendamentoId, {
+        medico: medicoNome || null
+      });
+      
+      console.log('✅ Médico do procedimento atualizado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao atualizar médico do procedimento:', error);
+      mostrarAlerta('❌ Erro', `Erro ao atualizar médico: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+  };
+
   // Atualizar texto de um item
   const handleUpdateItem = (gradeIndex: number, itemId: string, novoTexto: string) => {
     // Calcular novo estado
@@ -1338,6 +1440,21 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       ...prev,
       [key]: !prev[key]
     }));
+  };
+  
+  // Toggle expansão de dados do paciente no procedimento
+  const toggleExpansaoProcedimento = (gradeIndex: number, itemId: string) => {
+    const key = `${gradeIndex}_${itemId}`;
+    setExpandedProcedimentos(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+  
+  // Verificar se procedimento está expandido
+  const isProcedimentoExpanded = (gradeIndex: number, itemId: string) => {
+    const key = `${gradeIndex}_${itemId}`;
+    return expandedProcedimentos[key] || false;
   };
 
   // Verificar se especialidade está expandida
@@ -2136,19 +2253,29 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           {pIdx > 0 && <div className="w-4"></div>}
 
                                           {/* Dados do procedimento e paciente */}
-                                          <div className="flex-1 flex items-center gap-2">
-                                            {/* Procedimento */}
-                                            <span className="text-xs font-medium text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                              {proc.texto}
-                                            </span>
-                                            
-                                            {/* Seta */}
-                                            <span className="text-slate-400">→</span>
-                                            
-                                            {/* Dados do Paciente */}
-                                            <div className="flex items-center gap-2 flex-1">
-                                              {/* Nome e Idade */}
-                                              <div className="flex items-center gap-1.5">
+                                          <div className="flex-1 flex flex-col gap-1">
+                                            {/* Linha principal: Procedimento, Médico, Nome do Paciente e Botão Expandir */}
+                                            <div className="flex items-center gap-2">
+                                              {/* Procedimento */}
+                                              <span className="text-xs font-medium text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                                {proc.texto}
+                                              </span>
+                                              
+                                              {/* Médico (se houver) */}
+                                              {proc.medicoNome && (
+                                                <>
+                                                  <span className="text-slate-400">•</span>
+                                                  <span className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                                    👨‍⚕️ {proc.medicoNome}
+                                                  </span>
+                                                </>
+                                              )}
+                                              
+                                              {/* Seta */}
+                                              <span className="text-slate-400">→</span>
+                                              
+                                              {/* Nome do Paciente (sempre visível) */}
+                                              <div className="flex items-center gap-1.5 flex-1">
                                                 <span className="text-xs font-semibold text-green-800 bg-green-100 px-2 py-0.5 rounded">
                                                   👤 {paciente.nome}
                                                 </span>
@@ -2159,8 +2286,29 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                 )}
                                               </div>
                                               
-                                              {/* Informações adicionais compactas */}
-                                              <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                                              {/* Botão Expandir/Recolher (apenas no primeiro paciente) */}
+                                              {pIdx === 0 && (
+                                                <button
+                                                  onClick={() => toggleExpansaoProcedimento(index, proc.id)}
+                                                  className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all flex-shrink-0"
+                                                  title={isProcedimentoExpanded(index, proc.id) ? "Recolher detalhes" : "Expandir detalhes"}
+                                                >
+                                                  {isProcedimentoExpanded(index, proc.id) ? (
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                                    </svg>
+                                                  ) : (
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                  )}
+                                                </button>
+                                              )}
+                                            </div>
+                                            
+                                            {/* Informações detalhadas (expandidas) */}
+                                            {isProcedimentoExpanded(index, proc.id) && (
+                                              <div className="ml-2 pl-2 border-l-2 border-green-200 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600">
                                                 {paciente.cidade && (
                                                   <span className="flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded">
                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2186,8 +2334,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     {new Date(paciente.dataConsulta).toLocaleDateString('pt-BR')}
                                                   </span>
                                                 )}
+                                                {paciente.dataNascimento && (
+                                                  <span className="flex items-center gap-0.5 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    Nasc: {new Date(paciente.dataNascimento).toLocaleDateString('pt-BR')}
+                                                  </span>
+                                                )}
                                               </div>
-                                            </div>
+                                            )}
                                           </div>
 
                                           {/* Botões de ação */}
@@ -2247,33 +2403,79 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           </button>
                                         </div>
 
-                                        {/* Input do Procedimento e botões */}
-                                        <div className="flex items-center gap-1 flex-1">
-                                          <Input
-                                            value={proc.texto}
-                                            onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
-                                            onBlur={() => handleBlurItem(index, proc.id, proc.texto, proc.tipo)}
-                                            placeholder="Ex: LCA"
-                                            className="flex-1 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
-                                          />
+                                        {/* Input do Procedimento, seleção de médico e botões */}
+                                        <div className="flex-1 flex flex-col gap-1">
+                                          {/* Linha principal: Input, Médico, Botões */}
+                                          <div className="flex items-center gap-1">
+                                            <Input
+                                              value={proc.texto}
+                                              onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
+                                              onBlur={() => handleBlurItem(index, proc.id, proc.texto, proc.tipo)}
+                                              placeholder="Ex: LCA"
+                                              className="flex-1 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
+                                            />
+                                            
+                                            {/* Seleção de Médico */}
+                                            <select
+                                              value={proc.medicoId || ''}
+                                              onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
+                                              className="text-[10px] px-1.5 py-0.5 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white min-w-[120px]"
+                                              title="Selecione o médico para este procedimento"
+                                            >
+                                              <option value="">Sem médico</option>
+                                              {carregandoMedicosParaProcedimentos ? (
+                                                <option disabled>Carregando...</option>
+                                              ) : (
+                                                medicosParaProcedimentos.map((medico) => (
+                                                  <option key={medico.id} value={medico.id}>
+                                                    {medico.nome}
+                                                  </option>
+                                                ))
+                                              )}
+                                            </select>
 
-                                          {/* Botão adicionar paciente */}
-                                          <button
-                                            onClick={() => handleAddPacienteClick(index, proc.id)}
-                                            className="p-0.5 text-green-600 hover:bg-green-100 rounded transition-all flex-shrink-0"
-                                            title="Adicionar Paciente"
-                                          >
-                                            <PlusIcon className="w-3 h-3" />
-                                          </button>
+                                            {/* Botão Expandir/Recolher (sempre visível) */}
+                                            <button
+                                              onClick={() => toggleExpansaoProcedimento(index, proc.id)}
+                                              className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all flex-shrink-0"
+                                              title={isProcedimentoExpanded(index, proc.id) ? "Recolher detalhes" : "Expandir detalhes"}
+                                            >
+                                              {isProcedimentoExpanded(index, proc.id) ? (
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                                </svg>
+                                              ) : (
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                              )}
+                                            </button>
 
-                                          {/* Botão remover procedimento */}
-                                          <button
-                                            onClick={() => handleRemoveItem(index, proc.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-0.5 text-red-600 hover:bg-red-100 rounded transition-all flex-shrink-0"
-                                            title="✕"
-                                          >
-                                            <TrashIcon className="w-2.5 h-2.5" />
-                                          </button>
+                                            {/* Botão adicionar paciente */}
+                                            <button
+                                              onClick={() => handleAddPacienteClick(index, proc.id)}
+                                              className="p-0.5 text-green-600 hover:bg-green-100 rounded transition-all flex-shrink-0"
+                                              title="Adicionar Paciente"
+                                            >
+                                              <PlusIcon className="w-3 h-3" />
+                                            </button>
+
+                                            {/* Botão remover procedimento */}
+                                            <button
+                                              onClick={() => handleRemoveItem(index, proc.id)}
+                                              className="opacity-0 group-hover:opacity-100 p-0.5 text-red-600 hover:bg-red-100 rounded transition-all flex-shrink-0"
+                                              title="✕"
+                                            >
+                                              <TrashIcon className="w-2.5 h-2.5" />
+                                            </button>
+                                          </div>
+                                          
+                                          {/* Informações detalhadas (expandidas) - para procedimentos sem pacientes */}
+                                          {isProcedimentoExpanded(index, proc.id) && (
+                                            <div className="ml-2 pl-2 border-l-2 border-slate-200 text-[10px] text-slate-500 italic">
+                                              Nenhum paciente cadastrado ainda. Clique no botão "+" para adicionar.
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     );
