@@ -1,5 +1,5 @@
 
-export type StatusLiberacao = 'x' | 'v'; // x = pendente, v = liberado
+export type StatusLiberacao = 'anestesista' | 'cardio' | 'exames' | 'liberado'; // Status de liberação do paciente
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
 export type View = 'dashboard' | 'calendar' | 'documentacao' | 'faturamento';
 

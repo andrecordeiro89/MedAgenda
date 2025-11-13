@@ -471,6 +471,9 @@ export const agendamentoService = {
   async create(agendamento: Omit<Agendamento, 'id' | 'created_at' | 'updated_at'>): Promise<Agendamento> {
     console.log('💾 Salvando agendamento no Supabase...', agendamento);
     
+    // Garantir que status_liberacao sempre tenha um valor padrão 'anestesista'
+    const statusLiberacao = agendamento.status_liberacao || 'anestesista';
+    
     const insertData = {
       nome_paciente: agendamento.nome_paciente,
       data_nascimento: agendamento.data_nascimento,
@@ -482,8 +485,11 @@ export const agendamentoService = {
       hospital_id: agendamento.hospital_id || null,
       cidade_natal: agendamento.cidade_natal || null,
       telefone: agendamento.telefone || null,
-      is_grade_cirurgica: agendamento.is_grade_cirurgica || false
+      is_grade_cirurgica: agendamento.is_grade_cirurgica || false,
+      status_liberacao: statusLiberacao // Sempre define um valor (padrão: 'anestesista')
     };
+    
+    console.log('📋 Status liberação definido:', statusLiberacao);
     
     const { data, error } = await supabase
       .from('agendamentos')
@@ -532,6 +538,9 @@ export const agendamentoService = {
     if (agendamento.ficha_pre_anestesica_url !== undefined) updateData.ficha_pre_anestesica_url = agendamento.ficha_pre_anestesica_url
     if (agendamento.ficha_pre_anestesica_data !== undefined) updateData.ficha_pre_anestesica_data = agendamento.ficha_pre_anestesica_data
     if (agendamento.observacoes !== undefined) updateData.observacoes = agendamento.observacoes
+    
+    // Status de liberação (campo direto)
+    if (agendamento.status_liberacao !== undefined) updateData.status_liberacao = agendamento.status_liberacao
     
     // Campo de grade cirúrgica
     if (agendamento.is_grade_cirurgica !== undefined) updateData.is_grade_cirurgica = agendamento.is_grade_cirurgica

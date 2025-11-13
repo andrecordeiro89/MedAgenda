@@ -92,6 +92,15 @@ export class SimpleAgendamentoService {
   }
 
   async create(agendamento: Omit<Agendamento, 'id'>): Promise<Agendamento> {
+    // Mapear status_liberacao: se não fornecido, usar 'anestesista' como padrão
+    let statusLiberacao = 'anestesista';
+    if (agendamento.status_liberacao) {
+      statusLiberacao = agendamento.status_liberacao;
+    } else if (agendamento.statusLiberacao) {
+      // Compatibilidade com valores antigos
+      statusLiberacao = agendamento.statusLiberacao === 'v' ? 'liberado' : 'anestesista';
+    }
+    
     const supabaseData = {
       nome_paciente: agendamento.nome,
       data_nascimento: agendamento.dataNascimento,
@@ -99,7 +108,7 @@ export class SimpleAgendamentoService {
       telefone: agendamento.telefone,
       whatsapp: agendamento.whatsapp,
       data_agendamento: agendamento.dataAgendamento,
-      status_liberacao: agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente',
+      status_liberacao: statusLiberacao, // Sempre define um valor (padrão: 'anestesista')
       medico_id: agendamento.medicoId,
       procedimento_id: agendamento.procedimentoId,
       hospital_id: agendamento.hospitalId
