@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, ReactElement } from 'react';
 import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon } from './ui';
 import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 // MODO MOCK
 // import { simpleGradeCirurgicaService } from '../services/api-simple';
 import { mockServices } from '../services/mock-storage';
@@ -9,6 +11,7 @@ const simpleGradeCirurgicaService = mockServices.gradeCirurgica;
 // Importar service real de agendamentos e médicos do Supabase
 import { agendamentoService, medicoService } from '../services/supabase';
 import { Medico } from '../types';
+
 
 interface GradeCirurgicaModalProps {
   isOpen: boolean;
@@ -86,6 +89,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   // Estados
   const [grades, setGrades] = useState<GradeCirurgicaDia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalRelatorioAberto, setModalRelatorioAberto] = useState(false);
+  const [gerandoPDF, setGerandoPDF] = useState(false);
 
   // Carregar médicos do hospital ao abrir o modal
   useEffect(() => {
@@ -141,6 +146,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 procedimentos: Array<{
                   nome: string;
                   agendamentoId: string;
+                  medicoId?: string;
+                  medicoNome?: string;
                   paciente?: {
                     nome: string;
                     dataNascimento: string;
@@ -240,8 +247,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     ordem: itens.length,
                     pacientes: pacientes,
                     agendamentoId: proc.agendamentoId,
-                    medicoId: proc.medicoId,
-                    medicoNome: proc.medicoNome
+                    ...(proc.medicoId && { medicoId: proc.medicoId }),
+                    ...(proc.medicoNome && { medicoNome: proc.medicoNome })
                   });
                 });
               });
@@ -1730,6 +1737,229 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     return grupos;
   };
 
+  // Função para gerar dados do relatório
+  const dadosRelatorio = useMemo(() => {
+    const dados: Array<{
+      data: string;
+      especialidade: string;
+      procedimento: string;
+      medico: string;
+      paciente: string;
+      idade: number | null;
+      cidade: string | null;
+      telefone: string | null;
+      dataConsulta: string | null;
+      dataNascimento: string | null;
+    }> = [];
+
+    grades.forEach((grade, gradeIndex) => {
+      const data = proximasDatas[gradeIndex];
+      if (!data) return;
+
+      const grupos = getEspecialidadesAgrupadas(grade.itens);
+      
+      grupos.forEach((grupo) => {
+        grupo.procedimentos.forEach((proc) => {
+          // Extrair apenas o nome da especialidade, removendo o nome do médico se presente
+          let especialidadeNome = grupo.especialidade?.texto || 'Sem especialidade';
+          // Se contém " - ", pegar apenas a parte antes (nome da especialidade)
+          if (especialidadeNome.includes(' - ')) {
+            especialidadeNome = especialidadeNome.split(' - ')[0];
+          }
+          const procedimentoNome = proc.texto || 'Sem procedimento';
+          const medicoNome = proc.medicoNome || 'Sem médico';
+
+          if (proc.pacientes && proc.pacientes.length > 0) {
+            proc.pacientes.forEach((paciente) => {
+              const idade = paciente.dataNascimento
+                ? new Date().getFullYear() - new Date(paciente.dataNascimento).getFullYear()
+                : null;
+
+              dados.push({
+                data: data.toLocaleDateString('pt-BR'),
+                especialidade: especialidadeNome,
+                procedimento: procedimentoNome,
+                medico: medicoNome,
+                paciente: paciente.nome || 'Sem nome',
+                idade,
+                cidade: paciente.cidade || null,
+                telefone: paciente.telefone || null,
+                dataConsulta: paciente.dataConsulta ? new Date(paciente.dataConsulta).toLocaleDateString('pt-BR') : null,
+                dataNascimento: paciente.dataNascimento ? new Date(paciente.dataNascimento).toLocaleDateString('pt-BR') : null,
+              });
+            });
+          } else {
+            // Procedimento sem paciente
+            dados.push({
+              data: data.toLocaleDateString('pt-BR'),
+              especialidade: especialidadeNome,
+              procedimento: procedimentoNome,
+              medico: medicoNome,
+              paciente: 'Sem paciente',
+              idade: null,
+              cidade: null,
+              telefone: null,
+              dataConsulta: null,
+              dataNascimento: null,
+            });
+          }
+        });
+      });
+    });
+
+    return dados;
+  }, [grades, proximasDatas]);
+
+  // Função para converter imagem em base64
+  const imageToBase64 = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg'));
+        } else {
+          reject(new Error('Não foi possível criar contexto do canvas'));
+        }
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  // Função para gerar e baixar PDF do relatório
+  const gerarPDFRelatorio = async () => {
+    setGerandoPDF(true);
+    try {
+    const doc = new jsPDF({
+      orientation: 'landscape', // Paisagem
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    try {
+      // Carregar e adicionar logo
+      const logoPath = '/CIS Sem fundo.jpg';
+      const logoBase64 = await imageToBase64(logoPath);
+      
+      // Adicionar logo no cabeçalho (lado esquerdo)
+      // Tamanho: 25mm de largura, altura proporcional (mantém proporção)
+      const logoWidth = 25;
+      const logoHeight = 15; // Altura fixa para manter proporção
+      doc.addImage(logoBase64, 'JPEG', 14, 8, logoWidth, logoHeight, undefined, 'FAST');
+      
+      // Título do relatório (ao lado do logo, centralizado verticalmente)
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleY = 8 + (logoHeight / 2) - 3; // Centralizado verticalmente com o logo
+      doc.text(`Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`, 14 + logoWidth + 5, titleY);
+
+      // Informações adicionais (abaixo do título)
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total de registros: ${dadosRelatorio.length}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Data de geração: ${new Date().toLocaleDateString('pt-BR')}`, 14 + logoWidth + 5, titleY + 12);
+    } catch (error) {
+      console.warn('Erro ao carregar logo, continuando sem logo:', error);
+      // Se não conseguir carregar o logo, continua sem ele
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`, 14, 15);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total de registros: ${dadosRelatorio.length}`, 14, 22);
+      doc.text(`Data de geração: ${new Date().toLocaleDateString('pt-BR')}`, 14, 27);
+    }
+
+    // Preparar dados da tabela
+    const tableData = dadosRelatorio.map(linha => [
+      linha.data,
+      linha.especialidade,
+      linha.procedimento,
+      linha.medico,
+      linha.paciente,
+      linha.idade !== null ? `${linha.idade} anos` : '-',
+      linha.cidade || '-',
+      linha.telefone || '-',
+      linha.dataConsulta || '-',
+      linha.dataNascimento || '-'
+    ]);
+
+    // Configurar colunas da tabela
+    const columns = [
+      { header: 'Data', dataKey: 'data' },
+      { header: 'Especialidade', dataKey: 'especialidade' },
+      { header: 'Procedimento', dataKey: 'procedimento' },
+      { header: 'Médico', dataKey: 'medico' },
+      { header: 'Paciente', dataKey: 'paciente' },
+      { header: 'Idade', dataKey: 'idade' },
+      { header: 'Cidade', dataKey: 'cidade' },
+      { header: 'Telefone', dataKey: 'telefone' },
+      { header: 'Data Consulta', dataKey: 'dataConsulta' },
+      { header: 'Data Nascimento', dataKey: 'dataNascimento' }
+    ];
+
+    // Adicionar tabela ao PDF usando autoTable como função
+    autoTable(doc, {
+      head: [['Data', 'Especialidade', 'Procedimento', 'Médico', 'Paciente', 'Idade', 'Cidade', 'Telefone', 'Data Consulta', 'Data Nascimento']],
+      body: tableData,
+      startY: 28,
+      styles: {
+        fontSize: 7,
+        cellPadding: 2,
+        overflow: 'linebreak',
+        halign: 'left'
+      },
+      headStyles: {
+        fillColor: [128, 128, 128],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7
+      },
+      columnStyles: {
+        0: { cellWidth: 20 }, // Data
+        1: { cellWidth: 30 }, // Especialidade
+        2: { cellWidth: 35 }, // Procedimento
+        3: { cellWidth: 30 }, // Médico
+        4: { cellWidth: 35 }, // Paciente
+        5: { cellWidth: 15 }, // Idade
+        6: { cellWidth: 25 }, // Cidade
+        7: { cellWidth: 25 }, // Telefone
+        8: { cellWidth: 25 }, // Data Consulta
+        9: { cellWidth: 25 }  // Data Nascimento
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: function (data: any) {
+        // Adicionar número da página
+        doc.setFontSize(8);
+        doc.text(
+          `Página ${data.pageNumber}`,
+          doc.internal.pageSize.getWidth() / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+      }
+    });
+
+    // Nome do arquivo
+    const nomeArquivo = `Relatorio_${nomeDiaClicado}_${mesExibidoNome.replace(/\s+/g, '_')}.pdf`;
+    
+    // Baixar PDF
+    doc.save(nomeArquivo);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar o PDF. Por favor, tente novamente.');
+    } finally {
+      setGerandoPDF(false);
+    }
+  };
+
   return (
     <>
     <Modal
@@ -1758,17 +1988,42 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           Grade Cirúrgica - {nomeDiaClicado}s de {mesExibidoNome}
         </h2>
 
-        {/* Botão Avançar Mês */}
-        <button
-          onClick={() => setOffsetMes(prev => prev + 1)}
-          className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          title="Próximo mês"
-        >
-          <span className="text-sm font-medium">Próximo</span>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        {/* Botões à direita */}
+        <div className="flex items-center gap-2">
+          {/* Botão Emitir Relatório - Download direto do PDF */}
+          <button
+            onClick={gerarPDFRelatorio}
+            disabled={gerandoPDF || dadosRelatorio.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+            title={gerandoPDF ? "Gerando PDF..." : dadosRelatorio.length === 0 ? "Nenhum registro para gerar relatório" : "Emitir Relatório PDF"}
+          >
+            {gerandoPDF ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm font-medium">Gerando PDF...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm font-medium">Emitir Relatório</span>
+              </>
+            )}
+          </button>
+
+          {/* Botão Avançar Mês */}
+          <button
+            onClick={() => setOffsetMes(prev => prev + 1)}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Próximo mês"
+          >
+            <span className="text-sm font-medium">Próximo</span>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col p-4 overflow-y-auto">
@@ -1782,8 +2037,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           </div>
         ) : (
           <>
-            {/* Grid com as 3 datas */}
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            {/* Grid com 1 dia por linha - sempre 1 coluna para dar espaço à tabela */}
+            <div className="flex flex-col gap-4 mb-4">
               {proximasDatas.map((data, index) => {
                 const grade = grades[index];
                 
@@ -1793,33 +2048,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             return (
               <div
                 key={index}
-                className="border-2 border-slate-300 rounded-lg bg-white shadow-md flex flex-col"
+                className="border-4 border-blue-400 rounded-xl bg-white shadow-lg flex flex-col w-full overflow-hidden"
               >
-                {/* Header do Card */}
-                <div className={`px-3 py-1.5 border-b-2 ${
-                  grade.itens.length > 0 
-                    ? 'border-green-200 bg-green-50' 
-                    : 'border-slate-200 bg-slate-50'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-800">
-                        {data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                      </h3>
-                      {grade.itens.length > 0 && (
-                        <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full">
-                          {(() => {
-                            const totalPacientes = grade.itens
-                              .filter(item => item.tipo === 'procedimento')
-                              .reduce((sum, item) => sum + (item.pacientes?.length || 0), 0);
-                            return totalPacientes > 0 ? totalPacientes : grade.itens.length;
-                          })()}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Botões de ação do header */}
-                    <div className="flex items-center gap-1">
+                {/* Header do Card com Data e Dia da Semana Destacados */}
+                <div className="px-4 py-3 border-b-4 border-blue-300 bg-white">
+                  <div className="flex items-center justify-center relative min-h-[3rem]">
+                    {/* Botões de ação do header - lado esquerdo */}
+                    <div className="absolute left-0 flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={() => handleAddEspecialidadeClick(index)}
                         className="flex items-center gap-0.5 px-2 py-0.5 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-medium transition-colors"
@@ -1861,6 +2096,27 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                           </svg>
                           Não é possível replicar com pacientes vinculados
                         </div>
+                      )}
+                    </div>
+                    
+                    {/* Data e Dia da Semana Centralizados - Formato: 05/01/2026 - Segunda-Feira */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-semibold text-black">
+                        {String(data.getDate()).padStart(2, '0')}/{String(data.getMonth() + 1).padStart(2, '0')}/{data.getFullYear()}
+                      </span>
+                      <span className="text-xl font-semibold text-black">-</span>
+                      <span className="text-xl font-semibold text-black">
+                        {DAY_NUMBER_NAMES[data.getDay()]}
+                      </span>
+                      {grade.itens.length > 0 && (
+                        <span className="text-xs font-bold bg-green-600 text-white px-2 py-0.5 rounded-full shadow-sm ml-2">
+                          {(() => {
+                            const totalPacientes = grade.itens
+                              .filter(item => item.tipo === 'procedimento')
+                              .reduce((sum, item) => sum + (item.pacientes?.length || 0), 0);
+                            return totalPacientes > 0 ? totalPacientes : grade.itens.length;
+                          })()}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -2129,19 +2385,19 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   </div>
                 )}
 
-                {/* Tabela de Itens Agrupados por Especialidade */}
+                {/* Tabela de Itens Agrupados por Especialidade - Formato Excel */}
                 <div className="flex-1 p-2">
                   {grade.itens.length === 0 ? (
                     <div className="text-center py-4 text-slate-500">
                       <p className="text-xs">Vazio</p>
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {getEspecialidadesAgrupadas(grade.itens).map((grupo, grupoIndex) => (
                         <div key={grupoIndex} className="border border-slate-300 rounded overflow-hidden bg-white shadow-sm">
                           {/* Header da Especialidade */}
                           {grupo.especialidade && (
-                            <div className="group flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                            <div className="group flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                               {/* Botões de ordem */}
                               <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
@@ -2170,11 +2426,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
                                 placeholder="Ex: Ortopedia - Joelho"
-                                className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-xs focus:bg-white/30 py-0.5 px-1.5"
+                                className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-sm focus:bg-white/30 py-1 px-2"
                               />
 
-                              {/* Badge com contador de procedimentos e pacientes */}
-                              <span className="bg-white/30 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                              {/* Badge com contador */}
+                              <span className="bg-white/30 text-white px-2 py-1 rounded text-xs font-semibold">
                                 {(() => {
                                   const totalPacientes = grupo.procedimentos.reduce((sum, proc) => 
                                     sum + (proc.pacientes?.length || 0), 0
@@ -2186,114 +2442,267 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               {/* Botão adicionar procedimento */}
                               <button
                                 onClick={() => handleAddProcedimento(index, grupo.especialidade!.id)}
-                                className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/20 hover:bg-white/30 text-white rounded text-[10px] font-medium transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 bg-white/20 hover:bg-white/30 text-white rounded text-xs font-medium transition-colors"
                                 title="Adicionar Procedimento"
                               >
-                                <PlusIcon className="w-2.5 h-2.5" />
+                                <PlusIcon className="w-3 h-3" />
                                 Proc.
                               </button>
 
                               {/* Botão remover */}
                               <button
                                 onClick={() => handleRemoveItem(index, grupo.especialidade!.id)}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 text-white hover:bg-white/20 rounded transition-all"
+                                className="opacity-0 group-hover:opacity-100 p-1 text-white hover:bg-white/20 rounded transition-all"
                                 title="✕"
                               >
-                                <TrashIcon className="w-3 h-3" />
+                                <TrashIcon className="w-4 h-4" />
                               </button>
                             </div>
                           )}
 
-                          {/* Lista de Procedimentos */}
+                          {/* Tabela estilo Excel */}
                           {grupo.procedimentos.length > 0 && (
-                            <div className="bg-slate-50">
-                              <div className="p-1 space-y-0.5">
-                                {(() => {
-                                  const expanded = grupo.especialidade ? isExpanded(index, grupo.especialidade.id) : true;
-                                  const procedimentosVisiveis = expanded ? grupo.procedimentos : grupo.procedimentos.slice(0, 5);
-                                  
-                                  return procedimentosVisiveis.map((proc) => {
-                                    // Para cada procedimento com pacientes, criar uma linha para cada paciente
-                                    if (proc.pacientes && proc.pacientes.length > 0) {
-                                      return proc.pacientes.map((paciente, pIdx) => {
-                                        // Calcular idade a partir da data de nascimento
-                                        const idade = paciente.dataNascimento
-                                          ? new Date().getFullYear() - new Date(paciente.dataNascimento).getFullYear()
-                                          : null;
-                                        
-                                        return (
-                                        <div
-                                          key={`${proc.id}-${pIdx}`}
-                                          className="group flex items-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-green-50 to-white rounded border border-green-200 hover:border-green-300 transition-all shadow-sm"
-                                        >
-                                          {/* Botões de ordem (apenas no primeiro paciente) */}
-                                          {pIdx === 0 && (
-                                            <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-                                              <button
-                                                onClick={() => handleMoveUp(index, proc.id)}
-                                                disabled={grade.itens.indexOf(proc) === (grupo.especialidade ? grade.itens.indexOf(grupo.especialidade) + 1 : 0)}
-                                                className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="↑"
-                                              >
-                                                <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                                </svg>
-                                              </button>
-                                              <button
-                                                onClick={() => handleMoveDown(index, proc.id)}
-                                                className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="↓"
-                                              >
-                                                <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                </svg>
-                                              </button>
-                                            </div>
-                                          )}
-                                          {pIdx > 0 && <div className="w-4"></div>}
-
-                                          {/* Dados do procedimento e paciente */}
-                                          <div className="flex-1 flex flex-col gap-1">
-                                            {/* Linha principal: Procedimento, Médico, Nome do Paciente e Botão Expandir */}
-                                            <div className="flex items-center gap-2">
-                                              {/* Procedimento */}
-                                              <span className="text-xs font-medium text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                                {proc.texto}
-                                              </span>
-                                              
-                                              {/* Médico (se houver) */}
-                                              {proc.medicoNome && (
-                                                <>
-                                                  <span className="text-slate-400">•</span>
-                                                  <span className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                                                    👨‍⚕️ {proc.medicoNome}
-                                                  </span>
-                                                </>
-                                              )}
-                                              
-                                              {/* Seta */}
-                                              <span className="text-slate-400">→</span>
-                                              
-                                              {/* Nome do Paciente (sempre visível) */}
-                                              <div className="flex items-center gap-1.5 flex-1">
-                                                <span className="text-xs font-semibold text-green-800 bg-green-100 px-2 py-0.5 rounded">
-                                                  👤 {paciente.nome}
-                                                </span>
-                                                {idade && (
-                                                  <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                                                    {idade} anos
-                                                  </span>
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse">
+                                {/* Cabeçalho da tabela */}
+                                <thead>
+                                  <tr className="bg-slate-100 border-b-2 border-slate-300">
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300">Procedimento</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300">Médico</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300">Nome do Paciente</th>
+                                    <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
+                                    <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(() => {
+                                    const expanded = grupo.especialidade ? isExpanded(index, grupo.especialidade.id) : true;
+                                    const procedimentosVisiveis = expanded ? grupo.procedimentos : grupo.procedimentos.slice(0, 5);
+                                    
+                                    // Preparar linhas da tabela
+                                    const linhas: ReactElement[] = [];
+                                    
+                                    procedimentosVisiveis.forEach((proc) => {
+                                      // Se tem pacientes, criar uma linha para cada paciente
+                                      if (proc.pacientes && proc.pacientes.length > 0) {
+                                        proc.pacientes.forEach((paciente, pIdx) => {
+                                          // Calcular idade
+                                          const idade = paciente.dataNascimento
+                                            ? new Date().getFullYear() - new Date(paciente.dataNascimento).getFullYear()
+                                            : null;
+                                          
+                                          const isFirstPaciente = pIdx === 0;
+                                          const isProcExpanded = isProcedimentoExpanded(index, proc.id);
+                                          
+                                          linhas.push(
+                                            <tr 
+                                              key={`${proc.id}-${pIdx}`}
+                                              className="group hover:bg-slate-50 border-b border-slate-200"
+                                            >
+                                              {/* Coluna Procedimento */}
+                                              <td className="px-3 py-2 border-r border-slate-200">
+                                                {isFirstPaciente ? (
+                                                  <Input
+                                                    value={proc.texto}
+                                                    onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
+                                                    onBlur={() => handleBlurItem(index, proc.id)}
+                                                    placeholder="Ex: LCA"
+                                                    className="text-sm border-0 shadow-none focus:ring-1 focus:ring-blue-500 py-1 px-2"
+                                                  />
+                                                ) : (
+                                                  <span className="text-sm text-slate-500 italic">└ {proc.texto}</span>
                                                 )}
-                                              </div>
+                                              </td>
                                               
-                                              {/* Botão Expandir/Recolher (apenas no primeiro paciente) */}
-                                              {pIdx === 0 && (
+                                              {/* Coluna Médico */}
+                                              <td className="px-3 py-2 border-r border-slate-200">
+                                                {isFirstPaciente ? (
+                                                  <select
+                                                    value={proc.medicoId || ''}
+                                                    onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
+                                                    className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full"
+                                                    title="Selecione o médico para este procedimento"
+                                                  >
+                                                    <option value="">Sem médico</option>
+                                                    {carregandoMedicosParaProcedimentos ? (
+                                                      <option disabled>Carregando...</option>
+                                                    ) : (
+                                                      medicosParaProcedimentos.map((medico) => (
+                                                        <option key={medico.id} value={medico.id}>
+                                                          {medico.nome}
+                                                        </option>
+                                                      ))
+                                                    )}
+                                                  </select>
+                                                ) : (
+                                                  <span className="text-sm text-slate-500">{proc.medicoNome || '-'}</span>
+                                                )}
+                                              </td>
+                                              
+                                              {/* Coluna Nome do Paciente */}
+                                              <td className="px-3 py-2 border-r border-slate-200">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-sm font-medium text-slate-800">{paciente.nome}</span>
+                                                  {isFirstPaciente && (
+                                                    <button
+                                                      onClick={() => toggleExpansaoProcedimento(index, proc.id)}
+                                                      className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
+                                                      title={isProcExpanded ? "Recolher detalhes" : "Expandir detalhes"}
+                                                    >
+                                                      {isProcExpanded ? (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                                        </svg>
+                                                      ) : (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                      )}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </td>
+                                              
+                                              {/* Coluna Idade */}
+                                              <td className="px-3 py-2 text-center border-r border-slate-200">
+                                                {idade ? (
+                                                  <span className="text-sm text-slate-700">{idade} anos</span>
+                                                ) : (
+                                                  <span className="text-sm text-slate-400">-</span>
+                                                )}
+                                              </td>
+                                              
+                                              {/* Coluna Ações */}
+                                              <td className="px-3 py-2 text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <button
+                                                    onClick={() => handleEditarPaciente(index, proc.id, pIdx)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-100 rounded transition-all"
+                                                    title="Editar paciente"
+                                                  >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleRemovePaciente(index, proc.id, pIdx)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                    title="Remover paciente"
+                                                  >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                  </button>
+                                                  {isFirstPaciente && (
+                                                    <>
+                                                      <button
+                                                        onClick={() => handleAddPacienteClick(index, proc.id)}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:bg-green-100 rounded transition-all"
+                                                        title="Adicionar Paciente"
+                                                      >
+                                                        <PlusIcon className="w-4 h-4" />
+                                                      </button>
+                                                      <button
+                                                        onClick={() => handleRemoveItem(index, proc.id)}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                        title="Remover procedimento"
+                                                      >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                      </button>
+                                                    </>
+                                                  )}
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                          
+                                          // Linha expandida com detalhes (apenas no primeiro paciente quando expandido)
+                                          if (isFirstPaciente && isProcExpanded) {
+                                            linhas.push(
+                                              <tr key={`${proc.id}-expanded`} className="bg-slate-50">
+                                                <td colSpan={5} className="px-3 py-2">
+                                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                                    {paciente.cidade && (
+                                                      <span className="flex items-center gap-1">
+                                                        <span className="font-medium">Cidade:</span>
+                                                        <span>{paciente.cidade}</span>
+                                                      </span>
+                                                    )}
+                                                    {paciente.telefone && (
+                                                      <span className="flex items-center gap-1">
+                                                        <span className="font-medium">Telefone:</span>
+                                                        <span>{paciente.telefone}</span>
+                                                      </span>
+                                                    )}
+                                                    {paciente.dataConsulta && (
+                                                      <span className="flex items-center gap-1">
+                                                        <span className="font-medium">Data Consulta:</span>
+                                                        <span>{new Date(paciente.dataConsulta).toLocaleDateString('pt-BR')}</span>
+                                                      </span>
+                                                    )}
+                                                    {paciente.dataNascimento && (
+                                                      <span className="flex items-center gap-1">
+                                                        <span className="font-medium">Nascimento:</span>
+                                                        <span>{new Date(paciente.dataNascimento).toLocaleDateString('pt-BR')}</span>
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            );
+                                          }
+                                        });
+                                      } else {
+                                        // Procedimento sem pacientes
+                                        const isProcExpanded = isProcedimentoExpanded(index, proc.id);
+                                        
+                                        linhas.push(
+                                          <tr 
+                                            key={proc.id}
+                                            className="group hover:bg-slate-50 border-b border-slate-200"
+                                          >
+                                            {/* Coluna Procedimento */}
+                                            <td className="px-3 py-2 border-r border-slate-200">
+                                              <Input
+                                                value={proc.texto}
+                                                onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
+                                                onBlur={() => handleBlurItem(index, proc.id)}
+                                                placeholder="Ex: LCA"
+                                                className="text-sm border-0 shadow-none focus:ring-1 focus:ring-blue-500 py-1 px-2"
+                                              />
+                                            </td>
+                                            
+                                            {/* Coluna Médico */}
+                                            <td className="px-3 py-2 border-r border-slate-200">
+                                              <select
+                                                value={proc.medicoId || ''}
+                                                onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
+                                                className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full"
+                                                title="Selecione o médico para este procedimento"
+                                              >
+                                                <option value="">Sem médico</option>
+                                                {carregandoMedicosParaProcedimentos ? (
+                                                  <option disabled>Carregando...</option>
+                                                ) : (
+                                                  medicosParaProcedimentos.map((medico) => (
+                                                    <option key={medico.id} value={medico.id}>
+                                                      {medico.nome}
+                                                    </option>
+                                                  ))
+                                                )}
+                                              </select>
+                                            </td>
+                                            
+                                            {/* Coluna Nome do Paciente */}
+                                            <td className="px-3 py-2 border-r border-slate-200">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-sm text-slate-400 italic">Sem paciente</span>
                                                 <button
                                                   onClick={() => toggleExpansaoProcedimento(index, proc.id)}
-                                                  className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all flex-shrink-0"
-                                                  title={isProcedimentoExpanded(index, proc.id) ? "Recolher detalhes" : "Expandir detalhes"}
+                                                  className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
+                                                  title={isProcExpanded ? "Recolher detalhes" : "Expandir detalhes"}
                                                 >
-                                                  {isProcedimentoExpanded(index, proc.id) ? (
+                                                  {isProcExpanded ? (
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                                     </svg>
@@ -2303,208 +2712,80 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     </svg>
                                                   )}
                                                 </button>
-                                              )}
-                                            </div>
-                                            
-                                            {/* Informações detalhadas (expandidas) */}
-                                            {isProcedimentoExpanded(index, proc.id) && (
-                                              <div className="ml-2 pl-2 border-l-2 border-green-200 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600">
-                                                {paciente.cidade && (
-                                                  <span className="flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded">
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                    {paciente.cidade}
-                                                  </span>
-                                                )}
-                                                {paciente.telefone && (
-                                                  <span className="flex items-center gap-0.5 bg-purple-50 px-1.5 py-0.5 rounded">
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                                    </svg>
-                                                    {paciente.telefone}
-                                                  </span>
-                                                )}
-                                                {paciente.dataConsulta && (
-                                                  <span className="flex items-center gap-0.5 bg-orange-50 px-1.5 py-0.5 rounded">
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
-                                                    {new Date(paciente.dataConsulta).toLocaleDateString('pt-BR')}
-                                                  </span>
-                                                )}
-                                                {paciente.dataNascimento && (
-                                                  <span className="flex items-center gap-0.5 bg-indigo-50 px-1.5 py-0.5 rounded">
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
-                                                    Nasc: {new Date(paciente.dataNascimento).toLocaleDateString('pt-BR')}
-                                                  </span>
-                                                )}
                                               </div>
-                                            )}
-                                          </div>
-
-                                          {/* Botões de ação */}
-                                          <div className="flex items-center gap-1">
-                                            {/* Botão editar paciente */}
-                                            <button
-                                              onClick={() => handleEditarPaciente(index, proc.id, pIdx)}
-                                              className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-100 rounded transition-all flex-shrink-0"
-                                              title="Editar paciente"
-                                            >
-                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                              </svg>
-                                            </button>
+                                            </td>
                                             
-                                            {/* Botão remover paciente */}
-                                            <button
-                                              onClick={() => handleRemovePaciente(index, proc.id, pIdx)}
-                                              className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all flex-shrink-0"
-                                              title="Remover paciente"
-                                            >
-                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                              </svg>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      )});
-                                    }
-
-                                    // Se não tem pacientes, mostrar linha do procedimento vazio
-                                    return (
-                                      <div
-                                        key={proc.id}
-                                        className="group flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200 hover:border-slate-300 transition-all"
-                                      >
-                                        {/* Botões de ordem */}
-                                        <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button
-                                            onClick={() => handleMoveUp(index, proc.id)}
-                                            disabled={grade.itens.indexOf(proc) === (grupo.especialidade ? grade.itens.indexOf(grupo.especialidade) + 1 : 0)}
-                                            className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                                            title="↑"
-                                          >
-                                            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                            </svg>
-                                          </button>
-                                          <button
-                                            onClick={() => handleMoveDown(index, proc.id)}
-                                            className="p-0.5 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                                            title="↓"
-                                          >
-                                            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                          </button>
-                                        </div>
-
-                                        {/* Input do Procedimento, seleção de médico e botões */}
-                                        <div className="flex-1 flex flex-col gap-1">
-                                          {/* Linha principal: Input, Médico, Botões */}
-                                          <div className="flex items-center gap-1">
-                                            <Input
-                                              value={proc.texto}
-                                              onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
-                                              onBlur={() => handleBlurItem(index, proc.id, proc.texto, proc.tipo)}
-                                              placeholder="Ex: LCA"
-                                              className="flex-1 border-0 shadow-none text-xs font-medium focus:ring-1 py-0.5 px-1.5"
-                                            />
+                                            {/* Coluna Idade */}
+                                            <td className="px-3 py-2 text-center border-r border-slate-200">
+                                              <span className="text-sm text-slate-400">-</span>
+                                            </td>
                                             
-                                            {/* Seleção de Médico */}
-                                            <select
-                                              value={proc.medicoId || ''}
-                                              onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
-                                              className="text-[10px] px-1.5 py-0.5 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white min-w-[120px]"
-                                              title="Selecione o médico para este procedimento"
-                                            >
-                                              <option value="">Sem médico</option>
-                                              {carregandoMedicosParaProcedimentos ? (
-                                                <option disabled>Carregando...</option>
-                                              ) : (
-                                                medicosParaProcedimentos.map((medico) => (
-                                                  <option key={medico.id} value={medico.id}>
-                                                    {medico.nome}
-                                                  </option>
-                                                ))
-                                              )}
-                                            </select>
-
-                                            {/* Botão Expandir/Recolher (sempre visível) */}
-                                            <button
-                                              onClick={() => toggleExpansaoProcedimento(index, proc.id)}
-                                              className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all flex-shrink-0"
-                                              title={isProcedimentoExpanded(index, proc.id) ? "Recolher detalhes" : "Expandir detalhes"}
-                                            >
-                                              {isProcedimentoExpanded(index, proc.id) ? (
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                                </svg>
-                                              ) : (
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                </svg>
-                                              )}
-                                            </button>
-
-                                            {/* Botão adicionar paciente */}
-                                            <button
-                                              onClick={() => handleAddPacienteClick(index, proc.id)}
-                                              className="p-0.5 text-green-600 hover:bg-green-100 rounded transition-all flex-shrink-0"
-                                              title="Adicionar Paciente"
-                                            >
-                                              <PlusIcon className="w-3 h-3" />
-                                            </button>
-
-                                            {/* Botão remover procedimento */}
-                                            <button
-                                              onClick={() => handleRemoveItem(index, proc.id)}
-                                              className="opacity-0 group-hover:opacity-100 p-0.5 text-red-600 hover:bg-red-100 rounded transition-all flex-shrink-0"
-                                              title="✕"
-                                            >
-                                              <TrashIcon className="w-2.5 h-2.5" />
-                                            </button>
-                                          </div>
-                                          
-                                          {/* Informações detalhadas (expandidas) - para procedimentos sem pacientes */}
-                                          {isProcedimentoExpanded(index, proc.id) && (
-                                            <div className="ml-2 pl-2 border-l-2 border-slate-200 text-[10px] text-slate-500 italic">
-                                              Nenhum paciente cadastrado ainda. Clique no botão "+" para adicionar.
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  }).flat();
-                                })()}
-                              </div>
+                                            {/* Coluna Ações */}
+                                            <td className="px-3 py-2 text-center">
+                                              <div className="flex items-center justify-center gap-1">
+                                                <button
+                                                  onClick={() => handleAddPacienteClick(index, proc.id)}
+                                                  className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:bg-green-100 rounded transition-all"
+                                                  title="Adicionar Paciente"
+                                                >
+                                                  <PlusIcon className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                  onClick={() => handleRemoveItem(index, proc.id)}
+                                                  className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                  title="Remover procedimento"
+                                                >
+                                                  <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        );
+                                        
+                                        // Linha expandida para procedimento sem pacientes
+                                        if (isProcExpanded) {
+                                          linhas.push(
+                                            <tr key={`${proc.id}-expanded`} className="bg-slate-50">
+                                              <td colSpan={5} className="px-3 py-2">
+                                                <div className="text-xs text-slate-500 italic">
+                                                  Nenhum paciente cadastrado ainda. Clique no botão "+" para adicionar.
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        }
+                                      }
+                                    });
+                                    
+                                    return linhas;
+                                  })()}
+                                </tbody>
+                              </table>
                               
                               {/* Botão Ver mais / Ver menos */}
                               {grupo.procedimentos.length > 5 && grupo.especialidade && (
-                                <button
-                                  onClick={() => toggleExpansao(index, grupo.especialidade!.id)}
-                                  className="w-full py-1 px-2 text-[10px] text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-medium transition-colors border-t border-slate-200"
-                                >
-                                  {isExpanded(index, grupo.especialidade.id) ? (
-                                    <span className="flex items-center justify-center gap-1">
-                                      Ver menos
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                      </svg>
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center justify-center gap-1">
-                                      Ver mais ({grupo.procedimentos.length - 5} ocultos)
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                      </svg>
-                                    </span>
-                                  )}
-                                </button>
+                                <div className="border-t border-slate-200 bg-slate-50">
+                                  <button
+                                    onClick={() => toggleExpansao(index, grupo.especialidade!.id)}
+                                    className="w-full py-2 px-3 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-medium transition-colors"
+                                  >
+                                    {isExpanded(index, grupo.especialidade.id) ? (
+                                      <span className="flex items-center justify-center gap-1">
+                                        Ver menos
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                        </svg>
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center justify-center gap-1">
+                                        Ver mais ({grupo.procedimentos.length - 5} ocultos)
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </span>
+                                    )}
+                                  </button>
+                                </div>
                               )}
                             </div>
                           )}
@@ -2707,6 +2988,93 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 OK
               </Button>
             )}
+          </div>
+        </div>
+      </Modal>
+    )}
+
+    {/* Modal de Relatório */}
+    {modalRelatorioAberto && (
+      <Modal
+        isOpen={modalRelatorioAberto}
+        onClose={() => setModalRelatorioAberto(false)}
+        title={`Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`}
+        size="large"
+      >
+        <div className="p-6">
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 mb-4">
+              Relatório de todas as <strong>{nomeDiaClicado}s</strong> do mês de <strong>{mesExibidoNome}</strong>
+            </p>
+          </div>
+
+          <div className="overflow-x-auto max-h-[70vh]">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead className="bg-gray-100 sticky top-0">
+                <tr>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Data</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Especialidade</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Procedimento</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Médico</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Paciente</th>
+                  <th className="border border-gray-300 px-3 py-2 text-center text-xs font-semibold text-gray-700">Idade</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Cidade</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Telefone</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Data Consulta</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Data Nascimento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dadosRelatorio.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="border border-gray-300 px-3 py-4 text-center text-gray-500">
+                      Nenhum agendamento encontrado para o período selecionado.
+                    </td>
+                  </tr>
+                ) : (
+                  dadosRelatorio.map((linha, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.data}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.especialidade}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.procedimento}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.medico}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm font-medium">{linha.paciente}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm text-center">
+                        {linha.idade !== null ? `${linha.idade} anos` : '-'}
+                      </td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.cidade || '-'}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.telefone || '-'}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.dataConsulta || '-'}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.dataNascimento || '-'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 flex justify-between items-center">
+            <p className="text-sm text-gray-600">
+              Total de registros: <strong>{dadosRelatorio.length}</strong>
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onClick={gerarPDFRelatorio}
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                disabled={dadosRelatorio.length === 0}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download PDF
+              </Button>
+              <Button
+                onClick={() => setModalRelatorioAberto(false)}
+                className="bg-gray-600 hover:bg-gray-700 text-white"
+              >
+                Fechar
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

@@ -11,6 +11,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "@tanstack/react-virtual": "^3.13.12",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
     "jszip": "^3.10.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
