@@ -361,6 +361,25 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [medicosParaProcedimentos, setMedicosParaProcedimentos] = useState<Medico[]>([]);
   const [carregandoMedicosParaProcedimentos, setCarregandoMedicosParaProcedimentos] = useState(false);
 
+  // Estados para mover paciente
+  const [modalMoverPaciente, setModalMoverPaciente] = useState(false);
+  const [agendamentoParaMover, setAgendamentoParaMover] = useState<{
+    id: string;
+    nome: string;
+    procedimento: string;
+    dataAtual: string;
+    gradeIndex: number;
+    diaSemana?: string;
+  } | null>(null);
+  const [novaDataSelecionada, setNovaDataSelecionada] = useState('');
+  const [datasDisponiveis, setDatasDisponiveis] = useState<Array<{ data: string; label: string }>>([]);
+  const [especialidadesDisponiveis, setEspecialidadesDisponiveis] = useState<Array<{ id: string; nome: string; medicoId: string; medicoNome: string; agendamentos?: any[] }>>([]);
+  const [procedimentosDisponiveis, setProcedimentosDisponiveis] = useState<Array<{ id: string; texto: string; agendamentoId: string }>>([]);
+  const [especialidadeSelecionadaDestino, setEspecialidadeSelecionadaDestino] = useState('');
+  const [procedimentoSelecionadoDestino, setProcedimentoSelecionadoDestino] = useState('');
+  const [movendoPaciente, setMovendoPaciente] = useState(false);
+  const [carregandoDestinos, setCarregandoDestinos] = useState(false);
+
   // Função auxiliar para mostrar mensagens personalizadas (substitui alert nativo)
   const mostrarMensagem = (titulo: string, mensagem: string, tipo: 'info' | 'sucesso' | 'erro' | 'aviso' = 'info') => {
     setConfirmacaoData({
@@ -1696,6 +1715,288 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setModalConfirmacao(true);
   };
 
+  // Função para abrir modal de mover paciente
+  const handleAbrirModalMoverPaciente = async (
+    gradeIndex: number, 
+    itemId: string, 
+    pacienteIndex: number
+  ) => {
+    const grade = grades[gradeIndex];
+    const item = grade.itens.find(i => i.id === itemId);
+    
+    if (!item || !item.agendamentoId || !item.pacientes || !item.pacientes[pacienteIndex]) {
+      setConfirmacaoData({
+        titulo: '❌ Erro',
+        mensagem: 'Paciente não encontrado.',
+        onConfirm: () => setModalConfirmacao(false)
+      });
+      setModalConfirmacao(true);
+      return;
+    }
+    
+    const paciente = item.pacientes[pacienteIndex];
+    
+    try {
+      // Buscar TODOS os agendamentos do hospital para encontrar todas as datas disponíveis
+      console.log('🔍 Buscando todas as datas com agendamentos...');
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      
+      // Descobrir o dia da semana da data atual (0=domingo, 1=segunda, ..., 6=sábado)
+      const diaSemanaDaDataAtual = new Date(grade.data + 'T00:00:00').getDay();
+      console.log(`📅 Dia da semana da data atual: ${diaSemanaDaDataAtual} (${DAY_NUMBER_NAMES[diaSemanaDaDataAtual]})`);
+      
+      // Extrair datas únicas (exceto a data atual) que possuem especialidade e procedimento
+      // E que sejam do MESMO DIA DA SEMANA
+      const datasUnicas = new Set<string>();
+      todosAgendamentos.forEach(ag => {
+        if (ag.data_agendamento && 
+            ag.data_agendamento !== grade.data && 
+            ag.especialidade && 
+            ag.procedimentos) {
+          // Verificar se é o mesmo dia da semana
+          const diaSemanaDestino = new Date(ag.data_agendamento + 'T00:00:00').getDay();
+          if (diaSemanaDestino === diaSemanaDaDataAtual) {
+            datasUnicas.add(ag.data_agendamento);
+          }
+        }
+      });
+      
+      // Ordenar e formatar as datas
+      const datasComGrades = Array.from(datasUnicas)
+        .sort() // Ordenar cronologicamente
+        .map(data => ({
+          data: data,
+          label: new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { 
+            weekday: 'long', 
+            day: '2-digit', 
+            month: 'long', 
+            year: 'numeric' 
+          })
+        }));
+      
+      console.log(`✅ Encontradas ${datasComGrades.length} ${DAY_NUMBER_NAMES[diaSemanaDaDataAtual]}s disponíveis`);
+      
+      if (datasComGrades.length === 0) {
+        setConfirmacaoData({
+          titulo: '⚠️ Nenhuma Data Disponível',
+          mensagem: `Não há outras ${DAY_NUMBER_NAMES[diaSemanaDaDataAtual]}s com especialidades e procedimentos criados para mover este paciente.`,
+          onConfirm: () => setModalConfirmacao(false)
+        });
+        setModalConfirmacao(true);
+        return;
+      }
+      
+      setAgendamentoParaMover({
+        id: item.agendamentoId,
+        nome: paciente.nome,
+        procedimento: item.texto || 'Procedimento',
+        dataAtual: grade.data, // grade.data já é uma string no formato YYYY-MM-DD
+        gradeIndex,
+        diaSemana: DAY_NUMBER_NAMES[diaSemanaDaDataAtual]
+      });
+      setDatasDisponiveis(datasComGrades);
+      setNovaDataSelecionada('');
+      setEspecialidadesDisponiveis([]);
+      setProcedimentosDisponiveis([]);
+      setEspecialidadeSelecionadaDestino('');
+      setProcedimentoSelecionadoDestino('');
+      setModalMoverPaciente(true);
+      
+    } catch (error) {
+      console.error('❌ Erro ao buscar datas:', error);
+      setConfirmacaoData({
+        titulo: '❌ Erro',
+        mensagem: 'Erro ao buscar datas disponíveis.',
+        onConfirm: () => setModalConfirmacao(false)
+      });
+      setModalConfirmacao(true);
+    }
+  };
+
+  // Função para carregar especialidades e procedimentos quando uma data é selecionada
+  const handleSelecionarDataDestino = async (dataDestino: string) => {
+    setNovaDataSelecionada(dataDestino);
+    setEspecialidadesDisponiveis([]);
+    setProcedimentosDisponiveis([]);
+    setEspecialidadeSelecionadaDestino('');
+    setProcedimentoSelecionadoDestino('');
+    
+    if (!dataDestino) return;
+    
+    setCarregandoDestinos(true);
+    try {
+      console.log('🔍 Buscando especialidades para a data:', dataDestino);
+      
+      // Buscar agendamentos da data selecionada diretamente do banco
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      const agendamentosDaData = todosAgendamentos.filter(a => a.data_agendamento === dataDestino);
+      
+      console.log(`📅 Encontrados ${agendamentosDaData.length} agendamentos para ${dataDestino}`);
+      
+      if (agendamentosDaData.length === 0) {
+        setConfirmacaoData({
+          titulo: '⚠️ Erro',
+          mensagem: 'Nenhuma especialidade encontrada para esta data.',
+          onConfirm: () => setModalConfirmacao(false)
+        });
+        setModalConfirmacao(true);
+        setCarregandoDestinos(false);
+        return;
+      }
+      
+      // Agrupar por especialidade + médico
+      const especialidadesMap = new Map<string, { 
+        id: string; 
+        nome: string; 
+        medicoId: string; 
+        medicoNome: string;
+        agendamentos: typeof agendamentosDaData;
+      }>();
+      
+      agendamentosDaData.forEach((agendamento) => {
+        if (agendamento.especialidade && agendamento.procedimentos) {
+          const medico = agendamento.medico || '';
+          const key = `${agendamento.especialidade}|||${medico}`;
+          
+          if (!especialidadesMap.has(key)) {
+            especialidadesMap.set(key, {
+              id: key, // Usar chave como ID
+              nome: agendamento.especialidade,
+              medicoId: '', // Não temos o ID do médico aqui
+              medicoNome: medico,
+              agendamentos: []
+            });
+          }
+          
+          especialidadesMap.get(key)!.agendamentos.push(agendamento);
+        }
+      });
+      
+      const especialidadesArray = Array.from(especialidadesMap.values());
+      console.log(`✅ ${especialidadesArray.length} especialidades encontradas`);
+      
+      setEspecialidadesDisponiveis(especialidadesArray);
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar especialidades:', error);
+      setConfirmacaoData({
+        titulo: '❌ Erro',
+        mensagem: 'Erro ao carregar especialidades disponíveis.',
+        onConfirm: () => setModalConfirmacao(false)
+      });
+      setModalConfirmacao(true);
+    } finally {
+      setCarregandoDestinos(false);
+    }
+  };
+
+  // Função para carregar procedimentos quando uma especialidade é selecionada
+  const handleSelecionarEspecialidadeDestino = (especialidadeId: string) => {
+    setEspecialidadeSelecionadaDestino(especialidadeId);
+    setProcedimentosDisponiveis([]);
+    setProcedimentoSelecionadoDestino('');
+    
+    if (!especialidadeId || !novaDataSelecionada) return;
+    
+    // Encontrar a especialidade selecionada
+    const especialidadeSelecionada = especialidadesDisponiveis.find(e => e.id === especialidadeId);
+    
+    if (!especialidadeSelecionada || !especialidadeSelecionada.agendamentos) return;
+    
+    console.log('🔍 Buscando procedimentos para especialidade:', especialidadeSelecionada.nome);
+    
+    // Extrair procedimentos únicos dos agendamentos desta especialidade
+    const procedimentosMap = new Map<string, { id: string; texto: string; agendamentoId: string }>();
+    
+    especialidadeSelecionada.agendamentos.forEach((agendamento) => {
+      if (agendamento.procedimentos && agendamento.id) {
+        const key = agendamento.procedimentos;
+        if (!procedimentosMap.has(key)) {
+          procedimentosMap.set(key, {
+            id: agendamento.id, // Usar o ID do agendamento como ID do procedimento
+            texto: agendamento.procedimentos,
+            agendamentoId: agendamento.id
+          });
+        }
+      }
+    });
+    
+    const procedimentosArray = Array.from(procedimentosMap.values());
+    console.log(`✅ ${procedimentosArray.length} procedimentos encontrados`);
+    
+    setProcedimentosDisponiveis(procedimentosArray);
+  };
+
+  // Função para executar a mudança de data
+  const handleMoverPaciente = async () => {
+    if (!agendamentoParaMover || !novaDataSelecionada || !especialidadeSelecionadaDestino || !procedimentoSelecionadoDestino) {
+      setConfirmacaoData({
+        titulo: '⚠️ Atenção',
+        mensagem: 'Por favor, selecione a data, especialidade e procedimento de destino.',
+        onConfirm: () => setModalConfirmacao(false)
+      });
+      setModalConfirmacao(true);
+      return;
+    }
+
+    setMovendoPaciente(true);
+    try {
+      // Buscar dados da especialidade e procedimento de destino
+      const especialidadeDestino = especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino);
+      const procedimentoDestino = procedimentosDisponiveis.find(p => p.id === procedimentoSelecionadoDestino);
+      
+      if (!especialidadeDestino || !procedimentoDestino) {
+        throw new Error('Especialidade ou procedimento de destino não encontrado.');
+      }
+      
+      console.log('📅 Movendo paciente...', {
+        agendamentoId: agendamentoParaMover.id,
+        dataAtual: agendamentoParaMover.dataAtual,
+        novaData: novaDataSelecionada,
+        novaEspecialidade: especialidadeDestino.nome,
+        novoProcedimento: procedimentoDestino.texto,
+        novoMedico: especialidadeDestino.medicoNome
+      });
+
+      // Atualizar data, especialidade, médico e procedimento do agendamento no banco
+      await agendamentoService.update(agendamentoParaMover.id, {
+        data_agendamento: novaDataSelecionada,
+        especialidade: especialidadeDestino.nome,
+        medico: especialidadeDestino.medicoNome || null,
+        procedimentos: procedimentoDestino.texto
+      });
+
+      console.log('✅ Paciente movido com sucesso!');
+
+      // Fechar modal
+      setModalMoverPaciente(false);
+      setAgendamentoParaMover(null);
+
+      // Mostrar mensagem de sucesso
+      setConfirmacaoData({
+        titulo: '✅ Sucesso',
+        mensagem: `Paciente "${agendamentoParaMover.nome}" movido para ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} - ${especialidadeDestino.nome} - ${procedimentoDestino.texto}.`,
+        onConfirm: () => {
+          setModalConfirmacao(false);
+          // Recarregar todas as grades
+          window.location.reload();
+        }
+      });
+      setModalConfirmacao(true);
+
+    } catch (error) {
+      console.error('❌ Erro ao mover paciente:', error);
+      setConfirmacaoData({
+        titulo: '❌ Erro',
+        mensagem: `Erro ao mover paciente: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        onConfirm: () => setModalConfirmacao(false)
+      });
+      setModalConfirmacao(true);
+    } finally {
+      setMovendoPaciente(false);
+    }
+  };
+
 
   const mesProximoNome = new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 1)
     .toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
@@ -2463,13 +2764,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                           {/* Tabela estilo Excel */}
                           {grupo.procedimentos.length > 0 && (
                             <div className="overflow-x-auto">
-                              <table className="w-full border-collapse">
+                              <table className="w-full border-collapse table-fixed">
                                 {/* Cabeçalho da tabela */}
                                 <thead>
                                   <tr className="bg-slate-100 border-b-2 border-slate-300">
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300">Procedimento</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300">Médico</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300">Nome do Paciente</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-56">Procedimento</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-36">Médico</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
                                     <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
                                     <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
                                   </tr>
@@ -2500,27 +2801,27 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               className="group hover:bg-slate-50 border-b border-slate-200"
                                             >
                                               {/* Coluna Procedimento */}
-                                              <td className="px-3 py-2 border-r border-slate-200">
+                                              <td className="px-3 py-2 border-r border-slate-200 w-56 overflow-hidden">
                                                 {isFirstPaciente ? (
                                                   <Input
                                                     value={proc.texto}
                                                     onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
                                                     onBlur={() => handleBlurItem(index, proc.id)}
                                                     placeholder="Ex: LCA"
-                                                    className="text-sm border-0 shadow-none focus:ring-1 focus:ring-blue-500 py-1 px-2"
+                                                    className="text-sm border-0 shadow-none focus:ring-1 focus:ring-blue-500 py-1 px-2 truncate"
                                                   />
                                                 ) : (
-                                                  <span className="text-sm text-slate-500 italic">└ {proc.texto}</span>
+                                                  <span className="text-sm text-slate-500 italic truncate block">└ {proc.texto}</span>
                                                 )}
                                               </td>
                                               
                                               {/* Coluna Médico */}
-                                              <td className="px-3 py-2 border-r border-slate-200">
+                                              <td className="px-3 py-2 border-r border-slate-200 w-36 overflow-hidden">
                                                 {isFirstPaciente ? (
                                                   <select
                                                     value={proc.medicoId || ''}
                                                     onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
-                                                    className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full"
+                                                    className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full truncate"
                                                     title="Selecione o médico para este procedimento"
                                                   >
                                                     <option value="">Sem médico</option>
@@ -2535,14 +2836,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     )}
                                                   </select>
                                                 ) : (
-                                                  <span className="text-sm text-slate-500">{proc.medicoNome || '-'}</span>
+                                                  <span className="text-sm text-slate-500 truncate block">{proc.medicoNome || '-'}</span>
                                                 )}
                                               </td>
                                               
                                               {/* Coluna Nome do Paciente */}
-                                              <td className="px-3 py-2 border-r border-slate-200">
+                                              <td className="px-3 py-2 border-r border-slate-200 w-72 overflow-hidden">
                                                 <div className="flex items-center gap-2">
-                                                  <span className="text-sm font-medium text-slate-800">{paciente.nome}</span>
+                                                  <span className="text-sm font-medium text-slate-800 truncate">{paciente.nome}</span>
                                                   {isFirstPaciente && (
                                                     <button
                                                       onClick={() => toggleExpansaoProcedimento(index, proc.id)}
@@ -2564,7 +2865,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </td>
                                               
                                               {/* Coluna Idade */}
-                                              <td className="px-3 py-2 text-center border-r border-slate-200">
+                                              <td className="px-3 py-2 text-center border-r border-slate-200 w-20 overflow-hidden">
                                                 {idade ? (
                                                   <span className="text-sm text-slate-700">{idade} anos</span>
                                                 ) : (
@@ -2573,11 +2874,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </td>
                                               
                                               {/* Coluna Ações */}
-                                              <td className="px-3 py-2 text-center">
+                                              <td className="px-3 py-2 text-center w-24 overflow-hidden">
                                                 <div className="flex items-center justify-center gap-1">
                                                   <button
                                                     onClick={() => handleEditarPaciente(index, proc.id, pIdx)}
-                                                    className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-100 rounded transition-all"
+                                                    className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-all"
                                                     title="Editar paciente"
                                                   >
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2585,8 +2886,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     </svg>
                                                   </button>
                                                   <button
+                                                    onClick={() => handleAbrirModalMoverPaciente(index, proc.id, pIdx)}
+                                                    className="p-1 text-purple-600 hover:bg-purple-100 rounded transition-all"
+                                                    title="Mover paciente para outra data"
+                                                  >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                                    </svg>
+                                                  </button>
+                                                  <button
                                                     onClick={() => handleRemovePaciente(index, proc.id, pIdx)}
-                                                    className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                    className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
                                                     title="Remover paciente"
                                                   >
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2597,14 +2907,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     <>
                                                       <button
                                                         onClick={() => handleAddPacienteClick(index, proc.id)}
-                                                        className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:bg-green-100 rounded transition-all"
+                                                        className="p-1 text-green-600 hover:bg-green-100 rounded transition-all"
                                                         title="Adicionar Paciente"
                                                       >
                                                         <PlusIcon className="w-4 h-4" />
                                                       </button>
                                                       <button
                                                         onClick={() => handleRemoveItem(index, proc.id)}
-                                                        className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                        className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
                                                         title="Remover procedimento"
                                                       >
                                                         <TrashIcon className="w-4 h-4" />
@@ -2662,22 +2972,22 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             className="group hover:bg-slate-50 border-b border-slate-200"
                                           >
                                             {/* Coluna Procedimento */}
-                                            <td className="px-3 py-2 border-r border-slate-200">
+                                            <td className="px-3 py-2 border-r border-slate-200 w-56 overflow-hidden">
                                               <Input
                                                 value={proc.texto}
                                                 onChange={(e) => handleUpdateItem(index, proc.id, e.target.value)}
                                                 onBlur={() => handleBlurItem(index, proc.id)}
                                                 placeholder="Ex: LCA"
-                                                className="text-sm border-0 shadow-none focus:ring-1 focus:ring-blue-500 py-1 px-2"
+                                                className="text-sm border-0 shadow-none focus:ring-1 focus:ring-blue-500 py-1 px-2 truncate"
                                               />
                                             </td>
                                             
                                             {/* Coluna Médico */}
-                                            <td className="px-3 py-2 border-r border-slate-200">
+                                            <td className="px-3 py-2 border-r border-slate-200 w-36 overflow-hidden">
                                               <select
                                                 value={proc.medicoId || ''}
                                                 onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
-                                                className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full"
+                                                className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full truncate"
                                                 title="Selecione o médico para este procedimento"
                                               >
                                                 <option value="">Sem médico</option>
@@ -2694,7 +3004,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             </td>
                                             
                                             {/* Coluna Nome do Paciente */}
-                                            <td className="px-3 py-2 border-r border-slate-200">
+                                            <td className="px-3 py-2 border-r border-slate-200 w-72 overflow-hidden">
                                               <div className="flex items-center gap-2">
                                                 <span className="text-sm text-slate-400 italic">Sem paciente</span>
                                                 <button
@@ -2716,23 +3026,23 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             </td>
                                             
                                             {/* Coluna Idade */}
-                                            <td className="px-3 py-2 text-center border-r border-slate-200">
+                                            <td className="px-3 py-2 text-center border-r border-slate-200 w-20 overflow-hidden">
                                               <span className="text-sm text-slate-400">-</span>
                                             </td>
                                             
                                             {/* Coluna Ações */}
-                                            <td className="px-3 py-2 text-center">
+                                            <td className="px-3 py-2 text-center w-24 overflow-hidden">
                                               <div className="flex items-center justify-center gap-1">
                                                 <button
                                                   onClick={() => handleAddPacienteClick(index, proc.id)}
-                                                  className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:bg-green-100 rounded transition-all"
+                                                  className="p-1 text-green-600 hover:bg-green-100 rounded transition-all"
                                                   title="Adicionar Paciente"
                                                 >
                                                   <PlusIcon className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                   onClick={() => handleRemoveItem(index, proc.id)}
-                                                  className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                  className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
                                                   title="Remover procedimento"
                                                 >
                                                   <TrashIcon className="w-4 h-4" />
@@ -3075,6 +3385,147 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 Fechar
               </Button>
             </div>
+          </div>
+        </div>
+      </Modal>
+    )}
+
+    {/* Modal de Mover Paciente */}
+    {modalMoverPaciente && agendamentoParaMover && (
+      <Modal
+        isOpen={modalMoverPaciente}
+        onClose={() => {
+          setModalMoverPaciente(false);
+          setAgendamentoParaMover(null);
+        }}
+        title={`📅 Mover Paciente para outra ${agendamentoParaMover.diaSemana || 'Data'}`}
+        size="medium"
+      >
+        <div className="p-6">
+          {/* Informações do Paciente Atual */}
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">📋 Informações Atuais</h3>
+            <p className="text-sm text-gray-700 mb-2">
+              <strong>Paciente:</strong> {agendamentoParaMover.nome}
+            </p>
+            <p className="text-sm text-gray-700 mb-2">
+              <strong>Procedimento:</strong> {agendamentoParaMover.procedimento}
+            </p>
+            <p className="text-sm text-gray-700">
+              <strong>Data Atual:</strong> {new Date(agendamentoParaMover.dataAtual + 'T00:00:00').toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+
+          {/* Etapa 1: Selecionar Data */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              1️⃣ Selecione a Nova {agendamentoParaMover.diaSemana}:
+            </label>
+            <select
+              value={novaDataSelecionada}
+              onChange={(e) => handleSelecionarDataDestino(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Escolha uma data...</option>
+              {datasDisponiveis.map((dataOpt) => (
+                <option key={dataOpt.data} value={dataOpt.data}>
+                  {dataOpt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Etapa 2: Selecionar Especialidade */}
+          {novaDataSelecionada && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                2️⃣ Selecione a Especialidade de Destino:
+              </label>
+              {carregandoDestinos ? (
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">
+                  Carregando especialidades...
+                </div>
+              ) : (
+                <select
+                  value={especialidadeSelecionadaDestino}
+                  onChange={(e) => handleSelecionarEspecialidadeDestino(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={especialidadesDisponiveis.length === 0}
+                >
+                  <option value="">Escolha uma especialidade...</option>
+                  {especialidadesDisponiveis.map((esp) => (
+                    <option key={esp.id} value={esp.id}>
+                      {esp.nome}{esp.medicoNome ? ` - ${esp.medicoNome}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Etapa 3: Selecionar Procedimento */}
+          {especialidadeSelecionadaDestino && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                3️⃣ Selecione o Procedimento de Destino:
+              </label>
+              <select
+                value={procedimentoSelecionadoDestino}
+                onChange={(e) => setProcedimentoSelecionadoDestino(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={procedimentosDisponiveis.length === 0}
+              >
+                <option value="">Escolha um procedimento...</option>
+                {procedimentosDisponiveis.map((proc) => (
+                  <option key={proc.id} value={proc.id}>
+                    {proc.texto}
+                  </option>
+                ))}
+              </select>
+              {procedimentosDisponiveis.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Nenhum procedimento disponível para esta especialidade.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Resumo da Seleção */}
+          {novaDataSelecionada && especialidadeSelecionadaDestino && procedimentoSelecionadoDestino && (
+            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-green-800 mb-3">✅ Destino Selecionado</h3>
+              <p className="text-sm text-green-800 mb-1">
+                <strong>Data:</strong> {new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}
+              </p>
+              <p className="text-sm text-green-800 mb-1">
+                <strong>Especialidade:</strong> {especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.nome}
+                {especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.medicoNome && 
+                  ` - ${especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.medicoNome}`
+                }
+              </p>
+              <p className="text-sm text-green-800">
+                <strong>Procedimento:</strong> {procedimentosDisponiveis.find(p => p.id === procedimentoSelecionadoDestino)?.texto}
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <Button
+              onClick={() => {
+                setModalMoverPaciente(false);
+                setAgendamentoParaMover(null);
+              }}
+              variant="secondary"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleMoverPaciente}
+              disabled={!novaDataSelecionada || !especialidadeSelecionadaDestino || !procedimentoSelecionadoDestino || movendoPaciente}
+              className="bg-purple-600 hover:bg-purple-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {movendoPaciente ? 'Movendo...' : 'Confirmar Mudança'}
+            </Button>
           </div>
         </div>
       </Modal>
