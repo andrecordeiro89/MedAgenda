@@ -70,21 +70,40 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
         return procedimento?.tipo || agendamento.tipo || 'ambulatorial';
     };
     
-    // Calcular KPIs baseados na documentação (mesma lógica da tela Documentação)
-    const aguardandoDocs = agendamentos.filter(a => {
+    // Calcular KPIs baseados na documentação - CONTANDO POR PACIENTES ÚNICOS
+    // Função auxiliar para obter pacientes únicos de uma lista de agendamentos
+    const getPacientesUnicos = (agendamentosList: Agendamento[]): Set<string> => {
+        const pacientes = new Set<string>();
+        agendamentosList.forEach(a => {
+            const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+            // Ignorar registros sem paciente (ex: linhas de grade cirúrgica)
+            if (nomePaciente && nomePaciente !== '') {
+                pacientes.add(nomePaciente.toLowerCase()); // lowercase para evitar duplicatas por case
+            }
+        });
+        return pacientes;
+    };
+    
+    // Aguardando docs: contar PACIENTES ÚNICOS (não procedimentos)
+    const agendamentosAguardandoDocs = agendamentos.filter(a => {
         // Aguardando docs: documentos_ok não é true (pode ser false, null ou undefined)
         return !(a.documentos_ok === true);
-    }).length;
+    });
+    const aguardandoDocs = getPacientesUnicos(agendamentosAguardandoDocs).size;
     
-    const aguardandoFicha = agendamentos.filter(a => {
+    // Aguardando ficha: contar PACIENTES ÚNICOS
+    const agendamentosAguardandoFicha = agendamentos.filter(a => {
         // Aguardando ficha: tem docs OK mas não tem ficha OK
         return a.documentos_ok === true && !(a.ficha_pre_anestesica_ok === true);
-    }).length;
+    });
+    const aguardandoFicha = getPacientesUnicos(agendamentosAguardandoFicha).size;
     
-    const liberados = agendamentos.filter(a => {
+    // Liberados: contar PACIENTES ÚNICOS
+    const agendamentosLiberados = agendamentos.filter(a => {
         // Liberado: tem docs OK E ficha OK
         return a.documentos_ok === true && a.ficha_pre_anestesica_ok === true;
-    }).length;
+    });
+    const liberados = getPacientesUnicos(agendamentosLiberados).size;
     
     // Debug: log dos KPIs calculados
     useEffect(() => {

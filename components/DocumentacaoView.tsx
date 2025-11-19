@@ -14,6 +14,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Estado para controlar agrupamento por status
   const [agruparPorStatus, setAgruparPorStatus] = useState(false);
   
+  // Estado para controlar ordenação por anestesista
+  const [ordenarPorAnestesista, setOrdenarPorAnestesista] = useState(false);
+  
   // Estados para filtros de busca
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
@@ -102,8 +105,43 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
-  // Filtrar agendamentos
-  const agendamentosFiltrados = agendamentos.filter(ag => {
+  // AGRUPAR POR PACIENTES ÚNICOS
+  // Função para agrupar agendamentos por paciente (mostrar apenas 1 linha por paciente)
+  const agruparPorPacienteUnico = (agendamentosList: Agendamento[]): Agendamento[] => {
+    const pacientesMap = new Map<string, Agendamento>();
+    
+    agendamentosList.forEach(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
+      
+      // Ignorar registros sem paciente
+      if (!nomePaciente || nomePaciente === '') return;
+      
+      // Se já existe um registro deste paciente, mantém o mais relevante
+      if (pacientesMap.has(nomePaciente)) {
+        const existente = pacientesMap.get(nomePaciente)!;
+        
+        // Prioridade: 
+        // 1. Registro mais recente (created_at)
+        // 2. Registro com mais informações preenchidas
+        const dataExistente = new Date(existente.created_at || 0).getTime();
+        const dataAtual = new Date(ag.created_at || 0).getTime();
+        
+        // Se o registro atual é mais recente, substitui
+        if (dataAtual > dataExistente) {
+          pacientesMap.set(nomePaciente, ag);
+        }
+      } else {
+        // Primeira vez que encontra este paciente
+        pacientesMap.set(nomePaciente, ag);
+      }
+    });
+    
+    // Retornar array de agendamentos únicos por paciente
+    return Array.from(pacientesMap.values());
+  };
+  
+  // Filtrar agendamentos (ANTES de agrupar)
+  const agendamentosFiltradosCompletos = agendamentos.filter(ag => {
     // Filtro por status geral (Todos, Pendentes, Liberados)
     if (filtro === 'pendentes') {
       const pendente = !(ag.documentos_ok === true) || !(ag.ficha_pre_anestesica_ok === true);
@@ -148,6 +186,30 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     return true;
   });
   
+  // AGRUPAR POR PACIENTE ÚNICO (mostrar apenas 1 linha por paciente)
+  let agendamentosFiltrados = agruparPorPacienteUnico(agendamentosFiltradosCompletos);
+  
+  // ORDENAR POR ANESTESISTA (se ativo)
+  if (ordenarPorAnestesista) {
+    agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
+      const statusA = a.status_liberacao || 'anestesista';
+      const statusB = b.status_liberacao || 'anestesista';
+      
+      // Prioridade: liberado > exames > cardio > anestesista
+      const prioridade: Record<string, number> = {
+        'liberado': 1,
+        'exames': 2,
+        'cardio': 3,
+        'anestesista': 4
+      };
+      
+      const prioridadeA = prioridade[statusA] || 999;
+      const prioridadeB = prioridade[statusB] || 999;
+      
+      return prioridadeA - prioridadeB;
+    });
+  }
+  
   // Limpar todos os filtros
   const limparFiltros = () => {
     setFiltroStatus('');
@@ -186,6 +248,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setAgruparPorStatus(prev => !prev);
     // Recolher todas as linhas ao alternar agrupamento
     setLinhasExpandidas(new Set());
+  };
+  
+  // Toggle ordenação por anestesista
+  const toggleOrdenarPorAnestesista = () => {
+    setOrdenarPorAnestesista(prev => !prev);
   };
 
   // Abrir modal de upload
@@ -476,13 +543,17 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
           
-          {/* Status Liberação */}
+          {/* Status Liberação - COM DESTAQUE VERDE QUANDO LIBERADO */}
           <td className="px-4 py-4 whitespace-nowrap">
             <select
               value={ag.status_liberacao || 'anestesista'}
               onChange={(e) => handleAtualizarStatusLiberacao(ag.id, e.target.value as StatusLiberacao)}
-              className="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-              title="Status de liberação do paciente"
+              className={`text-xs px-2 py-1 border rounded focus:outline-none focus:ring-2 ${
+                (ag.status_liberacao || 'anestesista') === 'liberado'
+                  ? 'border-green-500 border-2 bg-green-50 text-green-800 font-semibold focus:ring-green-400'
+                  : 'border-gray-300 bg-white focus:ring-blue-500'
+              }`}
+              title={(ag.status_liberacao || 'anestesista') === 'liberado' ? '✅ Paciente liberado!' : 'Status de liberação do paciente'}
             >
               <option value="anestesista">Anestesista</option>
               <option value="cardio">Cardio</option>
@@ -767,7 +838,17 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          Todos ({agendamentos.length})
+          Todos ({(() => {
+            // Contar PACIENTES ÚNICOS (não procedimentos)
+            const pacientes = new Set<string>();
+            agendamentos.forEach(a => {
+              const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+              if (nomePaciente && nomePaciente !== '') {
+                pacientes.add(nomePaciente.toLowerCase());
+              }
+            });
+            return pacientes.size;
+          })()})
         </button>
         <button
           onClick={() => setFiltro('pendentes')}
@@ -777,7 +858,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          Pendentes ({agendamentos.filter(a => !(a.documentos_ok === true) || !(a.ficha_pre_anestesica_ok === true)).length})
+          Pendentes ({(() => {
+            // Contar PACIENTES ÚNICOS pendentes (não procedimentos)
+            const pacientes = new Set<string>();
+            agendamentos
+              .filter(a => !(a.documentos_ok === true) || !(a.ficha_pre_anestesica_ok === true))
+              .forEach(a => {
+                const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+                if (nomePaciente && nomePaciente !== '') {
+                  pacientes.add(nomePaciente.toLowerCase());
+                }
+              });
+            return pacientes.size;
+          })()})
         </button>
         <button
           onClick={() => setFiltro('liberados')}
@@ -787,7 +880,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          Liberados ({agendamentos.filter(a => a.documentos_ok === true && a.ficha_pre_anestesica_ok === true).length})
+          Liberados ({(() => {
+            // Contar PACIENTES ÚNICOS liberados (não procedimentos)
+            const pacientes = new Set<string>();
+            agendamentos
+              .filter(a => a.documentos_ok === true && a.ficha_pre_anestesica_ok === true)
+              .forEach(a => {
+                const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+                if (nomePaciente && nomePaciente !== '') {
+                  pacientes.add(nomePaciente.toLowerCase());
+                }
+              });
+            return pacientes.size;
+          })()})
         </button>
       </div>
 
@@ -932,8 +1037,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Data Cirurgia
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Anestesista
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={toggleOrdenarPorAnestesista}
+                      title={ordenarPorAnestesista ? 'Clique para remover ordenação' : 'Clique para ordenar (Liberados primeiro)'}
+                    >
+                      <div className="flex items-center gap-2">
+                        Anestesista
+                        {ordenarPorAnestesista && (
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                          </svg>
+                        )}
+                      </div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Confirmação
