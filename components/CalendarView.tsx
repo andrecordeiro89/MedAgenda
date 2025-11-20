@@ -4,6 +4,8 @@ import { Agendamento, Medico, Procedimento, GradeCirurgicaDia, Especialidade, Me
 import { ChevronLeftIcon, ChevronRightIcon, Modal } from './ui';
 import { formatDate, formatDateLocal, compareDates } from '../utils';
 import GradeCirurgicaModal from './GradeCirurgicaModal';
+import RelatorioSemanalModal from './RelatorioSemanalModal';
+import { useAuth } from './PremiumLogin';
 
 interface CalendarViewProps {
   agendamentos: Agendamento[];
@@ -23,11 +25,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   metasEspecialidades = [], // Default para array vazio
   hospitalId
 }) => {
+  const { hospitalSelecionado } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGradeCirurgicaModalOpen, setIsGradeCirurgicaModalOpen] = useState(false);
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 0=Dom, 1=Seg, ..., 6=Sáb
+  const [isRelatorioSemanalOpen, setIsRelatorioSemanalOpen] = useState(false);
 
   // Debug: verificar se metas estão carregadas
   console.log('📊 CalendarView - Metas carregadas:', metasEspecialidades.length);
@@ -366,7 +370,21 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   return (
     <div>
-        <h2 className="text-3xl font-bold text-slate-800 mb-6">Calendário de Agendamentos</h2>
+        {/* Cabeçalho com título e botão */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-3xl font-bold text-slate-800">Calendário de Agendamentos</h2>
+          <button
+            onClick={() => setIsRelatorioSemanalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-md"
+            title="Gerar relatório semanal em PDF"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            Compartilhar Grade
+          </button>
+        </div>
+        
         <div className="bg-white p-4 rounded-lg shadow-md">
             <div className="flex justify-between items-center mb-4">
                 <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-slate-100"><ChevronLeftIcon /></button>
@@ -414,6 +432,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             diaSemanaClicado={selectedDayOfWeek}
             hospitalId={hospitalId}
             especialidades={especialidades}
+        />
+
+        {/* Modal de Relatório Semanal */}
+        <RelatorioSemanalModal
+            isOpen={isRelatorioSemanalOpen}
+            onClose={() => setIsRelatorioSemanalOpen(false)}
+            hospitalId={hospitalId}
+            hospitalNome={hospitalSelecionado?.nome}
         />
     </div>
   );
