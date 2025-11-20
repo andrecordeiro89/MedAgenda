@@ -481,6 +481,7 @@ export const agendamentoService = {
       data_consulta: agendamento.data_consulta || null,
       especialidade: agendamento.especialidade || null,
       medico: agendamento.medico || null,
+      medico_id: agendamento.medico_id || null, // Incluir ID do médico
       procedimentos: agendamento.procedimentos || null,
       hospital_id: agendamento.hospital_id || null,
       cidade_natal: agendamento.cidade_natal || null,
@@ -529,6 +530,7 @@ export const agendamentoService = {
     if (agendamento.data_consulta !== undefined) updateData.data_consulta = agendamento.data_consulta
     if (agendamento.especialidade !== undefined) updateData.especialidade = agendamento.especialidade
     if (agendamento.medico !== undefined) updateData.medico = agendamento.medico
+    if (agendamento.medico_id !== undefined) updateData.medico_id = agendamento.medico_id
     if (agendamento.procedimentos !== undefined) updateData.procedimentos = agendamento.procedimentos
     
     // Campos de documentação

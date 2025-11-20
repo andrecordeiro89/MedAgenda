@@ -191,17 +191,26 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     
                     // Incluir médico associado ao procedimento (se houver)
                     if (agendamento.medico) {
-                      // Buscar médico pelo nome para obter o ID (usar medicosParaProcedimentos se disponível)
-                      let medicoEncontrado = null;
-                      if (medicosParaProcedimentos.length > 0) {
-                        medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === agendamento.medico);
-                      }
-                      if (medicoEncontrado) {
-                        procedimentoData.medicoId = medicoEncontrado.id;
+                      // Prioridade 1: Usar medico_id ou medicoId do banco (se disponível)
+                      const medicoIdDoBanco = agendamento.medico_id || agendamento.medicoId;
+                      
+                      if (medicoIdDoBanco) {
+                        // Médico ID vem direto do banco
+                        procedimentoData.medicoId = medicoIdDoBanco;
                         procedimentoData.medicoNome = agendamento.medico;
                       } else {
-                        // Se não encontrar pelo nome, usar apenas o nome
-                        procedimentoData.medicoNome = agendamento.medico;
+                        // Prioridade 2: Buscar médico pelo nome (fallback)
+                        let medicoEncontrado = null;
+                        if (medicosParaProcedimentos.length > 0) {
+                          medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === agendamento.medico);
+                        }
+                        if (medicoEncontrado) {
+                          procedimentoData.medicoId = medicoEncontrado.id;
+                          procedimentoData.medicoNome = agendamento.medico;
+                        } else {
+                          // Se não encontrar pelo nome, usar apenas o nome
+                          procedimentoData.medicoNome = agendamento.medico;
+                        }
                       }
                     }
                     
@@ -588,6 +597,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_agendamento: dataFormatada,
         especialidade: especialidadeNome,
         medico: nomeMedico,
+        medico_id: medicoSelecionado || null, // ID do médico
         hospital_id: hospitalId || null,
         cidade_natal: null,
         telefone: null,
@@ -606,6 +616,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_agendamento: dataFormatada,
           especialidade: especialidadeNome,
           medico: nomeMedico,
+          medico_id: medicoSelecionado || null, // ID do médico
           procedimentos: procedimento.nome,
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -733,6 +744,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_agendamento: dataFormatada,
         especialidade: especialidadeNome,
         medico: nomeMedico || null, // Médico opcional (null para equipes)
+        medico_id: medicoSelecionado || null, // ID do médico
         hospital_id: hospitalId || null,
         cidade_natal: null,
         telefone: null,
@@ -747,6 +759,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_agendamento: dataFormatada,
           especialidade: especialidadeNome,
           medico: nomeMedico || null, // Médico opcional (null para equipes)
+          medico_id: medicoSelecionado || null, // ID do médico
           procedimentos: procedimento.nome,
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -952,7 +965,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
       
       await agendamentoService.update(item.agendamentoId, {
-        medico: medicoNome || null
+        medico: medicoNome || null,
+        medico_id: medicoId || null // Incluir ID do médico
       });
       
       console.log('✅ Médico do procedimento atualizado com sucesso!');
@@ -1313,6 +1327,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       
       let especialidadeAtual = '';
       let medicoAtual: string | null = null;
+      let medicoIdAtual: string | null = null;
       
       // Percorrer itens limpos e salvar especialidades e procedimentos (SEM pacientes)
       for (const item of itensLimpos) {
@@ -1323,10 +1338,20 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             const [espNome, medNome] = item.texto.split(' - ');
             especialidadeAtual = espNome || '';
             medicoAtual = medNome || null;
+            
+            // Buscar ID do médico pelo nome
+            medicoIdAtual = null;
+            if (medNome && medicosParaProcedimentos.length > 0) {
+              const medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === medNome);
+              if (medicoEncontrado) {
+                medicoIdAtual = medicoEncontrado.id;
+              }
+            }
           } else {
             // Apenas especialidade, sem médico
             especialidadeAtual = item.texto;
             medicoAtual = null;
+            medicoIdAtual = null;
           }
           
           // Salvar especialidade (médico é opcional)
@@ -1338,6 +1363,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 data_agendamento: dataFormatada,
                 especialidade: especialidadeAtual,
                 medico: medicoAtual || null, // Médico opcional (null para equipes)
+                medico_id: medicoIdAtual || null, // ID do médico
                 hospital_id: hospitalId || null,
                 cidade_natal: null,
                 telefone: null,
@@ -1356,6 +1382,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               data_agendamento: dataFormatada,
               especialidade: especialidadeAtual,
               medico: medicoAtual || null, // Médico opcional (null para equipes)
+              medico_id: medicoIdAtual || null, // ID do médico
               procedimentos: item.texto,
               hospital_id: hospitalId || null,
               cidade_natal: null,
