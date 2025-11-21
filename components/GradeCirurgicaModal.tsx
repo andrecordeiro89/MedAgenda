@@ -191,26 +191,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     
                     // Incluir médico associado ao procedimento (se houver)
                     if (agendamento.medico) {
-                      // Prioridade 1: Usar medico_id ou medicoId do banco (se disponível)
-                      const medicoIdDoBanco = agendamento.medico_id || agendamento.medicoId;
-                      
-                      if (medicoIdDoBanco) {
-                        // Médico ID vem direto do banco
-                        procedimentoData.medicoId = medicoIdDoBanco;
+                      // Buscar médico pelo nome na lista de médicos carregados
+                      let medicoEncontrado = null;
+                      if (medicosParaProcedimentos.length > 0) {
+                        medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === agendamento.medico);
+                      }
+                      if (medicoEncontrado) {
+                        procedimentoData.medicoId = medicoEncontrado.id;
                         procedimentoData.medicoNome = agendamento.medico;
                       } else {
-                        // Prioridade 2: Buscar médico pelo nome (fallback)
-                        let medicoEncontrado = null;
-                        if (medicosParaProcedimentos.length > 0) {
-                          medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === agendamento.medico);
-                        }
-                        if (medicoEncontrado) {
-                          procedimentoData.medicoId = medicoEncontrado.id;
-                          procedimentoData.medicoNome = agendamento.medico;
-                        } else {
-                          // Se não encontrar pelo nome, usar apenas o nome
-                          procedimentoData.medicoNome = agendamento.medico;
-                        }
+                        // Se não encontrar pelo nome, usar apenas o nome do médico
+                        procedimentoData.medicoNome = agendamento.medico;
                       }
                     }
                     
@@ -597,7 +588,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_agendamento: dataFormatada,
         especialidade: especialidadeNome,
         medico: nomeMedico,
-        medico_id: medicoSelecionado || null, // ID do médico
+        // REMOVIDO: medico_id - coluna não existe no schema do banco
         hospital_id: hospitalId || null,
         cidade_natal: null,
         telefone: null,
@@ -616,7 +607,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_agendamento: dataFormatada,
           especialidade: especialidadeNome,
           medico: nomeMedico,
-          medico_id: medicoSelecionado || null, // ID do médico
+          // REMOVIDO: medico_id - coluna não existe no schema do banco
           procedimentos: procedimento.nome,
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -744,7 +735,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_agendamento: dataFormatada,
         especialidade: especialidadeNome,
         medico: nomeMedico || null, // Médico opcional (null para equipes)
-        medico_id: medicoSelecionado || null, // ID do médico
+        // REMOVIDO: medico_id - coluna não existe no schema do banco
         hospital_id: hospitalId || null,
         cidade_natal: null,
         telefone: null,
@@ -759,7 +750,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_agendamento: dataFormatada,
           especialidade: especialidadeNome,
           medico: nomeMedico || null, // Médico opcional (null para equipes)
-          medico_id: medicoSelecionado || null, // ID do médico
+          // REMOVIDO: medico_id - coluna não existe no schema do banco
           procedimentos: procedimento.nome,
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -965,8 +956,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
       
       await agendamentoService.update(item.agendamentoId, {
-        medico: medicoNome || null,
-        medico_id: medicoId || null // Incluir ID do médico
+        medico: medicoNome || null
+        // REMOVIDO: medico_id - coluna não existe no schema do banco
       });
       
       console.log('✅ Médico do procedimento atualizado com sucesso!');
@@ -1087,7 +1078,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           data_agendamento: grade.data,
           especialidade: especialidadeNome,
           medico: medicoNome,
-          medico_id: medicoId,
+          // REMOVIDO: medico_id - coluna não existe no schema do banco
           procedimentos: novoProcedimentoTexto.trim(),
           hospital_id: hospitalId || null,
           cidade_natal: null,
@@ -1428,7 +1419,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 data_agendamento: dataFormatada,
                 especialidade: especialidadeAtual,
                 medico: medicoAtual || null, // Médico opcional (null para equipes)
-                medico_id: medicoIdAtual || null, // ID do médico
+                // REMOVIDO: medico_id - coluna não existe no schema do banco
                 hospital_id: hospitalId || null,
                 cidade_natal: null,
                 telefone: null,
@@ -1447,7 +1438,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               data_agendamento: dataFormatada,
               especialidade: especialidadeAtual,
               medico: medicoAtual || null, // Médico opcional (null para equipes)
-              medico_id: medicoIdAtual || null, // ID do médico
+              // REMOVIDO: medico_id - coluna não existe no schema do banco
               procedimentos: item.texto,
               hospital_id: hospitalId || null,
               cidade_natal: null,

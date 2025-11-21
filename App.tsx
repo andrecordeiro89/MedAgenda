@@ -46,7 +46,7 @@ const simpleMetaEspecialidadeService = mockServices.metaEspecialidade;
 // ============================================================================
 const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
-    const { hospitalSelecionado, addHospitalFilter } = useHospitalFilter();
+    const { hospitalSelecionado, addHospitalFilter, hasAccessToView } = useHospitalFilter();
     
     // PERSISTÊNCIA: Carregar tela atual do localStorage
     const [currentView, setCurrentView] = useState<View>(() => {
@@ -137,6 +137,15 @@ const AppContent: React.FC = () => {
             loadData();
         }
     }, [isAuthenticated, hospitalSelecionado]);
+    
+    // Verificar se usuário tem acesso à view atual após o login
+    useEffect(() => {
+        if (isAuthenticated && !hasAccessToView(currentView)) {
+            // Se não tem acesso, redirecionar para dashboard
+            console.log(`⚠️ Usuário não tem acesso a "${currentView}". Redirecionando para dashboard...`);
+            changeView('dashboard');
+        }
+    }, [isAuthenticated, currentView, hasAccessToView]);
 
     // Se não estiver autenticado, mostrar tela de login premium
     if (!isAuthenticated) {
@@ -201,6 +210,33 @@ const AppContent: React.FC = () => {
 
     // Renderizar conteúdo da aplicação
     const renderContent = () => {
+        // Verificar se o usuário tem acesso à view atual
+        if (!hasAccessToView(currentView)) {
+            // Se não tem acesso, mostrar mensagem de acesso negado
+            return (
+                <div className="min-h-[60vh] flex items-center justify-center">
+                    <div className="text-center max-w-md mx-auto p-8 bg-white rounded-lg shadow-md">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+                            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Acesso Negado</h2>
+                        <p className="text-slate-600 mb-4">
+                            Você não tem permissão para acessar esta área do sistema.
+                        </p>
+                        <button
+                            onClick={() => changeView('dashboard')}
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all duration-200"
+                        >
+                            Voltar ao Dashboard
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        
+        // Se tem acesso, renderizar a view normalmente
         switch (currentView) {
             case 'dashboard':
                 return (

@@ -1,7 +1,7 @@
 import React, { useState, ReactNode } from 'react';
 import { View } from '../types';
 import { HomeIcon, CalendarIcon, ListIcon, XIcon } from './ui';
-import { useAuth } from './PremiumLogin';
+import { useAuth, useHospitalFilter } from './PremiumLogin';
 
 interface LayoutProps {
   currentView: View;
@@ -11,6 +11,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) => {
     const { usuario, hospitalSelecionado, logout } = useAuth();
+    const { hasAccessToView } = useHospitalFilter();
     const [isMenuOpen, setMenuOpen] = useState(false);
     
     const handleNavClick = (view: View) => {
@@ -18,12 +19,16 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
         setMenuOpen(false);
     };
 
-    const navLinks = [
+    // Todas as opções de navegação possíveis
+    const allNavLinks = [
         { view: 'dashboard' as View, label: 'Dashboard', icon: <HomeIcon className="w-5 h-5"/> },
         { view: 'calendar' as View, label: 'Agenda', icon: <CalendarIcon className="w-5 h-5"/> },
         { view: 'documentacao' as View, label: 'Documentação', icon: <ListIcon className="w-5 h-5"/> },
         { view: 'faturamento' as View, label: 'Faturamento', icon: <ListIcon className="w-5 h-5"/> }
     ];
+    
+    // Filtrar links baseado nas permissões do usuário
+    const navLinks = allNavLinks.filter(link => hasAccessToView(link.view));
 
     return (
         <div className="min-h-screen bg-slate-50">

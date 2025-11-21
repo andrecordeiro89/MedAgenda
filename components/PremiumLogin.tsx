@@ -4,6 +4,8 @@ import { Button, Input, Card } from './ui';
 // ============================================================================
 // TIPOS E INTERFACES
 // ============================================================================
+export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento';
+
 interface Hospital {
   id: string;
   nome: string;
@@ -16,6 +18,7 @@ interface Usuario {
   email: string;
   hospital_id: string;
   hospital?: Hospital;
+  role: UserRole; // Novo campo para controle de acesso
 }
 
 interface AuthContextType {
@@ -23,6 +26,7 @@ interface AuthContextType {
   hospitalSelecionado: Hospital | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  userRole: UserRole | null; // Novo campo para facilitar acesso
   login: (email: string) => Promise<void>;
   selecionarHospital: (hospital: Hospital) => void;
   logout: () => void;
@@ -84,75 +88,100 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string): Promise<void> => {
     setIsLoading(true);
     try {
-      // Sistema simples sem autenticação real - apenas mapear email para hospital
-      const emailHospitalMap: { [key: string]: { id: string; nome: string; cidade: string; cnpj: string } } = {
+      // Sistema simples sem autenticação real - mapear email para hospital + role
+      const emailHospitalMap: { [key: string]: { id: string; nome: string; cidade: string; cnpj: string; role: UserRole } } = {
         // Hospitais de exemplo (manter para compatibilidade)
         'admin@hospitalsaopaulo.com': {
           id: '550e8400-e29b-41d4-a716-446655440001',
           nome: 'Hospital São Paulo',
           cidade: 'São Paulo',
-          cnpj: '12.345.678/0001-90'
+          cnpj: '12.345.678/0001-90',
+          role: 'admin'
         },
         'admin@hospitalrio.com': {
           id: '550e8400-e29b-41d4-a716-446655440002',
           nome: 'Hospital Rio de Janeiro',
           cidade: 'Rio de Janeiro',
-          cnpj: '98.765.432/0001-10'
+          cnpj: '98.765.432/0001-10',
+          role: 'admin'
         },
         'admin@hospitalbrasilia.com': {
           id: '550e8400-e29b-41d4-a716-446655440003',
           nome: 'Hospital Brasília',
           cidade: 'Brasília',
-          cnpj: '11.222.333/0001-44'
+          cnpj: '11.222.333/0001-44',
+          role: 'admin'
         },
         // Hospitais reais com IDs do banco
         'agendamento.sm@medagenda.com': {
           id: '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba',
           nome: 'Hospital Municipal Santa Alice',
           cidade: 'Santa Mariana',
-          cnpj: '14.736.446/0001-93'
+          cnpj: '14.736.446/0001-93',
+          role: 'admin'
         },
         'agendamento.fax@medagenda.com': {
           id: '4111b99d-8b4a-4b51-9561-a2fbd14e776e',
           nome: 'Hospital Municipal Juarez Barreto de Macedo',
           cidade: 'Faxinal',
-          cnpj: '14.736.446/0006-06'
+          cnpj: '14.736.446/0006-06',
+          role: 'admin'
         },
         'agendamento.car@medagenda.com': {
           id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da',
           nome: 'Hospital Municipal São José',
           cidade: 'Carlópolis',
-          cnpj: '14.736.446/0007-89'
+          cnpj: '14.736.446/0007-89',
+          role: 'admin'
         },
         'agendamento.ara@medagenda.com': {
           id: '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a',
           nome: 'Hospital Municipal 18 de Dezembro',
           cidade: 'Arapoti',
-          cnpj: '14.736.446/0008-60'
+          cnpj: '14.736.446/0008-60',
+          role: 'admin'
         },
         'agendamento.foz@medagenda.com': {
           id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
           nome: 'Hospital Nossa Senhora Aparecida',
           cidade: 'Foz do Iguaçu',
-          cnpj: '14.736.446/0009-40'
+          cnpj: '14.736.446/0009-40',
+          role: 'admin'
+        },
+        'recepcao.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'recepcao' // ✅ Acesso restrito: Dashboard + Documentação
+        },
+        'triagem.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem' // ✅ Acesso restrito: Dashboard + Documentação
         },
         'agendamento.frg@medagenda.com': {
           id: '933de4fb-ebfd-4838-bb43-153a7354d333',
           nome: 'Hospital Maternidade Nossa Senhora Aparecida',
           cidade: 'Fazenda Rio Grande',
-          cnpj: '14.736.446/0010-84'
+          cnpj: '14.736.446/0010-84',
+          role: 'admin'
         },
         'agendamento.rbs@medagenda.com': {
           id: '4a2527c1-df09-4a36-a08f-adc63f555123',
           nome: 'Hospital Maternidade Rio Branco do Sul',
           cidade: 'Rio Branco do Sul',
-          cnpj: '14.736.446/0012-46'
+          cnpj: '14.736.446/0012-46',
+          role: 'admin'
         },
         'agendamento.apu@medagenda.com': {
           id: '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7',
           nome: 'Hospital Torao Tokuda',
           cidade: 'Apucarana',
-          cnpj: '08325231001400'
+          cnpj: '08325231001400',
+          role: 'admin'
         }
       };
 
@@ -162,12 +191,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Email não cadastrado no sistema');
       }
 
-      // Criar usuário fictício
-      const usuario = {
+      // Criar usuário com role
+      const usuario: Usuario = {
         id: `user-${Date.now()}`,
         email: email,
         hospital_id: hospitalData.id,
-        hospital: hospitalData
+        hospital: hospitalData,
+        role: hospitalData.role
       };
 
       setUsuario(usuario);
@@ -179,7 +209,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         usuario: usuario,
         hospital: hospitalData
       }));
-      console.log('💾 Login salvo no localStorage:', hospitalData.nome);
+      console.log('💾 Login salvo no localStorage:', hospitalData.nome, `(${hospitalData.role})`);
       
     } catch (error) {
       console.error('Erro no login:', error);
@@ -211,6 +241,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         hospitalSelecionado,
         isAuthenticated,
         isLoading,
+        userRole: usuario?.role || null,
         login,
         selecionarHospital,
         logout,
@@ -219,6 +250,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+};
+
+// ============================================================================
+// HOOK PARA FILTROS POR HOSPITAL E PERMISSÕES
+// ============================================================================
+export const useHospitalFilter = () => {
+  const { hospitalSelecionado, userRole } = useAuth();
+
+  // Função para adicionar filtro de hospital em query string (URL)
+  const addHospitalFilter = (url: string): string => {
+    if (!hospitalSelecionado) return url;
+    
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}hospitalId=${hospitalSelecionado.id}`;
+  };
+
+  // Verificar se usuário tem acesso a uma view
+  const hasAccessToView = (viewName: string): boolean => {
+    if (!userRole) return false;
+    
+    // Admin tem acesso a tudo
+    if (userRole === 'admin') return true;
+    
+    // Recepcao e Triagem têm acesso apenas a Dashboard e Documentação
+    if (userRole === 'recepcao' || userRole === 'triagem') {
+      return viewName === 'dashboard' || viewName === 'documentacao';
+    }
+    
+    // Faturamento tem acesso a Dashboard, Documentação e Faturamento
+    if (userRole === 'faturamento') {
+      return ['dashboard', 'documentacao', 'faturamento'].includes(viewName);
+    }
+    
+    return false;
+  };
+
+  return {
+    hospitalSelecionado,
+    addHospitalFilter,
+    hasAccessToView,
+    userRole
+  };
 };
 
 // ============================================================================
@@ -599,18 +672,3 @@ export const PremiumHospitalHeader: React.FC = () => {
   );
 };
 
-// ============================================================================
-// HOOK PARA FILTROS POR HOSPITAL (MESMO DO ANTERIOR)
-// ============================================================================
-export const useHospitalFilter = () => {
-  const { hospitalSelecionado } = useAuth();
-
-  const addHospitalFilter = (url: string): string => {
-    if (!hospitalSelecionado) return url;
-    
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}hospitalId=${hospitalSelecionado.id}`;
-  };
-
-  return { hospitalSelecionado, addHospitalFilter };
-};
