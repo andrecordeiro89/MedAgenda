@@ -127,18 +127,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }
   }, [isOpen, hospitalId]);
 
-  // Carregar grade DO SUPABASE ao abrir o modal
-  useEffect(() => {
-    const loadGrade = async () => {
-      if (!isOpen) return;
+  // Função para recarregar grades do banco (reutilizável)
+  const recarregarGradesDoSupabase = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Recarregando agendamentos do Supabase para as datas:', proximasDatas.map(d => d.toISOString().split('T')[0]));
       
-      setLoading(true);
-      try {
-        console.log('🔍 Buscando agendamentos do Supabase para as datas:', proximasDatas.map(d => d.toISOString().split('T')[0]));
-        
-        // Buscar agendamentos reais do banco para cada data
-        const gradesCarregadas = await Promise.all(
-          proximasDatas.map(async (data, index) => {
+      // Buscar agendamentos reais do banco para cada data
+      const gradesCarregadas = await Promise.all(
+        proximasDatas.map(async (data, index) => {
             const dataFormatada = data.toISOString().split('T')[0];
             
             try {
@@ -300,10 +297,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       } finally {
         setLoading(false);
       }
-    };
+  };
 
+  // Carregar grade DO SUPABASE ao abrir o modal
+  useEffect(() => {
     if (isOpen) {
-      loadGrade();
+      recarregarGradesDoSupabase();
     }
   }, [isOpen, hospitalId, diaSemanaClicado, mesReferencia, proximasDatas]);
 
@@ -2016,27 +2015,29 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
 
       // Atualizar data, especialidade, médico e procedimento do agendamento no banco
-      await agendamentoService.update(agendamentoParaMover.id, {
+      const resultado = await agendamentoService.update(agendamentoParaMover.id, {
         data_agendamento: novaDataSelecionada,
         especialidade: especialidadeDestino.nome,
         medico: especialidadeDestino.medicoNome || null,
         procedimentos: procedimentoDestino.texto
       });
 
-      console.log('✅ Paciente movido com sucesso!');
+      console.log('✅ Paciente movido com sucesso no banco!', resultado);
+      console.log('🔄 Datas atualmente visíveis no modal:', proximasDatas.map(d => d.toISOString().split('T')[0]));
 
-      // Fechar modal
+      // Fechar modal de mover paciente
       setModalMoverPaciente(false);
       setAgendamentoParaMover(null);
 
+      // Recarregar todas as grades do banco (MANTÉM O MODAL PRINCIPAL ABERTO)
+      await recarregarGradesDoSupabase();
+
       // Mostrar mensagem de sucesso
       setConfirmacaoData({
-        titulo: '✅ Sucesso',
-        mensagem: `Paciente "${agendamentoParaMover.nome}" movido para ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} - ${especialidadeDestino.nome} - ${procedimentoDestino.texto}.`,
+        titulo: '✅ Paciente Movido com Sucesso',
+        mensagem: `O paciente "${agendamentoParaMover.nome}" foi movido para:\n\n📅 Data: ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}\n🏥 Especialidade: ${especialidadeDestino.nome}\n💉 Procedimento: ${procedimentoDestino.texto}\n\n✨ As grades foram atualizadas automaticamente!`,
         onConfirm: () => {
           setModalConfirmacao(false);
-          // Recarregar todas as grades
-          window.location.reload();
         }
       });
       setModalConfirmacao(true);
@@ -2968,22 +2969,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     </svg>
                                                   </button>
                                                   {isFirstPaciente && (
-                                                    <>
-                                                      <button
-                                                        onClick={() => handleAddPacienteClick(index, proc.id)}
-                                                        className="p-1 text-green-600 hover:bg-green-100 rounded transition-all"
-                                                        title="Adicionar Paciente"
-                                                      >
-                                                        <PlusIcon className="w-4 h-4" />
-                                                      </button>
-                                                      <button
-                                                        onClick={() => handleRemoveItem(index, proc.id)}
-                                                        className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
-                                                        title="Remover procedimento"
-                                                      >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                      </button>
-                                                    </>
+                                                    <button
+                                                      onClick={() => handleRemoveItem(index, proc.id)}
+                                                      className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
+                                                      title="Remover procedimento"
+                                                    >
+                                                      <TrashIcon className="w-4 h-4" />
+                                                    </button>
                                                   )}
                                                 </div>
                                               </td>
@@ -2993,33 +2985,71 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           // Linha expandida com detalhes (apenas no primeiro paciente quando expandido)
                                           if (isFirstPaciente && isProcExpanded) {
                                             linhas.push(
-                                              <tr key={`${proc.id}-expanded`} className="bg-slate-50">
-                                                <td colSpan={5} className="px-3 py-2">
-                                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                                                    {paciente.cidade && (
-                                                      <span className="flex items-center gap-1">
-                                                        <span className="font-medium">Cidade:</span>
-                                                        <span>{paciente.cidade}</span>
-                                                      </span>
-                                                    )}
-                                                    {paciente.telefone && (
-                                                      <span className="flex items-center gap-1">
-                                                        <span className="font-medium">Telefone:</span>
-                                                        <span>{paciente.telefone}</span>
-                                                      </span>
-                                                    )}
-                                                    {paciente.dataConsulta && (
-                                                      <span className="flex items-center gap-1">
-                                                        <span className="font-medium">Data Consulta:</span>
-                                                        <span>{new Date(paciente.dataConsulta).toLocaleDateString('pt-BR')}</span>
-                                                      </span>
-                                                    )}
-                                                    {paciente.dataNascimento && (
-                                                      <span className="flex items-center gap-1">
-                                                        <span className="font-medium">Nascimento:</span>
-                                                        <span>{new Date(paciente.dataNascimento).toLocaleDateString('pt-BR')}</span>
-                                                      </span>
-                                                    )}
+                                              <tr key={`${proc.id}-expanded`} className="bg-gradient-to-r from-slate-50 to-blue-50/30">
+                                                <td colSpan={5} className="px-3 py-3">
+                                                  <div className="flex items-start gap-2 pl-6 border-l-2 border-blue-400/30">
+                                                    {/* Ícone de informação */}
+                                                    <div className="flex-shrink-0 mt-0.5">
+                                                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                      </svg>
+                                                    </div>
+                                                    
+                                                    {/* Grid de informações */}
+                                                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 flex-1 text-xs">
+                                                      {/* Cidade */}
+                                                      {paciente.cidade && (
+                                                        <div className="flex items-center gap-2">
+                                                          <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                          </svg>
+                                                          <div className="flex flex-col">
+                                                            <span className="text-slate-500 font-medium">Cidade</span>
+                                                            <span className="text-slate-700">{paciente.cidade}</span>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                      
+                                                      {/* Telefone */}
+                                                      {paciente.telefone && (
+                                                        <div className="flex items-center gap-2">
+                                                          <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                                          </svg>
+                                                          <div className="flex flex-col">
+                                                            <span className="text-slate-500 font-medium">Telefone</span>
+                                                            <span className="text-slate-700">{paciente.telefone}</span>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                      
+                                                      {/* Data de Nascimento */}
+                                                      {paciente.dataNascimento && (
+                                                        <div className="flex items-center gap-2">
+                                                          <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                          </svg>
+                                                          <div className="flex flex-col">
+                                                            <span className="text-slate-500 font-medium">Nascimento</span>
+                                                            <span className="text-slate-700">{new Date(paciente.dataNascimento).toLocaleDateString('pt-BR')}</span>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                      
+                                                      {/* Data da Consulta */}
+                                                      {paciente.dataConsulta && (
+                                                        <div className="flex items-center gap-2">
+                                                          <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                                          </svg>
+                                                          <div className="flex flex-col">
+                                                            <span className="text-slate-500 font-medium">Consulta</span>
+                                                            <span className="text-slate-700">{new Date(paciente.dataConsulta).toLocaleDateString('pt-BR')}</span>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </div>
                                                   </div>
                                                 </td>
                                               </tr>

@@ -525,6 +525,7 @@ export const agendamentoService = {
     // Novos campos diretos
     if (agendamento.nome_paciente !== undefined) updateData.nome_paciente = agendamento.nome_paciente
     if (agendamento.data_nascimento !== undefined) updateData.data_nascimento = agendamento.data_nascimento
+    if (agendamento.data_agendamento !== undefined) updateData.data_agendamento = agendamento.data_agendamento // ✅ ADICIONADO
     if (agendamento.telefone !== undefined) updateData.telefone = agendamento.telefone
     if (agendamento.cidade_natal !== undefined) updateData.cidade_natal = agendamento.cidade_natal
     if (agendamento.data_consulta !== undefined) updateData.data_consulta = agendamento.data_consulta
@@ -552,6 +553,8 @@ export const agendamentoService = {
     if (agendamento.is_grade_cirurgica !== undefined) updateData.is_grade_cirurgica = agendamento.is_grade_cirurgica
 
     try {
+      console.log('📝 Dados que serão enviados ao banco:', updateData);
+      
       const { data, error } = await supabase
         .from('agendamentos')
         .update(updateData)
@@ -565,7 +568,13 @@ export const agendamentoService = {
       }
       if (!data) throw new Error('Agendamento não encontrado')
       
-      console.log('✅ Agendamento atualizado com sucesso!', data);
+      console.log('✅ Agendamento atualizado com sucesso!', {
+        id: data.id,
+        nome_paciente: data.nome_paciente,
+        data_agendamento: data.data_agendamento,
+        especialidade: data.especialidade,
+        procedimentos: data.procedimentos
+      });
       return data as Agendamento;
     } catch (error: any) {
       // Se o erro for sobre updated_at, tentar sem trigger
