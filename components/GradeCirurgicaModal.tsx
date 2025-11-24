@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, ReactElement } from 'react';
 import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon } from './ui';
+import { SelectCidade } from './SelectCidade';
 import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -3233,10 +3234,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Cidade
           </label>
-          <Input
+          <SelectCidade
             value={pacienteCidade}
-            onChange={(e) => setPacienteCidade(e.target.value)}
-            placeholder="Digite a cidade"
+            onChange={setPacienteCidade}
+            placeholder="Selecione ou digite a cidade"
             className="w-full"
           />
         </div>

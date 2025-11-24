@@ -184,3 +184,12 @@ export type Action =
     | { type: 'ADD_PROCEDIMENTO'; payload: Procedimento }
     | { type: 'UPDATE_PROCEDIMENTO'; payload: Procedimento }
     | { type: 'DELETE_PROCEDIMENTO'; payload: string };
+
+// Interface para cidades
+export interface Cidade {
+    id: string;
+    nome: string;
+    estado?: string; // Opcional - pode não existir na tabela
+    created_at?: string;
+    updated_at?: string;
+}

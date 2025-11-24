@@ -4,6 +4,7 @@ import {
   Medico, 
   Procedimento,
   Especialidade,
+  Cidade,
   StatusLiberacao,
   TipoAgendamento 
 } from '../types'
@@ -676,6 +677,61 @@ export const especialidadeService = {
   }
 };
 
+// ============================================
+// SERVICE: CIDADES
+// ============================================
+export const cidadeService = {
+  // Buscar TODAS as cidades
+  async getAll(): Promise<Cidade[]> {
+    console.log('🏙️ Buscando cidades do Supabase...');
+    
+    const { data, error } = await supabase
+      .from('cidades')
+      .select('id, nome')
+      .order('nome', { ascending: true });
+    
+    if (error) {
+      console.error('❌ Erro ao buscar cidades:', error);
+      throw new Error(error.message);
+    }
+    
+    console.log(`✅ ${(data || []).length} cidades encontradas`);
+    return data as Cidade[] || [];
+  },
+  
+  // Buscar cidades por nome (autocomplete)
+  async searchByName(searchTerm: string, limit: number = 20): Promise<Cidade[]> {
+    console.log('🔍 Buscando cidades por nome:', searchTerm);
+    
+    const { data, error } = await supabase
+      .from('cidades')
+      .select('id, nome')
+      .ilike('nome', `%${searchTerm}%`) // Case-insensitive
+      .order('nome', { ascending: true })
+      .limit(limit);
+    
+    if (error) {
+      console.error('❌ Erro ao buscar cidades:', error);
+      throw new Error(error.message);
+    }
+    
+    return data as Cidade[] || [];
+  },
+  
+  // Buscar cidade por ID
+  async getById(id: string): Promise<Cidade> {
+    const { data, error } = await supabase
+      .from('cidades')
+      .select('id, nome')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Cidade não encontrada');
+    
+    return data as Cidade;
+  }
+};
 
 // ============================================
 // FUNÇÃO PARA TESTAR CONEXÃO
