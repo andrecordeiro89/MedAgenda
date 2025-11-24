@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Modal, Button } from './ui';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Agendamento } from '../types';
-import { agendamentoService } from '../services/supabase';
+import { Agendamento, Medico } from '../types';
+import { agendamentoService, medicoService } from '../services/supabase';
 
 interface RelatorioSemanalModalProps {
   isOpen: boolean;
@@ -30,6 +30,14 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
 
   const [gerando, setGerando] = useState(false);
   const [carregandoGrades, setCarregandoGrades] = useState(false);
+  
+  // Estado para médicos e filtro
+  const [medicos, setMedicos] = useState<Medico[]>([]);
+  const [medicoSelecionado, setMedicoSelecionado] = useState<string>('todos'); // 'todos' ou nome do médico
+  const [carregandoMedicos, setCarregandoMedicos] = useState(false);
+  
+  // Estado para armazenar agendamentos carregados
+  const [agendamentosCarregados, setAgendamentosCarregados] = useState<Agendamento[]>([]);
 
   // Calcular dias do mês selecionado
   const diasDoMes = useMemo(() => {
@@ -60,6 +68,78 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
     year: 'numeric' 
   });
 
+  // Filtrar médicos que têm procedimentos nos dias selecionados
+  const medicosDisponiveis = useMemo(() => {
+    if (diasSelecionados.size === 0) {
+      return []; // Se nenhum dia selecionado, não mostrar médicos
+    }
+
+    // Buscar médicos únicos que têm procedimentos COM PACIENTE nos dias selecionados
+    const nomeMedicosSet = new Set<string>();
+    
+    agendamentosCarregados.forEach(ag => {
+      const dataAgendamento = ag.data_agendamento || ag.dataAgendamento;
+      if (!dataAgendamento) return;
+
+      const dataNormalizada = dataAgendamento.split('T')[0];
+      
+      // Verificar se é um dos dias selecionados
+      if (diasSelecionados.has(dataNormalizada)) {
+        // Verificar se tem paciente
+        const nomePaciente = ag.nome_paciente || ag.nome || '';
+        const temPaciente = nomePaciente.trim() !== '';
+        
+        // Verificar se tem médico
+        const medicoNome = ag.medico || '';
+        
+        if (temPaciente && medicoNome.trim() !== '') {
+          nomeMedicosSet.add(medicoNome.trim());
+        }
+      }
+    });
+
+    // Filtrar médicos cadastrados que estão nos dias selecionados
+    const medicosComProcedimentos = medicos.filter(medico => 
+      nomeMedicosSet.has(medico.nome)
+    );
+
+    console.log('👨‍⚕️ Médicos disponíveis nos dias selecionados:', medicosComProcedimentos.length);
+    
+    return medicosComProcedimentos;
+  }, [diasSelecionados, medicos, agendamentosCarregados]);
+
+  // Resetar seleção de médico quando dias mudarem
+  useEffect(() => {
+    // Se o médico selecionado não está mais disponível, resetar para 'todos'
+    if (medicoSelecionado !== 'todos') {
+      const medicoAindaDisponivel = medicosDisponiveis.some(m => m.nome === medicoSelecionado);
+      if (!medicoAindaDisponivel) {
+        setMedicoSelecionado('todos');
+      }
+    }
+  }, [medicosDisponiveis, medicoSelecionado]);
+
+  // Carregar médicos do hospital ao abrir modal
+  useEffect(() => {
+    const carregarMedicos = async () => {
+      if (!isOpen) return;
+      
+      setCarregandoMedicos(true);
+      try {
+        const medicosData = await medicoService.getAll(hospitalId);
+        setMedicos(medicosData);
+        console.log('👨‍⚕️ Médicos carregados:', medicosData.length);
+      } catch (error) {
+        console.error('❌ Erro ao carregar médicos:', error);
+        setMedicos([]);
+      } finally {
+        setCarregandoMedicos(false);
+      }
+    };
+    
+    carregarMedicos();
+  }, [isOpen, hospitalId]);
+
   // Carregar grades do mês ao abrir modal ou mudar mês
   useEffect(() => {
     const carregarGradesDoMes = async () => {
@@ -68,6 +148,9 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       setCarregandoGrades(true);
       try {
         const agendamentos = await agendamentoService.getAll(hospitalId);
+        
+        // Armazenar agendamentos para uso posterior (filtro de médicos)
+        setAgendamentosCarregados(agendamentos);
         
         // Filtrar agendamentos do mês atual que têm procedimentos (são grades)
         const diasSet = new Set<string>();
@@ -80,8 +163,12 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
           const agAno = data.getFullYear();
           const agMes = data.getMonth();
 
-          // Se é do mês atual e tem procedimentos (é uma grade)
-          if (agAno === anoSelecionado && agMes === mesSelecionado && ag.procedimentos && ag.procedimentos.trim()) {
+          // FILTRO: Marcar apenas dias com pacientes agendados (ignora estrutura de grade)
+          const nomePaciente = ag.nome_paciente || ag.nome || '';
+          const temPaciente = nomePaciente.trim() !== '';
+
+          // Se é do mês atual e tem procedimentos e tem paciente
+          if (agAno === anoSelecionado && agMes === mesSelecionado && ag.procedimentos && ag.procedimentos.trim() && temPaciente) {
             const dataNormalizada = dataAgendamento.split('T')[0];
             diasSet.add(dataNormalizada);
           }
@@ -196,7 +283,16 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
         // Normalizar data
         const dataNormalizada = dataAgendamento.split('T')[0]; // YYYY-MM-DD
 
-        if (diasSelecionados.has(dataNormalizada)) {
+        // FILTRO: Apenas agendamentos com paciente (ignora estrutura de grade)
+        const nomePaciente = ag.nome_paciente || ag.nome || '';
+        const temPaciente = nomePaciente.trim() !== '';
+        
+        // FILTRO: Por médico (se selecionado)
+        const medicoDoAgendamento = ag.medico || '';
+        const passaFiltroMedico = medicoSelecionado === 'todos' || 
+                                  medicoDoAgendamento.toLowerCase().includes(medicoSelecionado.toLowerCase());
+
+        if (diasSelecionados.has(dataNormalizada) && temPaciente && passaFiltroMedico) {
           agendamentosPorDia[dataNormalizada].push(ag);
         }
       });
@@ -214,8 +310,8 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
         return;
       }
 
-      // Gerar PDF
-      await gerarPDF(agendamentosPorDia, mesNome);
+      // Gerar PDF (passando info do médico selecionado)
+      await gerarPDF(agendamentosPorDia, mesNome, medicoSelecionado);
 
       // Fechar modal após gerar
       onClose();
@@ -229,7 +325,8 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
 
   const gerarPDF = async (
     agendamentosPorDia: { [key: string]: Agendamento[] },
-    mesNome: string
+    mesNome: string,
+    medicoFiltrado: string = 'todos'
   ) => {
     const doc = new jsPDF({
       orientation: 'landscape',
@@ -277,13 +374,17 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
         const titleY = 8 + (logoHeight / 2) - 3;
-        doc.text(`Grade Cirúrgica - ${dataFormatada}`, 14 + logoWidth + 5, titleY);
+        const tituloRelatorio = medicoFiltrado !== 'todos' 
+          ? `Grade Cirúrgica - ${dataFormatada} - ${medicoFiltrado}`
+          : `Grade Cirúrgica - ${dataFormatada}`;
+        doc.text(tituloRelatorio, 14 + logoWidth + 5, titleY);
 
         // Informações adicionais
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.text(`${hospitalNome}`, 14 + logoWidth + 5, titleY + 5);
-        doc.text(`${diaSemanaCapitalizado} - ${mesNome}`, 14 + logoWidth + 5, titleY + 10);
+        const infoMedico = medicoFiltrado !== 'todos' ? ` - Médico: ${medicoFiltrado}` : '';
+        doc.text(`${diaSemanaCapitalizado} - ${mesNome}${infoMedico}`, 14 + logoWidth + 5, titleY + 10);
         doc.text(`Total de registros: ${agendamentos.length}`, 14 + logoWidth + 5, titleY + 15);
 
         // Preparar dados da tabela
@@ -365,7 +466,8 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       }
 
       // Salvar PDF
-      const nomeArquivo = `Grade_Semanal_${mesNome.replace(/\s+/g, '_')}.pdf`;
+      const sufixoMedico = medicoFiltrado !== 'todos' ? `_${medicoFiltrado.replace(/\s+/g, '_')}` : '';
+      const nomeArquivo = `Grade_Semanal_${mesNome.replace(/\s+/g, '_')}${sufixoMedico}.pdf`;
       doc.save(nomeArquivo);
 
     } catch (error) {
@@ -410,6 +512,52 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
+          </div>
+
+          {/* Filtro de Médico */}
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Filtrar por Médico:
+            </label>
+            <select
+              value={medicoSelecionado}
+              onChange={(e) => setMedicoSelecionado(e.target.value)}
+              disabled={carregandoMedicos || diasSelecionados.size === 0}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="todos">
+                {diasSelecionados.size === 0 
+                  ? '📋 Selecione dias primeiro' 
+                  : `📋 Todos os Médicos (${medicosDisponiveis.length})`
+                }
+              </option>
+              {diasSelecionados.size > 0 && medicosDisponiveis.length > 0 ? (
+                medicosDisponiveis
+                  .sort((a, b) => a.nome.localeCompare(b.nome))
+                  .map(medico => (
+                    <option key={medico.id} value={medico.nome}>
+                      👨‍⚕️ {medico.nome} - {medico.especialidade}
+                    </option>
+                  ))
+              ) : diasSelecionados.size > 0 ? (
+                <option disabled>Nenhum médico nos dias selecionados</option>
+              ) : null}
+            </select>
+            {diasSelecionados.size === 0 && (
+              <p className="mt-1 text-xs text-amber-600">
+                ⚠️ Selecione pelo menos um dia no calendário para filtrar médicos
+              </p>
+            )}
+            {diasSelecionados.size > 0 && medicosDisponiveis.length > 0 && medicoSelecionado !== 'todos' && (
+              <p className="mt-1 text-xs text-blue-600">
+                ✓ Filtrando por: <strong>{medicoSelecionado}</strong>
+              </p>
+            )}
+            {diasSelecionados.size > 0 && medicosDisponiveis.length > 0 && medicoSelecionado === 'todos' && (
+              <p className="mt-1 text-xs text-green-600">
+                ✓ {medicosDisponiveis.length} {medicosDisponiveis.length === 1 ? 'médico disponível' : 'médicos disponíveis'} nos dias selecionados
+              </p>
+            )}
           </div>
 
           {/* Botões de ação rápida */}
@@ -520,24 +668,6 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
           </div>
         </div>
 
-        {/* Informação */}
-        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm text-blue-900 font-medium mb-1">Como funciona:</p>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Clique nos dias que deseja incluir no relatório</li>
-                <li>• Cada dia selecionado será uma página separada no PDF</li>
-                <li>• O relatório incluirá todas as grades cirúrgicas dos dias escolhidos</li>
-              </ul>
-            </div>
-          </div>
-        </div>
 
         {/* Botões */}
         <div className="flex justify-end gap-3">
