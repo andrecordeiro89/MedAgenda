@@ -6,7 +6,6 @@ import { Button, Modal } from './ui';
 export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState<'todos' | 'pendentes' | 'liberados'>('todos');
   
   // Estado para controlar linhas expandidas
   const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
@@ -24,22 +23,33 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMedico, setFiltroMedico] = useState<string>('');
   
-  // Estados do modal de upload
+  // Estados do modal
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha'>('documentos');
+  const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'complementares'>('documentos');
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
   
-  // Estados para Documentos (Recepção)
+  // Estados para Exames (Recepção)
   const [arquivosDocumentosSelecionados, setArquivosDocumentosSelecionados] = useState<File[]>([]);
   const [documentosAnexados, setDocumentosAnexados] = useState<string[]>([]);
   const fileInputDocumentosRef = useRef<HTMLInputElement>(null);
   
-  // Estados para Ficha Pré-Anestésica (Anestesista)
+  // Estados para Ficha Pré-Operatória (Anestesista)
   const [arquivoFichaSelecionado, setArquivoFichaSelecionado] = useState<File | null>(null);
   const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
   const fileInputFichaRef = useRef<HTMLInputElement>(null);
   
+  // Estados para Complementares (NOVO)
+  const [arquivosComplementaresSelecionados, setArquivosComplementaresSelecionados] = useState<File[]>([]);
+  const [complementaresAnexados, setComplementaresAnexados] = useState<string[]>([]);
+  const fileInputComplementaresRef = useRef<HTMLInputElement>(null);
+  
   const [uploading, setUploading] = useState(false);
+  
+  // Estados de Paginação
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [itensPorPagina, setItensPorPagina] = useState(20);
+  const tabelaRef = useRef<HTMLDivElement>(null);
 
   // Carregar agendamentos
   useEffect(() => {
@@ -77,15 +87,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
-  // Status do paciente
+  // Status do paciente - SIMPLIFICADO (2 status apenas)
   const getStatusPaciente = (ag: Agendamento) => {
-    const temDocs = ag.documentos_ok === true;
-    const temFicha = ag.ficha_pre_anestesica_ok === true;
+    const temExames = ag.documentos_ok === true;
     
-    if (temDocs && temFicha) return { texto: 'LIBERADO', cor: 'bg-green-100 text-green-800', grupo: 'liberado' };
-    if (temDocs && !temFicha) return { texto: 'AGUARDANDO FICHA', cor: 'bg-yellow-100 text-yellow-800', grupo: 'aguardando_ficha' };
-    if (!temDocs) return { texto: 'AGUARDANDO DOCS', cor: 'bg-red-100 text-red-800', grupo: 'aguardando_docs' };
-    return { texto: 'PENDENTE', cor: 'bg-gray-100 text-gray-800', grupo: 'aguardando_docs' };
+    if (temExames) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800', grupo: 'com_exames' };
+    return { texto: 'SEM EXAMES', cor: 'bg-red-100 text-red-800', grupo: 'sem_exames' };
+  };
+  
+  // Função para obter status dos checkboxes (semáforo)
+  const getCheckboxesStatus = (ag: Agendamento) => {
+    return {
+      exames: ag.documentos_ok === true,
+      preOperatorio: ag.ficha_pre_anestesica_ok === true,
+      complementares: ag.complementares_ok === true // Novo campo
+    };
   };
 
   // Formatar data
@@ -142,16 +158,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   // Filtrar agendamentos (ANTES de agrupar)
   const agendamentosFiltradosCompletos = agendamentos.filter(ag => {
-    // Filtro por status geral (Todos, Pendentes, Liberados)
-    if (filtro === 'pendentes') {
-      const pendente = !(ag.documentos_ok === true) || !(ag.ficha_pre_anestesica_ok === true);
-      if (!pendente) return false;
-    }
-    if (filtro === 'liberados') {
-      const liberado = ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
-      if (!liberado) return false;
-    }
-    
     // Filtro por status específico
     if (filtroStatus) {
       const status = getStatusPaciente(ag);
@@ -189,13 +195,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // AGRUPAR POR PACIENTE ÚNICO (mostrar apenas 1 linha por paciente)
   let agendamentosFiltrados = agruparPorPacienteUnico(agendamentosFiltradosCompletos);
   
-  // ORDENAR POR ANESTESISTA (se ativo)
-  if (ordenarPorAnestesista) {
-    agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
+  // ORDENAR POR DATA DE CIRURGIA (cirurgias mais próximas primeiro)
+  agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
+    const dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
+    const dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+    
+    // Se ordenar por anestesista está ativo, usar essa ordenação como secundária
+    if (ordenarPorAnestesista) {
       const statusA = a.status_liberacao || 'anestesista';
       const statusB = b.status_liberacao || 'anestesista';
       
-      // Prioridade: liberado > exames > cardio > anestesista
       const prioridade: Record<string, number> = {
         'liberado': 1,
         'exames': 2,
@@ -206,8 +215,38 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       const prioridadeA = prioridade[statusA] || 999;
       const prioridadeB = prioridade[statusB] || 999;
       
-      return prioridadeA - prioridadeB;
-    });
+      // Se prioridades diferentes, ordenar por prioridade
+      if (prioridadeA !== prioridadeB) {
+        return prioridadeA - prioridadeB;
+      }
+    }
+    
+    // Ordenar por data (mais próxima primeiro)
+    return dataA.localeCompare(dataB);
+  });
+  
+  // Total de registros (antes da paginação)
+  const totalRegistros = agendamentosFiltrados.length;
+  const totalPaginas = Math.ceil(totalRegistros / itensPorPagina);
+  
+  // Resetar para página 1 quando filtros mudarem
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [filtroStatus, filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMedico]);
+  
+  // Rolar para o topo da tabela quando mudar de página
+  useEffect(() => {
+    if (tabelaRef.current && paginaAtual > 1) {
+      tabelaRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [paginaAtual]);
+  
+  // APLICAR PAGINAÇÃO (somente se não estiver agrupado por status)
+  let agendamentosPaginados = agendamentosFiltrados;
+  if (!agruparPorStatus) {
+    const indexInicio = (paginaAtual - 1) * itensPorPagina;
+    const indexFim = indexInicio + itensPorPagina;
+    agendamentosPaginados = agendamentosFiltrados.slice(indexInicio, indexFim);
   }
   
   // Limpar todos os filtros
@@ -225,13 +264,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
     if (!agruparPorStatus) {
-      return { semGrupo: agendamentosFiltrados };
+      return { semGrupo: agendamentosPaginados };
     }
 
+    // Quando agrupado, usar todos os registros (sem paginação)
     const grupos: Record<string, Agendamento[]> = {
-      aguardando_docs: [],
-      aguardando_ficha: [],
-      liberado: []
+      sem_exames: [],
+      com_exames: []
     };
 
     agendamentosFiltrados.forEach(ag => {
@@ -260,10 +299,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setAgendamentoSelecionado(ag);
     setArquivosDocumentosSelecionados([]);
     setArquivoFichaSelecionado(null);
+    setArquivosComplementaresSelecionados([]);
     setAbaAtiva('documentos');
     setModalUploadAberto(true);
     
-    // Carregar documentos já anexados
+    // Carregar exames já anexados
     if (ag.documentos_urls) {
       try {
         const urls = JSON.parse(ag.documentos_urls);
@@ -275,8 +315,54 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setDocumentosAnexados([]);
     }
     
-    // Carregar ficha pré-anestésica já anexada
+    // Carregar ficha pré-operatória já anexada
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    
+    // Carregar complementares já anexados (NOVO)
+    if (ag.complementares_urls) {
+      try {
+        const urls = JSON.parse(ag.complementares_urls);
+        setComplementaresAnexados(Array.isArray(urls) ? urls : []);
+      } catch {
+        setComplementaresAnexados([]);
+      }
+    } else {
+      setComplementaresAnexados([]);
+    }
+  };
+
+  // Abrir modal para visualizar documentos
+  const handleAbrirModalVisualizacao = async (ag: Agendamento) => {
+    setAgendamentoSelecionado(ag);
+    
+    // Carregar documentos de exames
+    if (ag.documentos_urls) {
+      try {
+        const urls = JSON.parse(ag.documentos_urls);
+        setDocumentosAnexados(Array.isArray(urls) ? urls : []);
+      } catch {
+        setDocumentosAnexados([]);
+      }
+    } else {
+      setDocumentosAnexados([]);
+    }
+    
+    // Carregar ficha pré-operatória
+    setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    
+    // Carregar documentos complementares
+    if (ag.complementares_urls) {
+      try {
+        const urls = JSON.parse(ag.complementares_urls);
+        setComplementaresAnexados(Array.isArray(urls) ? urls : []);
+      } catch {
+        setComplementaresAnexados([]);
+      }
+    } else {
+      setComplementaresAnexados([]);
+    }
+    
+    setModalVisualizacaoAberto(true);
   };
 
   // Selecionar documentos (Recepção)
@@ -297,6 +383,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     if (e.target.files && e.target.files[0]) {
       setArquivoFichaSelecionado(e.target.files[0]);
     }
+  };
+  
+  // Selecionar complementares (NOVO)
+  const handleSelecionarComplementares = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setArquivosComplementaresSelecionados(prev => [...prev, ...files]);
+    }
+  };
+  
+  // Remover complementar da lista de seleção (NOVO)
+  const handleRemoverComplementar = (index: number) => {
+    setArquivosComplementaresSelecionados(prev => prev.filter((_, i) => i !== index));
   };
 
   // Upload de Documentos (Recepção)
@@ -362,7 +461,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setArquivosDocumentosSelecionados([]);
       setDocumentosAnexados(todasUrls);
       
-      alert('✅ Documentos anexados com sucesso!');
+      alert('✅ Exames anexados com sucesso!');
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
       alert(`❌ Erro ao anexar documentos: ${error.message}`);
@@ -377,9 +476,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       return;
     }
 
-    // Verificar se documentos estão OK
+    // Verificar se exames estão OK
     if (!agendamentoSelecionado.documentos_ok) {
-      alert('⚠️ É necessário anexar os documentos primeiro!');
+      alert('⚠️ É necessário anexar os exames primeiro!');
       setAbaAtiva('documentos');
       return;
     }
@@ -515,132 +614,192 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     const status = getStatusPaciente(ag);
     const expandida = isLinhaExpandida(ag.id);
     
+    // Verificar se exames E pré-operatório estão completos
+    const temExamesEPreOp = ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
+    
     return (
       <React.Fragment key={ag.id}>
         {/* Linha principal */}
-        <tr className="hover:bg-gray-50">
-          {/* Status */}
-          <td className="px-4 py-4 whitespace-nowrap">
-            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
-              {status.texto}
-            </span>
+        <tr className={`transition-colors ${
+          temExamesEPreOp 
+            ? 'bg-green-50/50 hover:bg-green-100/50 border-l-4 border-green-500' 
+            : 'hover:bg-gray-50'
+        }`}>
+          {/* Documentação - SEMÁFORO COM CHECKBOXES - DESTAQUE */}
+          <td className="px-3 py-3 bg-gradient-to-r from-blue-50/40 to-blue-50/60 border-r-2 border-blue-200 w-64 min-w-64 max-w-64">
+            <div className="flex items-center gap-2 justify-start flex-nowrap overflow-hidden">
+              {/* Checkbox 1: EXAMES */}
+              <div className="flex items-center gap-1">
+                <div 
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                    ag.documentos_ok === true 
+                      ? 'bg-green-500 border-green-600' 
+                      : 'bg-white border-gray-300'
+                  }`}
+                >
+                  {ag.documentos_ok === true && (
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setAbaAtiva('documentos');
+                    handleAbrirModalUpload(ag);
+                  }}
+                  className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
+                    ag.documentos_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
+                  }`}
+                  title="Clique para anexar/ver exames"
+                >
+                  🩺 Exames
+                </button>
+              </div>
+              
+              {/* Separador */}
+              <div className="h-3 w-px bg-gray-300"></div>
+              
+              {/* Checkbox 2: PRÉ-OPERATÓRIO */}
+              <div className="flex items-center gap-1">
+                <div 
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                    ag.ficha_pre_anestesica_ok === true 
+                      ? 'bg-green-500 border-green-600' 
+                      : 'bg-white border-gray-300'
+                  }`}
+                >
+                  {ag.ficha_pre_anestesica_ok === true && (
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setAbaAtiva('ficha');
+                    handleAbrirModalUpload(ag);
+                  }}
+                  className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
+                    ag.ficha_pre_anestesica_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
+                  }`}
+                  title="Clique para anexar/ver pré-operatório"
+                >
+                  📋 Pré-op
+                </button>
+              </div>
+              
+              {/* Separador */}
+              <div className="h-3 w-px bg-gray-300"></div>
+              
+              {/* Checkbox 3: COMPLEMENTARES */}
+              <div className="flex items-center gap-1">
+                <div 
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                    ag.complementares_ok === true 
+                      ? 'bg-green-500 border-green-600' 
+                      : 'bg-white border-gray-300'
+                  }`}
+                >
+                  {ag.complementares_ok === true && (
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setAbaAtiva('complementares');
+                    handleAbrirModalUpload(ag);
+                  }}
+                  className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
+                    ag.complementares_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
+                  }`}
+                  title="Clique para anexar/ver complementares"
+                >
+                  📁 Comp.
+                </button>
+              </div>
+              
+              {/* Separador */}
+              <div className="h-3 w-px bg-gray-300"></div>
+              
+              {/* Botão Ver Documentos */}
+              {(() => {
+                // Verificar se há algum documento anexado
+                const temExames = ag.documentos_ok === true;
+                const temFicha = ag.ficha_pre_anestesica_ok === true;
+                const temComplementares = ag.complementares_ok === true;
+                const temAlgumDocumento = temExames || temFicha || temComplementares;
+                
+                return (
+                  <button
+                    onClick={() => temAlgumDocumento && handleAbrirModalVisualizacao(ag)}
+                    disabled={!temAlgumDocumento}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold transition-colors ${
+                      temAlgumDocumento
+                        ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 cursor-pointer'
+                        : 'bg-transparent text-gray-300 cursor-default opacity-50 italic'
+                    }`}
+                    title={temAlgumDocumento ? 'Ver todos os documentos' : 'Nenhum documento anexado'}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Ver
+                  </button>
+                );
+              })()}
+            </div>
           </td>
-        
+          
           {/* Paciente */}
-          <td className="px-4 py-4 whitespace-nowrap">
-            <div className="text-sm font-medium text-gray-900">
+          <td className="px-4 py-3 w-48">
+            <div 
+              className="text-sm font-medium text-gray-900 truncate"
+              title={ag.nome_paciente || ag.nome || '-'}
+            >
               {ag.nome_paciente || ag.nome || '-'}
             </div>
           </td>
           
+          {/* Procedimento */}
+          <td className="px-4 py-3 w-56">
+            <div 
+              className="text-sm text-gray-700 truncate"
+              title={ag.procedimentos || '-'}
+            >
+              {ag.procedimentos || '-'}
+            </div>
+          </td>
+          
           {/* Data Consulta */}
-          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
             {formatarData(ag.data_consulta)}
           </td>
           
           {/* Data Cirurgia */}
-          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
           
-          {/* Status Liberação - COM DESTAQUE VERDE QUANDO LIBERADO */}
-          <td className="px-4 py-4 whitespace-nowrap">
-            <select
-              value={ag.status_liberacao || 'anestesista'}
-              onChange={(e) => handleAtualizarStatusLiberacao(ag.id, e.target.value as StatusLiberacao)}
-              className={`text-xs px-2 py-1 border rounded focus:outline-none focus:ring-2 ${
-                (ag.status_liberacao || 'anestesista') === 'liberado'
-                  ? 'border-green-500 border-2 bg-green-50 text-green-800 font-semibold focus:ring-green-400'
-                  : 'border-gray-300 bg-white focus:ring-blue-500'
-              }`}
-              title={(ag.status_liberacao || 'anestesista') === 'liberado' ? '✅ Paciente liberado!' : 'Status de liberação do paciente'}
-            >
-              <option value="anestesista">Anestesista</option>
-              <option value="cardio">Cardio</option>
-              <option value="exames">Exames</option>
-              <option value="liberado">Liberado</option>
-            </select>
-          </td>
-          
-          {/* Confirmação */}
-          <td className="px-4 py-4 whitespace-nowrap">
-            <select
-              value={ag.confirmacao || 'Aguardando'}
-              onChange={(e) => handleAtualizarConfirmacao(ag.id, e.target.value)}
-              className={`text-xs px-2 py-1 border-2 rounded focus:outline-none focus:ring-1 bg-white ${
-                (ag.confirmacao || 'Aguardando') === 'Confirmado'
-                  ? 'border-green-500 focus:ring-green-500'
-                  : 'border-red-500 focus:ring-red-500'
-              }`}
-              title="Status de confirmação do paciente"
-            >
-              <option value="Aguardando">Aguardando</option>
-              <option value="Confirmado">Confirmado</option>
-            </select>
-          </td>
-          
-          {/* Ações */}
-          <td className="px-4 py-4 whitespace-nowrap text-sm">
-            <div className="flex flex-col gap-2">
-              {/* Documentos Recepção */}
-              <div className="flex items-center gap-2">
-                {ag.documentos_ok === true ? (
-                  <button
-                    onClick={() => handleAbrirModalUpload(ag)}
-                    className="text-green-600 text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                    title="Ver/Adicionar documentos"
-                  >
-                    ✓ Docs OK
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleAbrirModalUpload(ag)}
-                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    📎 Anexar Docs
-                  </button>
-                )}
-              </div>
-              
-              {/* Ficha Pré-Anestésica */}
-              <div className="flex items-center gap-2">
-                {ag.ficha_pre_anestesica_ok === true ? (
-                  <button
-                    onClick={() => {
-                      setAbaAtiva('ficha');
-                      handleAbrirModalUpload(ag);
-                    }}
-                    className="text-green-600 text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                    title="Ver ficha pré-anestésica"
-                  >
-                    ✓ Ficha OK
-                  </button>
-                ) : ag.documentos_ok === true ? (
-                  <button
-                    onClick={() => {
-                      setAbaAtiva('ficha');
-                      handleAbrirModalUpload(ag);
-                    }}
-                    className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
-                  >
-                    📋 Anexar Ficha
-                  </button>
-                ) : (
-                  <span className="text-xs text-gray-400">Aguardando docs</span>
-                )}
-              </div>
-            </div>
+          {/* Status */}
+          <td className="px-4 py-3 whitespace-nowrap w-36">
+            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
+              {status.texto}
+            </span>
           </td>
           
           {/* Botão Expandir/Recolher */}
-          <td className="px-4 py-4 whitespace-nowrap">
+          <td className="px-2 py-3 whitespace-nowrap text-center">
             <button
               onClick={() => toggleExpandirLinha(ag.id)}
               className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
               title={expandida ? 'Recolher detalhes' : 'Expandir detalhes'}
             >
               <svg 
-                className={`w-5 h-5 transition-transform ${expandida ? 'rotate-90' : ''}`}
+                className={`w-4 h-4 transition-transform ${expandida ? 'rotate-90' : ''}`}
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -651,10 +810,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </td>
         </tr>
         
-        {/* Linha expandida com detalhes */}
-        {expandida && (
-          <tr className="bg-gray-50">
-            <td colSpan={8} className="px-4 py-4">
+         {/* Linha expandida com detalhes */}
+         {expandida && (
+           <tr className={temExamesEPreOp ? 'bg-green-50/50' : 'bg-gray-50'}>
+             <td colSpan={7} className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Nascimento */}
                 <div>
@@ -755,11 +914,131 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
+  // Upload de Complementares (NOVO)
+  const handleUploadComplementares = async () => {
+    if (!agendamentoSelecionado || !agendamentoSelecionado.id || arquivosComplementaresSelecionados.length === 0) {
+      return;
+    }
+
+    setUploading(true);
+    const urlsUploaded: string[] = [];
+
+    try {
+      // Upload de cada arquivo
+      for (const arquivo of arquivosComplementaresSelecionados) {
+        // Criar caminho: complementares/{agendamento_id}/{nome_arquivo}
+        const fileExt = arquivo.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `complementares/${agendamentoSelecionado.id}/${fileName}`;
+
+        // Upload para Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('Documentos')
+          .upload(filePath, arquivo, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Erro ao fazer upload:', uploadError);
+          throw new Error(`Erro ao fazer upload de ${arquivo.name}: ${uploadError.message}`);
+        }
+
+        // Obter URL pública do arquivo
+        const { data: urlData } = supabase.storage
+          .from('Documentos')
+          .getPublicUrl(filePath);
+
+        if (urlData?.publicUrl) {
+          urlsUploaded.push(urlData.publicUrl);
+        }
+      }
+
+      // Combinar URLs antigas com novas
+      const todasUrls = [...complementaresAnexados, ...urlsUploaded];
+
+      // Atualizar banco de dados
+      const updateData: Partial<Agendamento> = {
+        complementares_urls: JSON.stringify(todasUrls),
+        complementares_ok: todasUrls.length > 0,
+        complementares_data: new Date().toISOString()
+      };
+
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+
+      // Atualizar estado local
+      setAgendamentos(prev => prev.map(ag => 
+        ag.id === agendamentoSelecionado.id
+          ? { ...ag, ...updateData }
+          : ag
+      ));
+
+      // Limpar e atualizar estado
+      setArquivosComplementaresSelecionados([]);
+      setComplementaresAnexados(todasUrls);
+      
+      alert('✅ Complementares anexados com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao fazer upload:', error);
+      alert(`❌ Erro ao anexar complementares: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Remover complementar anexado (NOVO)
+  const handleRemoverComplementarAnexado = async (url: string) => {
+    if (!agendamentoSelecionado || !agendamentoSelecionado.id) return;
+
+    if (!confirm('Tem certeza que deseja remover este documento complementar?')) return;
+
+    try {
+      // Remover do array de URLs
+      const novasUrls = complementaresAnexados.filter(u => u !== url);
+      
+      // Extrair caminho do arquivo da URL para deletar do storage
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const filePath = pathParts.slice(pathParts.indexOf('Documentos') + 1).join('/');
+
+      // Deletar do storage
+      const { error: deleteError } = await supabase.storage
+        .from('Documentos')
+        .remove([filePath]);
+
+      if (deleteError) {
+        console.error('Erro ao deletar arquivo:', deleteError);
+      }
+
+      // Atualizar banco
+      const updateData: Partial<Agendamento> = {
+        complementares_urls: novasUrls.length > 0 ? JSON.stringify(novasUrls) : null,
+        complementares_ok: novasUrls.length > 0,
+        complementares_data: novasUrls.length > 0 ? new Date().toISOString() : null
+      };
+
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+
+      // Atualizar estado
+      setComplementaresAnexados(novasUrls);
+      setAgendamentos(prev => prev.map(ag => 
+        ag.id === agendamentoSelecionado.id
+          ? { ...ag, ...updateData }
+          : ag
+      ));
+
+      alert('✅ Documento complementar removido com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao remover complementar:', error);
+      alert(`❌ Erro ao remover complementar: ${error.message}`);
+    }
+  };
+  
   // Remover ficha pré-anestésica
   const handleRemoverFicha = async () => {
     if (!agendamentoSelecionado || !agendamentoSelecionado.id || !fichaAnexada) return;
 
-    if (!confirm('Tem certeza que deseja remover a ficha pré-anestésica?')) return;
+    if (!confirm('Tem certeza que deseja remover a ficha pré-operatória?')) return;
 
     try {
       // Extrair caminho do arquivo da URL para deletar do storage
@@ -793,7 +1072,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           : ag
       ));
 
-      alert('✅ Ficha pré-anestésica removida com sucesso!');
+      alert('✅ Ficha pré-operatória removida com sucesso!');
     } catch (error: any) {
       console.error('Erro ao remover ficha:', error);
       alert(`❌ Erro ao remover ficha: ${error.message}`);
@@ -801,13 +1080,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   };
 
   return (
-    <div className="p-6">
+    <div className="p-0">
       {/* Cabeçalho */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">📋 Documentação Pré-Cirúrgica</h1>
           <p className="text-gray-600">
-            Gerenciamento de documentos e fichas pré-anestésicas dos pacientes
+            Gerenciamento de documentos dos pacientes
           </p>
         </div>
         <button
@@ -825,74 +1104,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           {loading ? 'Carregando...' : 'Atualizar'}
-        </button>
-      </div>
-
-      {/* Filtros Rápidos */}
-      <div className="flex gap-3 mb-4">
-        <button
-          onClick={() => setFiltro('todos')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filtro === 'todos'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          Todos ({(() => {
-            // Contar PACIENTES ÚNICOS (não procedimentos)
-            const pacientes = new Set<string>();
-            agendamentos.forEach(a => {
-              const nomePaciente = (a.nome_paciente || a.nome || '').trim();
-              if (nomePaciente && nomePaciente !== '') {
-                pacientes.add(nomePaciente.toLowerCase());
-              }
-            });
-            return pacientes.size;
-          })()})
-        </button>
-        <button
-          onClick={() => setFiltro('pendentes')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filtro === 'pendentes'
-              ? 'bg-orange-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          Pendentes ({(() => {
-            // Contar PACIENTES ÚNICOS pendentes (não procedimentos)
-            const pacientes = new Set<string>();
-            agendamentos
-              .filter(a => !(a.documentos_ok === true) || !(a.ficha_pre_anestesica_ok === true))
-              .forEach(a => {
-                const nomePaciente = (a.nome_paciente || a.nome || '').trim();
-                if (nomePaciente && nomePaciente !== '') {
-                  pacientes.add(nomePaciente.toLowerCase());
-                }
-              });
-            return pacientes.size;
-          })()})
-        </button>
-        <button
-          onClick={() => setFiltro('liberados')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filtro === 'liberados'
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          Liberados ({(() => {
-            // Contar PACIENTES ÚNICOS liberados (não procedimentos)
-            const pacientes = new Set<string>();
-            agendamentos
-              .filter(a => a.documentos_ok === true && a.ficha_pre_anestesica_ok === true)
-              .forEach(a => {
-                const nomePaciente = (a.nome_paciente || a.nome || '').trim();
-                if (nomePaciente && nomePaciente !== '') {
-                  pacientes.add(nomePaciente.toLowerCase());
-                }
-              });
-            return pacientes.size;
-          })()})
         </button>
       </div>
 
@@ -914,20 +1125,60 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Filtro Status */}
+          {/* Filtro Status - DESTACADO */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Status
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              📊 Status da Documentação
             </label>
             <select
               value={filtroStatus}
               onChange={(e) => setFiltroStatus(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white"
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
+                filtroStatus 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300'
+              }`}
             >
-              <option value="">Todos os status</option>
-              <option value="AGUARDANDO DOCS">Aguardando Docs</option>
-              <option value="AGUARDANDO FICHA">Aguardando Ficha</option>
-              <option value="LIBERADO">Liberado</option>
+              <option value="">
+                Todos ({(() => {
+                  const pacientes = new Set<string>();
+                  agendamentos.forEach(a => {
+                    const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+                    if (nomePaciente && nomePaciente !== '') {
+                      pacientes.add(nomePaciente.toLowerCase());
+                    }
+                  });
+                  return pacientes.size;
+                })()})
+              </option>
+              <option value="SEM EXAMES">
+                Sem Exames ({(() => {
+                  const pacientes = new Set<string>();
+                  agendamentos
+                    .filter(a => !(a.documentos_ok === true))
+                    .forEach(a => {
+                      const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+                      if (nomePaciente && nomePaciente !== '') {
+                        pacientes.add(nomePaciente.toLowerCase());
+                      }
+                    });
+                  return pacientes.size;
+                })()})
+              </option>
+              <option value="COM EXAMES">
+                Com Exames ({(() => {
+                  const pacientes = new Set<string>();
+                  agendamentos
+                    .filter(a => a.documentos_ok === true)
+                    .forEach(a => {
+                      const nomePaciente = (a.nome_paciente || a.nome || '').trim();
+                      if (nomePaciente && nomePaciente !== '') {
+                        pacientes.add(nomePaciente.toLowerCase());
+                      }
+                    });
+                  return pacientes.size;
+                })()})
+              </option>
             </select>
           </div>
           
@@ -1008,14 +1259,160 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </div>
       ) : (
         <>
+          {/* Paginação Superior */}
+          {!agruparPorStatus && totalRegistros > 0 && (
+            <div ref={tabelaRef} className="mb-4 bg-white rounded-lg shadow p-4">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                {/* Informações e seletor de itens por página */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <p className="text-sm text-gray-700">
+                      Mostrando <span className="font-semibold">{Math.min((paginaAtual - 1) * itensPorPagina + 1, totalRegistros)}</span> a{' '}
+                      <span className="font-semibold">{Math.min(paginaAtual * itensPorPagina, totalRegistros)}</span> de{' '}
+                      <span className="font-semibold">{totalRegistros}</span> pacientes
+                    </p>
+                    {agendamentosPaginados.length > 0 && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)} 
+                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento && 
+                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
+                        }
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Por página:</label>
+                    <select
+                      value={itensPorPagina}
+                      onChange={(e) => {
+                        setItensPorPagina(Number(e.target.value));
+                        setPaginaAtual(1);
+                      }}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                      <option value="10">10</option>
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Navegação de páginas */}
+                <div className="flex items-center gap-2">
+                  {/* Botão Anterior */}
+                  <button
+                    onClick={() => setPaginaAtual(prev => Math.max(1, prev - 1))}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Anterior
+                  </button>
+
+                  {/* Números de páginas */}
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisible = 5;
+                      let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
+                      let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
+                      
+                      if (endPage - startPage < maxVisible - 1) {
+                        startPage = Math.max(1, endPage - maxVisible + 1);
+                      }
+
+                      // Primeira página
+                      if (startPage > 1) {
+                        pages.push(
+                          <button
+                            key={1}
+                            onClick={() => setPaginaAtual(1)}
+                            className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            1
+                          </button>
+                        );
+                        if (startPage > 2) {
+                          pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>);
+                        }
+                      }
+
+                      // Páginas visíveis
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => setPaginaAtual(i)}
+                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
+                              paginaAtual === i
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+
+                      // Última página
+                      if (endPage < totalPaginas) {
+                        if (endPage < totalPaginas - 1) {
+                          pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>);
+                        }
+                        pages.push(
+                          <button
+                            key={totalPaginas}
+                            onClick={() => setPaginaAtual(totalPaginas)}
+                            className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            {totalPaginas}
+                          </button>
+                        );
+                      }
+
+                      return pages;
+                    })()}
+                  </div>
+
+                  {/* Botão Próxima */}
+                  <button
+                    onClick={() => setPaginaAtual(prev => Math.min(totalPaginas, prev + 1))}
+                    disabled={paginaAtual === totalPaginas}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tabela */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gradient-to-r from-blue-50/40 to-blue-50/60 border-r-2 border-blue-200 w-64 min-w-64 max-w-64">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-blue-700 font-bold text-xs">📋 DOCUMENTAÇÃO</span>
+                        <span className="text-[9px] text-gray-500 font-normal normal-case">(Clique nos itens)</span>
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                      Paciente
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
+                      Procedimento
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                      Data Consulta
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                      Data Cirurgia
+                    </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-36"
                       onClick={toggleAgruparPorStatus}
                       title={agruparPorStatus ? 'Clique para desagrupar' : 'Clique para agrupar por status'}
                     >
@@ -1027,35 +1424,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                           </svg>
                         )}
                       </div>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Paciente
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Data Consulta
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Data Cirurgia
-                    </th>
-                    <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                      onClick={toggleOrdenarPorAnestesista}
-                      title={ordenarPorAnestesista ? 'Clique para remover ordenação' : 'Clique para ordenar (Liberados primeiro)'}
-                    >
-                      <div className="flex items-center gap-2">
-                        Anestesista
-                        {ordenarPorAnestesista && (
-                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-                          </svg>
-                        )}
-                      </div>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Confirmação
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ações
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
                       {/* Botão expandir */}
@@ -1072,18 +1440,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       if (lista.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={8} className="px-4 py-8 text-center">
+                            <td colSpan={7} className="px-4 py-8 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 <p className="text-gray-500 font-medium">Nenhum agendamento encontrado</p>
                                 <p className="text-sm text-gray-400">
-                                  {filtro === 'todos' 
-                                    ? 'Não há pacientes agendados no sistema.' 
-                                    : filtro === 'pendentes'
-                                    ? 'Não há pacientes pendentes de documentação.'
-                                    : 'Não há pacientes liberados para cirurgia.'}
+                                  {filtroStatus 
+                                    ? `Não há pacientes com status "${filtroStatus}".` 
+                                    : temFiltrosAtivos
+                                    ? 'Nenhum paciente corresponde aos filtros aplicados.'
+                                    : 'Não há pacientes agendados no sistema.'}
                                 </p>
                               </div>
                             </td>
@@ -1096,9 +1464,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     
                     // Se está agrupado
                     const gruposOrdenados = [
-                      { chave: 'aguardando_docs', titulo: 'Aguardando Docs', cor: 'bg-red-50 border-red-200' },
-                      { chave: 'aguardando_ficha', titulo: 'Aguardando Ficha', cor: 'bg-yellow-50 border-yellow-200' },
-                      { chave: 'liberado', titulo: 'Liberado', cor: 'bg-green-50 border-green-200' }
+                      { chave: 'sem_exames', titulo: 'Sem Exames', cor: 'bg-red-50 border-red-200' },
+                      { chave: 'com_exames', titulo: 'Com Exames', cor: 'bg-green-50 border-green-200' }
                     ];
                     
                     return gruposOrdenados.map((grupoInfo) => {
@@ -1109,7 +1476,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         <React.Fragment key={grupoInfo.chave}>
                           {/* Cabeçalho do grupo */}
                           <tr className={`${grupoInfo.cor} border-t-2 border-b-2`}>
-                            <td colSpan={8} className="px-4 py-3">
+                            <td colSpan={7} className="px-4 py-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-gray-800">{grupoInfo.titulo}</span>
@@ -1129,14 +1496,168 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </div>
           </div>
 
+          {/* Paginação */}
+          {!agruparPorStatus && totalRegistros > 0 && (
+            <div className="mt-6 bg-white rounded-lg shadow p-4">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                {/* Informações e seletor de itens por página */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <p className="text-sm text-gray-700">
+                      Mostrando <span className="font-semibold">{Math.min((paginaAtual - 1) * itensPorPagina + 1, totalRegistros)}</span> a{' '}
+                      <span className="font-semibold">{Math.min(paginaAtual * itensPorPagina, totalRegistros)}</span> de{' '}
+                      <span className="font-semibold">{totalRegistros}</span> pacientes
+                    </p>
+                    {agendamentosPaginados.length > 0 && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)} 
+                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento && 
+                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
+                        }
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Por página:</label>
+                    <select
+                      value={itensPorPagina}
+                      onChange={(e) => {
+                        setItensPorPagina(Number(e.target.value));
+                        setPaginaAtual(1);
+                      }}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                      <option value="10">10</option>
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Navegação de páginas */}
+                <div className="flex items-center gap-2">
+                  {/* Botão Anterior */}
+                  <button
+                    onClick={() => setPaginaAtual(prev => Math.max(1, prev - 1))}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Anterior
+                  </button>
+
+                  {/* Números de páginas */}
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisible = 5;
+                      let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
+                      let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
+                      
+                      if (endPage - startPage < maxVisible - 1) {
+                        startPage = Math.max(1, endPage - maxVisible + 1);
+                      }
+
+                      // Primeira página
+                      if (startPage > 1) {
+                        pages.push(
+                          <button
+                            key={1}
+                            onClick={() => setPaginaAtual(1)}
+                            className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            1
+                          </button>
+                        );
+                        if (startPage > 2) {
+                          pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>);
+                        }
+                      }
+
+                      // Páginas visíveis
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => setPaginaAtual(i)}
+                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
+                              paginaAtual === i
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+
+                      // Última página
+                      if (endPage < totalPaginas) {
+                        if (endPage < totalPaginas - 1) {
+                          pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>);
+                        }
+                        pages.push(
+                          <button
+                            key={totalPaginas}
+                            onClick={() => setPaginaAtual(totalPaginas)}
+                            className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            {totalPaginas}
+                          </button>
+                        );
+                      }
+
+                      return pages;
+                    })()}
+                  </div>
+
+                  {/* Botão Próxima */}
+                  <button
+                    onClick={() => setPaginaAtual(prev => Math.min(totalPaginas, prev + 1))}
+                    disabled={paginaAtual === totalPaginas}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Legenda */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-semibold text-gray-800 mb-2">📌 Fluxo de Documentação:</h3>
-            <ol className="space-y-1 text-sm text-gray-700">
-              <li>1️⃣ <strong>Recepção:</strong> Anexa exames (ECG, laboratoriais, etc.) → Marca "Docs OK"</li>
-              <li>2️⃣ <strong>Anestesista:</strong> Vê os exames → Faz ficha pré-anestésica → Anexa → Marca "Ficha OK"</li>
-              <li>3️⃣ <strong>Liberado:</strong> Paciente apto para cirurgia! ✅</li>
-            </ol>
+          <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 to-blue-100/50 rounded-lg border-l-4 border-blue-500 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <span className="text-blue-600">📌</span> Sistema de Documentação Visual
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <div className="flex items-start gap-2 bg-white p-2 rounded">
+                <span className="text-green-600">🩺</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Exames</p>
+                  <p className="text-xs text-gray-600">ECG, laboratoriais, raio-x</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 bg-white p-2 rounded">
+                <span className="text-green-600">📋</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Pré-operatório</p>
+                  <p className="text-xs text-gray-600">Ficha pré-anestésica</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 bg-white p-2 rounded">
+                <span className="text-green-600">📁</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Complementares</p>
+                  <p className="text-xs text-gray-600">Documentos adicionais</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-600 italic flex items-center gap-1">
+              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Clique nos itens da coluna <strong>DOCUMENTAÇÃO</strong> para anexar ou visualizar arquivos
+            </p>
           </div>
         </>
       )}
@@ -1178,35 +1699,38 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                📄 Documentos {agendamentoSelecionado?.documentos_ok && '✓'}
+                🩺 Exames {agendamentoSelecionado?.documentos_ok && '✓'}
               </button>
               <button
-                onClick={() => {
-                  if (agendamentoSelecionado?.documentos_ok) {
-                    setAbaAtiva('ficha');
-                  } else {
-                    alert('⚠️ É necessário anexar os documentos primeiro!');
-                  }
-                }}
+                onClick={() => setAbaAtiva('ficha')}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   abaAtiva === 'ficha'
                     ? 'border-purple-600 text-purple-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
-                } ${!agendamentoSelecionado?.documentos_ok ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={!agendamentoSelecionado?.documentos_ok}
+                }`}
               >
-                📋 Ficha Pré-Anestésica {agendamentoSelecionado?.ficha_pre_anestesica_ok && '✓'}
+                📋 Pré-Operatório {agendamentoSelecionado?.ficha_pre_anestesica_ok && '✓'}
+              </button>
+              <button
+                onClick={() => setAbaAtiva('complementares')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  abaAtiva === 'complementares'
+                    ? 'border-orange-600 text-orange-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                📎 Complementares {agendamentoSelecionado?.complementares_ok && '✓'}
               </button>
             </nav>
           </div>
 
-          {/* Conteúdo da Aba: Documentos */}
+          {/* Conteúdo da Aba: Exames */}
           {abaAtiva === 'documentos' && (
             <div className="space-y-4">
-              {/* Documentos já anexados */}
+              {/* Exames já anexados */}
               {documentosAnexados.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">📄 Documentos já anexados:</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">🩺 Exames já anexados:</h3>
                   <div className="space-y-2">
                     {documentosAnexados.map((url, index) => {
                       const fileName = url.split('/').pop() || `Documento ${index + 1}`;
@@ -1239,9 +1763,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 </div>
               )}
 
-              {/* Área de Upload de Documentos */}
+              {/* Área de Upload de Exames */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar novos documentos:</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar novos exames:</h3>
                 
                 <input
                   ref={fileInputDocumentosRef}
@@ -1315,7 +1839,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      Anexar Documentos
+                      Anexar Exames
                     </>
                   )}
                 </button>
@@ -1436,6 +1960,269 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               </div>
             </div>
           )}
+          
+          {/* Conteúdo da Aba: Complementares (NOVO) */}
+          {abaAtiva === 'complementares' && (
+            <div className="space-y-4">
+              {/* Complementares já anexados */}
+              {complementaresAnexados.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">📎 Complementares já anexados:</h3>
+                  <div className="space-y-2">
+                    {complementaresAnexados.map((url, index) => {
+                      const fileName = url.split('/').pop() || `Documento ${index + 1}`;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            {fileName}
+                          </a>
+                          <button
+                            onClick={() => handleRemoverComplementarAnexado(url)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Remover documento"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Área de Upload de Complementares */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar documentos complementares:</h3>
+                
+                <input
+                  ref={fileInputComplementaresRef}
+                  type="file"
+                  multiple
+                  onChange={handleSelecionarComplementares}
+                  className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                />
+
+                <button
+                  onClick={() => fileInputComplementaresRef.current?.click()}
+                  className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-orange-500 transition-colors text-center"
+                >
+                  <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="text-sm text-gray-600">Clique para selecionar arquivos complementares</p>
+                  <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX</p>
+                </button>
+
+                {/* Lista de arquivos selecionados */}
+                {arquivosComplementaresSelecionados.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-sm font-medium text-gray-700">Arquivos selecionados:</p>
+                    {arquivosComplementaresSelecionados.map((arquivo, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span className="text-sm text-gray-700 flex-1">{arquivo.name}</span>
+                        <span className="text-xs text-gray-500 mr-2">
+                          {(arquivo.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                        <button
+                          onClick={() => handleRemoverComplementar(index)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Botões de ação - Complementares */}
+              <div className="flex gap-3 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setModalUploadAberto(false);
+                    setArquivosComplementaresSelecionados([]);
+                    setAgendamentoSelecionado(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  disabled={uploading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUploadComplementares}
+                  disabled={uploading || arquivosComplementaresSelecionados.length === 0}
+                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                >
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      Anexar Complementares
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Modal de Visualização de Documentos */}
+      <Modal
+        isOpen={modalVisualizacaoAberto}
+        onClose={() => {
+          setModalVisualizacaoAberto(false);
+          setAgendamentoSelecionado(null);
+          setDocumentosAnexados([]);
+          setComplementaresAnexados([]);
+          setFichaAnexada(null);
+        }}
+        title={`📄 Documentos - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+        size="large"
+      >
+        <div className="space-y-4">
+          {/* Informações do Paciente */}
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Paciente:</strong> {agendamentoSelecionado?.nome_paciente || '-'}
+            </p>
+            <p className="text-sm text-gray-700">
+              <strong>Procedimento:</strong> {agendamentoSelecionado?.procedimentos || '-'}
+            </p>
+            <p className="text-sm text-gray-700">
+              <strong>Data Cirurgia:</strong> {formatarData(agendamentoSelecionado?.data_agendamento)}
+            </p>
+          </div>
+
+          {/* Seção de Exames */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              🩺 Exames
+            </h3>
+            {documentosAnexados.length > 0 ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {documentosAnexados.map((url, index) => {
+                  const fileName = url.split('/').pop() || `Exame ${index + 1}`;
+                  return (
+                    <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded hover:bg-green-100 transition-colors">
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1"
+                      >
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="truncate">{fileName}</span>
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">Nenhum exame anexado</p>
+            )}
+          </div>
+
+          {/* Seção de Ficha Pré-Operatória */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              📋 Ficha Pré-Operatória
+            </h3>
+            {fichaAnexada ? (
+              <div className="flex items-center justify-between p-2 bg-orange-50 rounded hover:bg-orange-100 transition-colors">
+                <a
+                  href={fichaAnexada}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="truncate">{fichaAnexada.split('/').pop() || 'Ficha Pré-Anestésica'}</span>
+                </a>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">Nenhuma ficha anexada</p>
+            )}
+          </div>
+
+          {/* Seção de Documentos Complementares */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              📁 Documentos Complementares
+            </h3>
+            {complementaresAnexados.length > 0 ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {complementaresAnexados.map((url, index) => {
+                  const fileName = url.split('/').pop() || `Complementar ${index + 1}`;
+                  return (
+                    <div key={index} className="flex items-center justify-between p-2 bg-purple-50 rounded hover:bg-purple-100 transition-colors">
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1"
+                      >
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="truncate">{fileName}</span>
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">Nenhum documento complementar anexado</p>
+            )}
+          </div>
+
+          {/* Botão Fechar */}
+          <div className="flex justify-end pt-4 border-t">
+            <button
+              onClick={() => {
+                setModalVisualizacaoAberto(false);
+                setAgendamentoSelecionado(null);
+                setDocumentosAnexados([]);
+                setComplementaresAnexados([]);
+                setFichaAnexada(null);
+              }}
+              className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

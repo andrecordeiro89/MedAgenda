@@ -1,7 +1,7 @@
 
 export type StatusLiberacao = 'anestesista' | 'cardio' | 'exames' | 'liberado'; // Status de liberação do paciente
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
-export type View = 'dashboard' | 'calendar' | 'documentacao' | 'faturamento';
+export type View = 'dashboard' | 'calendar' | 'documentacao' | 'anestesista' | 'faturamento';
 
 export interface Agendamento {
   id?: string;
@@ -19,12 +19,15 @@ export interface Agendamento {
   updated_at?: string;
   
   // Campos de documentação (fluxo pré-cirúrgico)
-  documentos_ok?: boolean; // Indica se documentos foram anexados pela recepção
-  documentos_urls?: string | null; // JSON com URLs dos documentos (ECG, exames, etc.)
-  documentos_data?: string | null; // Data/hora do upload dos documentos
-  ficha_pre_anestesica_ok?: boolean; // Indica se ficha pré-anestésica foi anexada
-  ficha_pre_anestesica_url?: string | null; // URL da ficha pré-anestésica
+  documentos_ok?: boolean; // Indica se exames foram anexados pela recepção
+  documentos_urls?: string | null; // JSON com URLs dos exames (ECG, laboratoriais, etc.)
+  documentos_data?: string | null; // Data/hora do upload dos exames
+  ficha_pre_anestesica_ok?: boolean; // Indica se ficha pré-operatória foi anexada
+  ficha_pre_anestesica_url?: string | null; // URL da ficha pré-operatória
   ficha_pre_anestesica_data?: string | null; // Data/hora do upload da ficha
+  complementares_ok?: boolean; // NOVO: Indica se documentos complementares foram anexados
+  complementares_urls?: string | null; // NOVO: JSON com URLs dos complementares
+  complementares_data?: string | null; // NOVO: Data/hora do upload dos complementares
   observacoes?: string | null; // Observações gerais
   
   // Campo para identificar registros de grade cirúrgica

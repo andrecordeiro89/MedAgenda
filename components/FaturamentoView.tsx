@@ -233,12 +233,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
 
   // Status do paciente (mesma lógica da tela Documentação)
   const getStatusPaciente = (ag: Agendamento) => {
-    const temDocs = ag.documentos_ok === true;
-    const temFicha = ag.ficha_pre_anestesica_ok === true;
+    const temExames = ag.documentos_ok === true;
     
-    if (temDocs && temFicha) return { texto: 'LIBERADO', cor: 'bg-green-100 text-green-800' };
-    if (temDocs && !temFicha) return { texto: 'AGUARDANDO FICHA', cor: 'bg-yellow-100 text-yellow-800' };
-    return { texto: 'AGUARDANDO DOCS', cor: 'bg-red-100 text-red-800' };
+    if (temExames) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800' };
+    return { texto: 'SEM EXAMES', cor: 'bg-red-100 text-red-800' };
   };
 
   // Renderizar linha de agendamento

@@ -84,44 +84,37 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
         return pacientes;
     };
     
-    // Aguardando docs: contar PACIENTES ÚNICOS (não procedimentos)
-    const agendamentosAguardandoDocs = agendamentos.filter(a => {
-        // Aguardando docs: documentos_ok não é true (pode ser false, null ou undefined)
+    // Sem exames: contar PACIENTES ÚNICOS (não procedimentos)
+    const agendamentosSemExames = agendamentos.filter(a => {
+        // Sem exames: documentos_ok não é true (pode ser false, null ou undefined)
         return !(a.documentos_ok === true);
     });
-    const aguardandoDocs = getPacientesUnicos(agendamentosAguardandoDocs).size;
+    const semExames = getPacientesUnicos(agendamentosSemExames).size;
     
-    // Aguardando ficha: contar PACIENTES ÚNICOS
-    const agendamentosAguardandoFicha = agendamentos.filter(a => {
-        // Aguardando ficha: tem docs OK mas não tem ficha OK
-        return a.documentos_ok === true && !(a.ficha_pre_anestesica_ok === true);
+    // Com exames: contar PACIENTES ÚNICOS
+    const agendamentosComExames = agendamentos.filter(a => {
+        // Com exames: tem docs OK
+        return a.documentos_ok === true;
     });
-    const aguardandoFicha = getPacientesUnicos(agendamentosAguardandoFicha).size;
-    
-    // Liberados: contar PACIENTES ÚNICOS
-    const agendamentosLiberados = agendamentos.filter(a => {
-        // Liberado: tem docs OK E ficha OK
-        return a.documentos_ok === true && a.ficha_pre_anestesica_ok === true;
-    });
-    const liberados = getPacientesUnicos(agendamentosLiberados).size;
+    const comExames = getPacientesUnicos(agendamentosComExames).size;
     
     // Debug: log dos KPIs calculados
     useEffect(() => {
         if (agendamentos.length > 0) {
             console.log('📊 Dashboard KPIs:', {
                 total: agendamentos.length,
-                aguardandoDocs,
-                aguardandoFicha,
-                liberados,
+                semExames,
+                comExames,
                 amostra: agendamentos.slice(0, 3).map(a => ({
                     id: a.id,
                     nome: a.nome_paciente || a.nome,
                     documentos_ok: a.documentos_ok,
-                    ficha_pre_anestesica_ok: a.ficha_pre_anestesica_ok
+                    ficha_pre_anestesica_ok: a.ficha_pre_anestesica_ok,
+                    complementares_ok: a.complementares_ok
                 }))
             });
         }
-    }, [agendamentos, aguardandoDocs, aguardandoFicha, liberados]);
+    }, [agendamentos, semExames, comExames]);
 
     // Funções auxiliares para buscar dados relacionados
     const getMedicoName = (id: string) => medicos.find(m => m.id === id)?.nome || 'Médico não encontrado';
@@ -166,59 +159,39 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
                         </div>
                     </div>
                     
-                    {/* Linha 2: Todos os KPIs */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* KPI 1: Aguardando Docs */}
-                        <div className={`text-center p-4 rounded-lg border-2 ${
-                            aguardandoDocs > 0 
+                    {/* Linha 2: KPIs Simplificados (Semáforo) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* KPI 1: Sem Exames (Vermelho) */}
+                        <div className={`text-center p-6 rounded-lg border-2 ${
+                            semExames > 0 
                                 ? 'border-red-500 bg-red-50/80 blink-animation shadow-lg shadow-red-200' 
                                 : 'border-white/40 bg-white/60'
                         }`}>
-                            <div className="flex items-center justify-center mb-2">
-                                <svg className={`w-6 h-6 mr-2 ${aguardandoDocs > 0 ? 'text-red-600' : 'text-red-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="flex items-center justify-center mb-3">
+                                <svg className={`w-8 h-8 mr-2 ${semExames > 0 ? 'text-red-600' : 'text-red-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
-                                <p className={`text-2xl font-bold ${aguardandoDocs > 0 ? 'text-red-600' : 'text-red-500'}`}>
-                                    {aguardandoDocs}
+                                <p className={`text-4xl font-bold ${semExames > 0 ? 'text-red-600' : 'text-red-500'}`}>
+                                    {semExames}
                                 </p>
                             </div>
-                            <p className={`text-sm font-semibold ${aguardandoDocs > 0 ? 'text-red-700' : 'text-slate-700'}`}>Aguardando Docs</p>
-                            {aguardandoDocs > 0 && (
-                                <p className="text-xs text-red-600 mt-1 font-medium blink-animation">⚠️ Atenção necessária</p>
+                            <p className={`text-base font-bold ${semExames > 0 ? 'text-red-700' : 'text-slate-700'}`}>SEM EXAMES</p>
+                            {semExames > 0 && (
+                                <p className="text-sm text-red-600 mt-2 font-medium blink-animation">⚠️ Aguardando documentação</p>
                             )}
                         </div>
                         
-                        {/* KPI 2: Aguardando Ficha */}
-                        <div className={`text-center p-4 rounded-lg border-2 ${
-                            aguardandoFicha > 0 
-                                ? 'border-yellow-500 bg-yellow-50/80 blink-animation shadow-lg shadow-yellow-200' 
-                                : 'border-white/40 bg-white/60'
-                        }`}>
-                            <div className="flex items-center justify-center mb-2">
-                                <svg className={`w-6 h-6 mr-2 ${aguardandoFicha > 0 ? 'text-yellow-600' : 'text-yellow-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <p className={`text-2xl font-bold ${aguardandoFicha > 0 ? 'text-yellow-600' : 'text-yellow-500'}`}>
-                                    {aguardandoFicha}
-                                </p>
-                            </div>
-                            <p className={`text-sm font-semibold ${aguardandoFicha > 0 ? 'text-yellow-700' : 'text-slate-700'}`}>Aguardando Ficha</p>
-                            {aguardandoFicha > 0 && (
-                                <p className="text-xs text-yellow-600 mt-1 font-medium blink-animation">⚠️ Atenção necessária</p>
-                            )}
-                        </div>
-                        
-                        {/* KPI 3: Liberado */}
-                        <div className="text-center p-4 bg-white/60 rounded-lg border-2 border-white/40">
-                            <div className="flex items-center justify-center mb-2">
-                                <svg className="w-6 h-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {/* KPI 2: Com Exames (Verde) */}
+                        <div className="text-center p-6 bg-green-50/80 rounded-lg border-2 border-green-500">
+                            <div className="flex items-center justify-center mb-3">
+                                <svg className="w-8 h-8 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <p className="text-2xl font-bold text-green-600">{liberados}</p>
+                                <p className="text-4xl font-bold text-green-600">{comExames}</p>
                             </div>
-                            <p className="text-sm text-slate-700 font-semibold">Liberado</p>
-                            {liberados > 0 && (
-                                <p className="text-xs text-green-600 mt-1 font-medium">✅ Pronto para faturamento</p>
+                            <p className="text-base text-green-700 font-bold">COM EXAMES</p>
+                            {comExames > 0 && (
+                                <p className="text-sm text-green-600 mt-2 font-medium">✅ Em processamento</p>
                             )}
                         </div>
                     </div>

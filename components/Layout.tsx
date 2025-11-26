@@ -24,6 +24,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
         { view: 'dashboard' as View, label: 'Dashboard', icon: <HomeIcon className="w-5 h-5"/> },
         { view: 'calendar' as View, label: 'Agenda', icon: <CalendarIcon className="w-5 h-5"/> },
         { view: 'documentacao' as View, label: 'Documentação', icon: <ListIcon className="w-5 h-5"/> },
+        { view: 'anestesista' as View, label: 'Anestesista', icon: <ListIcon className="w-5 h-5"/> },
         { view: 'faturamento' as View, label: 'Faturamento', icon: <ListIcon className="w-5 h-5"/> }
     ];
     
@@ -34,23 +35,23 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
         <div className="min-h-screen bg-slate-50">
             {/* Barra unificada colorida */}
             <header className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg sticky top-0 z-30">
-                <div className="container mx-auto px-4">
-                    <div className="flex justify-between items-center h-16">
-                        {/* Logo e nome - lado esquerdo */}
-                        <div className="flex items-center gap-3">
+                <div className="w-full px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16 gap-6">
+                        {/* Logo e nome - lado esquerdo (fixo) */}
+                        <div className="flex items-center gap-3 flex-shrink-0">
                             <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center">
                                 <CalendarIcon className="w-5 h-5 text-white"/>
                             </div>
-                            <h1 className="text-xl font-bold text-white">MedAgenda</h1>
+                            <h1 className="text-xl font-bold text-white whitespace-nowrap">MedAgenda</h1>
                         </div>
 
-                        {/* Navegação central - Desktop */}
-                        <nav className="hidden md:flex items-center gap-2">
+                        {/* Navegação central - Desktop (flexível) */}
+                        <nav className="hidden md:flex items-center gap-2 flex-1 justify-center max-w-3xl">
                             {navLinks.map(link => (
                                 <button 
                                     key={link.view}
                                     onClick={() => handleNavClick(link.view)}
-                                    className={`flex items-center px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 text-sm font-medium ${
+                                    className={`flex items-center px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 text-sm font-medium whitespace-nowrap ${
                                         currentView === link.view
                                         ? 'bg-white/20 text-white shadow-sm backdrop-blur-md border border-white/30'
                                         : 'text-white/80 hover:bg-white/10 hover:text-white'
@@ -62,19 +63,19 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                             ))}
                         </nav>
 
-                        {/* Usuário, Hospital e botão sair - lado direito */}
-                        <div className="hidden md:flex items-center gap-4">
+                        {/* Usuário, Hospital e botão sair - lado direito (fixo) */}
+                        <div className="hidden md:flex items-center gap-3 flex-shrink-0">
                             <div className="text-right">
-                                <div className="text-white font-medium text-sm">
+                                <div className="text-white font-medium text-sm whitespace-nowrap">
                                     {usuario?.email || 'Usuário não logado'}
                                 </div>
-                                <div className="text-white/70 text-xs">
-                                    {hospitalSelecionado?.nome || 'Hospital não selecionado'} • {hospitalSelecionado?.cidade || ''}
+                                <div className="text-white/70 text-xs whitespace-nowrap">
+                                    {hospitalSelecionado?.nome || 'Hospital não selecionado'}{hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
                             <button
                                 onClick={logout}
-                                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg text-white transition-all duration-200 border border-white/20 hover:border-white/30 text-sm font-medium"
+                                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg text-white transition-all duration-200 border border-white/20 hover:border-white/30 text-sm font-medium whitespace-nowrap"
                             >
                                 Sair
                             </button>
@@ -82,7 +83,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
 
                         {/* Botão mobile */}
                         <button 
-                            className="md:hidden text-white" 
+                            className="md:hidden text-white flex-shrink-0" 
                             onClick={() => setMenuOpen(!isMenuOpen)} 
                             aria-label="Abrir menu"
                         >
@@ -97,7 +98,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
 
                 {/* Menu mobile */}
                 <div className={`transition-all duration-300 ease-in-out md:hidden ${isMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                    <nav className="bg-white/10 backdrop-blur-md border-t border-white/20 p-4 flex flex-col gap-2">
+                    <nav className="bg-white/10 backdrop-blur-md border-t border-white/20 px-6 py-4 flex flex-col gap-2">
                         {navLinks.map(link => (
                              <button 
                                 key={link.view}
@@ -133,7 +134,13 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                 </div>
             </header>
 
-            <main className="p-3 md:p-6 lg:p-8 container mx-auto max-w-7xl">
+            <main className={`py-6 ${
+                // Telas que ocupam largura total (para tabelas grandes)
+                currentView === 'documentacao' || currentView === 'anestesista' || currentView === 'faturamento'
+                    ? 'w-full px-6 lg:px-8' 
+                    // Outras telas mantêm container centralizado
+                    : 'container mx-auto max-w-7xl px-4'
+            }`}>
                 {children}
             </main>
         </div>

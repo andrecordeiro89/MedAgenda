@@ -2093,6 +2093,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
     }
 
+    // Ordenar procedimentos alfabeticamente dentro de cada grupo
+    grupos.forEach(grupo => {
+      grupo.procedimentos.sort((a, b) => {
+        const textoA = (a.texto || '').toLowerCase();
+        const textoB = (b.texto || '').toLowerCase();
+        return textoA.localeCompare(textoB, 'pt-BR');
+      });
+    });
+
     return grupos;
   };
 
@@ -2148,13 +2157,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               });
             });
           } else {
-            // Procedimento sem paciente
+            // Procedimento sem paciente - mostrar nome do procedimento
             dados.push({
               data: data.toLocaleDateString('pt-BR'),
               especialidade: especialidadeNome,
               procedimento: procedimentoNome,
               medico: medicoNome,
-              paciente: 'Sem paciente',
+              paciente: procedimentoNome, // Mostrar nome do procedimento ao invés de "Sem paciente"
               idade: null,
               cidade: null,
               telefone: null,
@@ -3107,7 +3116,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             {/* Coluna Nome do Paciente */}
                                             <td className="px-3 py-2 border-r border-slate-200 w-72 overflow-hidden">
                                               <div className="flex items-center gap-2">
-                                                <span className="text-sm text-slate-400 italic">Sem paciente</span>
+                                                <span className="text-sm text-slate-400 italic opacity-60">{proc.texto || 'Procedimento'}</span>
                                                 <button
                                                   onClick={() => toggleExpansaoProcedimento(index, proc.id)}
                                                   className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
