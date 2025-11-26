@@ -33,6 +33,13 @@ export interface Agendamento {
   // Campo para identificar registros de grade cirúrgica
   is_grade_cirurgica?: boolean; // Indica se é apenas estrutura de grade (não aparece em Documentação)
   
+  // Campos de avaliação do anestesista
+  avaliacao_anestesista?: 'aprovado' | 'reprovado' | 'complementares' | null; // Status da avaliação
+  avaliacao_anestesista_observacao?: string | null; // Observações sobre a aprovação
+  avaliacao_anestesista_motivo_reprovacao?: string | null; // Motivo da reprovação
+  avaliacao_anestesista_complementares?: string | null; // Observações complementares
+  avaliacao_anestesista_data?: string | null; // Data/hora da avaliação
+  
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;
   procedimento_id?: string;

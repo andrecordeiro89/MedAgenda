@@ -28,6 +28,14 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
   const fileInputFichaRef = useRef<HTMLInputElement>(null);
   
+  // Estados para Avaliação do Anestesista
+  const [avaliacaoEmEdicao, setAvaliacaoEmEdicao] = useState<string | null>(null); // ID do agendamento sendo avaliado
+  const [avaliacaoTipo, setAvaliacaoTipo] = useState<'aprovado' | 'reprovado' | 'complementares' | null>(null);
+  const [avaliacaoObservacao, setAvaliacaoObservacao] = useState('');
+  const [avaliacaoMotivoReprovacao, setAvaliacaoMotivoReprovacao] = useState('');
+  const [avaliacaoComplementares, setAvaliacaoComplementares] = useState('');
+  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
+  
   // Estados para visualização de documentos
   const [documentosExames, setDocumentosExames] = useState<string[]>([]);
   const [documentosComplementares, setDocumentosComplementares] = useState<string[]>([]);
@@ -296,9 +304,94 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     }
   };
 
+  // Iniciar avaliação do anestesista
+  const handleIniciarAvaliacao = (ag: Agendamento) => {
+    setAvaliacaoEmEdicao(ag.id || null);
+    setAvaliacaoTipo(ag.avaliacao_anestesista || null);
+    setAvaliacaoObservacao(ag.avaliacao_anestesista_observacao || '');
+    setAvaliacaoMotivoReprovacao(ag.avaliacao_anestesista_motivo_reprovacao || '');
+    setAvaliacaoComplementares(ag.avaliacao_anestesista_complementares || '');
+  };
+
+  // Cancelar avaliação
+  const handleCancelarAvaliacao = () => {
+    setAvaliacaoEmEdicao(null);
+    setAvaliacaoTipo(null);
+    setAvaliacaoObservacao('');
+    setAvaliacaoMotivoReprovacao('');
+    setAvaliacaoComplementares('');
+  };
+
+  // Salvar avaliação do anestesista
+  const handleSalvarAvaliacao = async (agendamentoId: string) => {
+    if (!avaliacaoTipo) {
+      alert('⚠️ Selecione o tipo de avaliação (Aprovado, Reprovado ou Complementares)');
+      return;
+    }
+
+    // Validar campos obrigatórios
+    if (avaliacaoTipo === 'aprovado' && !avaliacaoObservacao.trim()) {
+      alert('⚠️ Preencha a observação sobre a aprovação');
+      return;
+    }
+
+    if (avaliacaoTipo === 'reprovado' && !avaliacaoMotivoReprovacao.trim()) {
+      alert('⚠️ Preencha o motivo da reprovação');
+      return;
+    }
+
+    if (avaliacaoTipo === 'complementares' && !avaliacaoComplementares.trim()) {
+      alert('⚠️ Preencha as observações complementares');
+      return;
+    }
+
+    setSalvandoAvaliacao(true);
+    try {
+      const updateData: Partial<Agendamento> = {
+        avaliacao_anestesista: avaliacaoTipo,
+        avaliacao_anestesista_data: new Date().toISOString()
+      };
+
+      // Adicionar campos específicos baseado no tipo
+      if (avaliacaoTipo === 'aprovado') {
+        updateData.avaliacao_anestesista_observacao = avaliacaoObservacao.trim();
+        updateData.avaliacao_anestesista_motivo_reprovacao = null;
+        updateData.avaliacao_anestesista_complementares = null;
+      } else if (avaliacaoTipo === 'reprovado') {
+        updateData.avaliacao_anestesista_motivo_reprovacao = avaliacaoMotivoReprovacao.trim();
+        updateData.avaliacao_anestesista_observacao = null;
+        updateData.avaliacao_anestesista_complementares = null;
+      } else if (avaliacaoTipo === 'complementares') {
+        updateData.avaliacao_anestesista_complementares = avaliacaoComplementares.trim();
+        updateData.avaliacao_anestesista_observacao = null;
+        updateData.avaliacao_anestesista_motivo_reprovacao = null;
+      }
+
+      await agendamentoService.update(agendamentoId, updateData);
+
+      // Atualizar estado local
+      setAgendamentos(prev => prev.map(ag => 
+        ag.id === agendamentoId 
+          ? { ...ag, ...updateData }
+          : ag
+      ));
+
+      // Limpar formulário
+      handleCancelarAvaliacao();
+
+      alert('✅ Avaliação salva com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao salvar avaliação:', error);
+      alert(`❌ Erro ao salvar avaliação: ${error.message}`);
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
+  };
+
   // Renderizar linha
   const renderizarLinhaAgendamento = (ag: Agendamento) => {
     const expandida = isLinhaExpandida(ag.id);
+    const estaEditando = avaliacaoEmEdicao === ag.id;
     
     return (
       <React.Fragment key={ag.id}>
@@ -332,6 +425,89 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           <td className="px-4 py-3 w-40">
             <div className="text-sm text-gray-700 truncate" title={ag.medico || '-'}>
               {ag.medico || '-'}
+            </div>
+          </td>
+
+          {/* COLUNA: Avaliação do Anestesista (3 checkboxes na linha) - REPOSICIONADA */}
+          <td className="px-3 py-3 w-56">
+            <div className="flex items-center gap-2">
+              {/* Checkbox APROVADO */}
+              <label 
+                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${
+                  (estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'aprovado'
+                    ? 'bg-green-100 text-green-800 border-2 border-green-500'
+                    : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-green-400'
+                }`}
+                title="Aprovado"
+              >
+                <input
+                  type="radio"
+                  name={`avaliacao-linha-${ag.id}`}
+                  value="aprovado"
+                  checked={(estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'aprovado'}
+                  onChange={() => {
+                    if (!estaEditando) {
+                      handleIniciarAvaliacao(ag);
+                      toggleExpandirLinha(ag.id); // Auto-expandir
+                    }
+                    setAvaliacaoTipo('aprovado');
+                  }}
+                  className="w-3 h-3"
+                />
+                <span>✅</span>
+              </label>
+
+              {/* Checkbox REPROVADO */}
+              <label 
+                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${
+                  (estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'reprovado'
+                    ? 'bg-red-100 text-red-800 border-2 border-red-500'
+                    : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-red-400'
+                }`}
+                title="Reprovado"
+              >
+                <input
+                  type="radio"
+                  name={`avaliacao-linha-${ag.id}`}
+                  value="reprovado"
+                  checked={(estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'reprovado'}
+                  onChange={() => {
+                    if (!estaEditando) {
+                      handleIniciarAvaliacao(ag);
+                      toggleExpandirLinha(ag.id); // Auto-expandir
+                    }
+                    setAvaliacaoTipo('reprovado');
+                  }}
+                  className="w-3 h-3"
+                />
+                <span>❌</span>
+              </label>
+
+              {/* Checkbox COMPLEMENTARES */}
+              <label 
+                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${
+                  (estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'complementares'
+                    ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
+                    : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-blue-400'
+                }`}
+                title="Complementares"
+              >
+                <input
+                  type="radio"
+                  name={`avaliacao-linha-${ag.id}`}
+                  value="complementares"
+                  checked={(estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'complementares'}
+                  onChange={() => {
+                    if (!estaEditando) {
+                      handleIniciarAvaliacao(ag);
+                      toggleExpandirLinha(ag.id); // Auto-expandir
+                    }
+                    setAvaliacaoTipo('complementares');
+                  }}
+                  className="w-3 h-3"
+                />
+                <span>ℹ️</span>
+              </label>
             </div>
           </td>
           
@@ -397,8 +573,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         
         {expandida && (
           <tr className="bg-gray-50">
-            <td colSpan={7} className="px-4 py-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <td colSpan={8} className="px-4 py-4">
+              {/* Dados do Paciente */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
                 <div>
                   <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Nascimento</div>
                   <div className="text-sm text-gray-900">{formatarData(ag.data_nascimento || ag.dataNascimento)}</div>
@@ -415,6 +592,157 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                   <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Data Consulta</div>
                   <div className="text-sm text-gray-900">{formatarData(ag.data_consulta)}</div>
                 </div>
+              </div>
+
+              {/* Seção de Avaliação do Anestesista - SIMPLIFICADA */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Observações da Avaliação
+                </h4>
+
+                {/* Mostrar avaliação existente (se não estiver em edição) */}
+                {ag.avaliacao_anestesista && avaliacaoEmEdicao !== ag.id && (
+                  <div className={`p-4 rounded-lg ${
+                    ag.avaliacao_anestesista === 'aprovado' ? 'bg-green-50 border-l-4 border-green-500' :
+                    ag.avaliacao_anestesista === 'reprovado' ? 'bg-red-50 border-l-4 border-red-500' :
+                    'bg-blue-50 border-l-4 border-blue-500'
+                  }`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className={`text-sm font-bold mb-2 ${
+                          ag.avaliacao_anestesista === 'aprovado' ? 'text-green-800' :
+                          ag.avaliacao_anestesista === 'reprovado' ? 'text-red-800' :
+                          'text-blue-800'
+                        }`}>
+                          {ag.avaliacao_anestesista === 'aprovado' && '✅ APROVADO'}
+                          {ag.avaliacao_anestesista === 'reprovado' && '❌ REPROVADO'}
+                          {ag.avaliacao_anestesista === 'complementares' && 'ℹ️ OBSERVAÇÕES COMPLEMENTARES'}
+                        </div>
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {ag.avaliacao_anestesista === 'aprovado' && ag.avaliacao_anestesista_observacao}
+                          {ag.avaliacao_anestesista === 'reprovado' && ag.avaliacao_anestesista_motivo_reprovacao}
+                          {ag.avaliacao_anestesista === 'complementares' && ag.avaliacao_anestesista_complementares}
+                        </div>
+                        {ag.avaliacao_anestesista_data && (
+                          <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleIniciarAvaliacao(ag)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 flex-shrink-0"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Editar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Formulário de avaliação (se estiver em edição ou não tiver avaliação) */}
+                {(!ag.avaliacao_anestesista || avaliacaoEmEdicao === ag.id) && (
+                  <div className="space-y-4">
+                    {/* Campos de texto baseados na opção selecionada NA LINHA */}
+                    {avaliacaoEmEdicao === ag.id && avaliacaoTipo && (
+                      <div className="mt-4">
+                        {avaliacaoTipo === 'aprovado' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Observações sobre a Aprovação <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                              value={avaliacaoObservacao}
+                              onChange={(e) => setAvaliacaoObservacao(e.target.value)}
+                              placeholder="Ex: Paciente em boas condições gerais, exames dentro da normalidade..."
+                              rows={4}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                            />
+                          </div>
+                        )}
+
+                        {avaliacaoTipo === 'reprovado' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Motivo da Reprovação <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                              value={avaliacaoMotivoReprovacao}
+                              onChange={(e) => setAvaliacaoMotivoReprovacao(e.target.value)}
+                              placeholder="Ex: Hipertensão não controlada, exames alterados, necessita avaliação cardiológica..."
+                              rows={4}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                            />
+                          </div>
+                        )}
+
+                        {avaliacaoTipo === 'complementares' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Observações Complementares <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                              value={avaliacaoComplementares}
+                              onChange={(e) => setAvaliacaoComplementares(e.target.value)}
+                              placeholder="Ex: Solicitar avaliação cardiológica adicional, aguardar resultado de exame pendente..."
+                              rows={4}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                            />
+                          </div>
+                        )}
+
+                        {/* Botões de ação */}
+                        <div className="flex gap-3 mt-4">
+                          <button
+                            onClick={() => handleSalvarAvaliacao(ag.id!)}
+                            disabled={salvandoAvaliacao}
+                            className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            {salvandoAvaliacao ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                                Salvando...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Salvar Avaliação
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={handleCancelarAvaliacao}
+                            disabled={salvandoAvaliacao}
+                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mensagem inicial se não houver avaliação e não estiver em edição */}
+                    {!avaliacaoEmEdicao && !ag.avaliacao_anestesista && (
+                      <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                        <svg className="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <p className="font-medium">Selecione uma das opções na linha acima para avaliar</p>
+                        <p className="text-xs text-gray-400 mt-1">(✅ Aprovado / ❌ Reprovado / ℹ️ Complementares)</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </td>
           </tr>
@@ -711,6 +1039,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
                       Médico
                     </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
+                      🩺 Avaliação Anestesista
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                       Status Exames
                     </th>
@@ -725,7 +1056,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                 <tbody className="bg-white divide-y divide-gray-200">
                   {agendamentosPaginados.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center">
+                      <td colSpan={8} className="px-4 py-8 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
