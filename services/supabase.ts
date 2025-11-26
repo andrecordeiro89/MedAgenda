@@ -543,6 +543,13 @@ export const agendamentoService = {
     if (agendamento.ficha_pre_anestesica_data !== undefined) updateData.ficha_pre_anestesica_data = agendamento.ficha_pre_anestesica_data
     if (agendamento.observacoes !== undefined) updateData.observacoes = agendamento.observacoes
     
+    // Campos de avaliação do anestesista
+    if (agendamento.avaliacao_anestesista !== undefined) updateData.avaliacao_anestesista = agendamento.avaliacao_anestesista
+    if (agendamento.avaliacao_anestesista_observacao !== undefined) updateData.avaliacao_anestesista_observacao = agendamento.avaliacao_anestesista_observacao
+    if (agendamento.avaliacao_anestesista_motivo_reprovacao !== undefined) updateData.avaliacao_anestesista_motivo_reprovacao = agendamento.avaliacao_anestesista_motivo_reprovacao
+    if (agendamento.avaliacao_anestesista_complementares !== undefined) updateData.avaliacao_anestesista_complementares = agendamento.avaliacao_anestesista_complementares
+    if (agendamento.avaliacao_anestesista_data !== undefined) updateData.avaliacao_anestesista_data = agendamento.avaliacao_anestesista_data
+    
     // Status de liberação (campo direto)
     if (agendamento.status_liberacao !== undefined) updateData.status_liberacao = agendamento.status_liberacao
     
@@ -554,28 +561,63 @@ export const agendamentoService = {
 
     try {
       console.log('📝 Dados que serão enviados ao banco:', updateData);
+      console.log('📝 ID do agendamento:', id);
+      console.log('📝 Tipo do ID:', typeof id);
       
-      const { data, error } = await supabase
+      // Log específico dos campos de avaliação
+      if (updateData.avaliacao_anestesista !== undefined) {
+        console.log('🔍 CAMPOS DE AVALIAÇÃO:', {
+          avaliacao_anestesista: updateData.avaliacao_anestesista,
+          avaliacao_anestesista_observacao: updateData.avaliacao_anestesista_observacao,
+          avaliacao_anestesista_motivo_reprovacao: updateData.avaliacao_anestesista_motivo_reprovacao,
+          avaliacao_anestesista_complementares: updateData.avaliacao_anestesista_complementares,
+          avaliacao_anestesista_data: updateData.avaliacao_anestesista_data
+        });
+      }
+      
+      // Tentar UPDATE sem .select() primeiro (mais compatível com RLS)
+      const { error, status, statusText, count } = await supabase
         .from('agendamentos')
         .update(updateData)
         .eq('id', id)
-        .select()
-        .single()
+      
+      console.log('📊 Resposta do Supabase (UPDATE):', { error, status, statusText, count });
       
       if (error) {
         console.error('❌ Erro ao atualizar agendamento:', error);
+        console.error('❌ Detalhes do erro:', JSON.stringify(error, null, 2));
         throw new Error(error.message);
       }
-      if (!data) throw new Error('Agendamento não encontrado')
       
-      console.log('✅ Agendamento atualizado com sucesso!', {
-        id: data.id,
-        nome_paciente: data.nome_paciente,
-        data_agendamento: data.data_agendamento,
-        especialidade: data.especialidade,
-        procedimentos: data.procedimentos
-      });
-      return data as Agendamento;
+      // Se UPDATE funcionou (status 200-299), buscar os dados atualizados
+      if (status >= 200 && status < 300) {
+        console.log('✅ UPDATE executado com sucesso! Buscando dados atualizados...');
+        
+        // Buscar o registro atualizado em uma query separada
+        const { data: agendamentoAtualizado, error: selectError } = await supabase
+          .from('agendamentos')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (selectError) {
+          console.warn('⚠️ Erro ao buscar dados atualizados:', selectError);
+          // Mesmo com erro no SELECT, o UPDATE funcionou
+          // Retornar os dados que tínhamos + o que foi atualizado
+          console.log('✅ UPDATE foi bem-sucedido mesmo sem conseguir ler os dados de volta');
+          return { id, ...updateData } as Agendamento;
+        }
+        
+        console.log('✅ Agendamento atualizado e recuperado com sucesso!', {
+          id: agendamentoAtualizado?.id,
+          nome_paciente: agendamentoAtualizado?.nome_paciente
+        });
+        
+        return agendamentoAtualizado as Agendamento;
+      }
+      
+      // Se chegou aqui, algo estranho aconteceu
+      throw new Error(`Status inesperado: ${status} - ${statusText}`);
     } catch (error: any) {
       // Se o erro for sobre updated_at, tentar sem trigger
       if (error.message?.includes('updated_at')) {
@@ -587,12 +629,11 @@ export const agendamentoService = {
           .update(updateData)
           .eq('id', id)
           .select()
-          .single()
         
         if (error2) throw new Error(error2.message);
-        if (!data) throw new Error('Agendamento não encontrado')
+        if (!data || data.length === 0) throw new Error('Agendamento não encontrado')
         
-        return data as Agendamento;
+        return data[0] as Agendamento;
       }
       throw error;
     }

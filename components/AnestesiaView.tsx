@@ -2,13 +2,28 @@ import React, { useState, useEffect, useRef } from 'react';
 import { agendamentoService, supabase } from '../services/supabase';
 import { Agendamento } from '../types';
 import { Modal } from './ui';
+import { ToastContainer, ToastType } from './Toast';
 
 export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Estado para controlar abas
-  const [abaAtiva, setAbaAtiva] = useState<'pendentes' | 'concluidos'>('pendentes');
+  // Sistema de toasts
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: ToastType }>>([]);
+  
+  // Estado para controlar filtro de status (era abas, agora é filtro)
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendentes' | 'concluidos'>('todos');
+  
+  // Função para mostrar toast
+  const mostrarToast = (message: string, type: ToastType) => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+  
+  // Função para remover toast
+  const removerToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
   
   // Estado para controlar linhas expandidas
   const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
@@ -56,6 +71,20 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setLoading(true);
     try {
       const dados = await agendamentoService.getAll(hospitalId);
+      
+      console.log('🔍 DEBUG - Total de agendamentos retornados:', dados.length);
+      
+      // Verificar se há agendamentos com avaliação
+      const comAvaliacao = dados.filter(ag => ag.avaliacao_anestesista);
+      console.log('🔍 DEBUG - Agendamentos COM avaliação:', comAvaliacao.length);
+      if (comAvaliacao.length > 0) {
+        console.log('🔍 DEBUG - Exemplo de agendamento com avaliação:', {
+          id: comAvaliacao[0].id,
+          nome: comAvaliacao[0].nome_paciente,
+          avaliacao: comAvaliacao[0].avaliacao_anestesista,
+          observacao: comAvaliacao[0].avaliacao_anestesista_observacao
+        });
+      }
       
       // Filtrar apenas registros válidos (excluir grade cirúrgica)
       const agendamentosFiltrados = dados.filter(ag => {
@@ -114,28 +143,33 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     return Array.from(pacientesMap.values());
   };
   
-  // Calcular contadores para as abas
+  // Calcular contadores para os filtros
+  const totalTodos = agendamentos.length;
   const totalPendentes = agendamentos.filter(ag => ag.ficha_pre_anestesica_ok !== true).length;
   const totalConcluidos = agendamentos.filter(ag => 
     ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true
   ).length;
   
-  // Filtrar agendamentos por aba
-  const agendamentosPorAba = agendamentos.filter(ag => {
+  // Filtrar agendamentos por status (substituindo a lógica de abas)
+  const agendamentosPorStatus = agendamentos.filter(ag => {
     const temExames = ag.documentos_ok === true;
     const temPreOperatorio = ag.ficha_pre_anestesica_ok === true;
     
-    if (abaAtiva === 'pendentes') {
+    if (filtroStatus === 'todos') {
+      // Todos: mostrar todos os agendamentos
+      return true;
+    } else if (filtroStatus === 'pendentes') {
       // Pendentes: SEM pré-operatório (independente de ter ou não exames)
       return !temPreOperatorio;
-    } else {
+    } else if (filtroStatus === 'concluidos') {
       // Concluídos: COM exames E COM pré-operatório
       return temExames && temPreOperatorio;
     }
+    return true;
   });
   
   // Filtrar agendamentos por texto
-  const agendamentosFiltradosCompletos = agendamentosPorAba.filter(ag => {
+  const agendamentosFiltradosCompletos = agendamentosPorStatus.filter(ag => {
     if (filtroPaciente) {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').toLowerCase();
       if (!nomePaciente.includes(filtroPaciente.toLowerCase())) return false;
@@ -169,7 +203,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroPaciente, filtroDataCirurgia, filtroMedico, abaAtiva]);
+  }, [filtroPaciente, filtroDataCirurgia, filtroMedico, filtroStatus]);
   
   useEffect(() => {
     if (tabelaRef.current && paginaAtual > 1) {
@@ -182,12 +216,13 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const agendamentosPaginados = agendamentosFiltrados.slice(indexInicio, indexFim);
   
   const limparFiltros = () => {
+    setFiltroStatus('todos');
     setFiltroPaciente('');
     setFiltroDataCirurgia('');
     setFiltroMedico('');
   };
   
-  const temFiltrosAtivos = filtroPaciente || filtroDataCirurgia || filtroMedico;
+  const temFiltrosAtivos = filtroStatus !== 'todos' || filtroPaciente || filtroDataCirurgia || filtroMedico;
 
   // Toggle expandir linha
   const toggleExpandirLinha = (agendamentoId: string | undefined) => {
@@ -325,28 +360,32 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   // Salvar avaliação do anestesista
   const handleSalvarAvaliacao = async (agendamentoId: string) => {
     if (!avaliacaoTipo) {
-      alert('⚠️ Selecione o tipo de avaliação (Aprovado, Reprovado ou Complementares)');
+      mostrarToast('Selecione o tipo de avaliação (Aprovado, Reprovado ou Complementares)', 'warning');
       return;
     }
 
-    // Validar campos obrigatórios
+    // Validar campos obrigatórios (apenas se houver tipo selecionado e texto digitado)
     if (avaliacaoTipo === 'aprovado' && !avaliacaoObservacao.trim()) {
-      alert('⚠️ Preencha a observação sobre a aprovação');
+      mostrarToast('Preencha a observação sobre a aprovação', 'warning');
       return;
     }
 
     if (avaliacaoTipo === 'reprovado' && !avaliacaoMotivoReprovacao.trim()) {
-      alert('⚠️ Preencha o motivo da reprovação');
+      mostrarToast('Preencha o motivo da reprovação', 'warning');
       return;
     }
 
     if (avaliacaoTipo === 'complementares' && !avaliacaoComplementares.trim()) {
-      alert('⚠️ Preencha as observações complementares');
+      mostrarToast('Preencha as observações complementares', 'warning');
       return;
     }
 
     setSalvandoAvaliacao(true);
     try {
+      console.log('🔍 DEBUG - Iniciando salvamento de avaliação');
+      console.log('🔍 DEBUG - ID do agendamento:', agendamentoId);
+      console.log('🔍 DEBUG - Tipo de avaliação:', avaliacaoTipo);
+      
       const updateData: Partial<Agendamento> = {
         avaliacao_anestesista: avaliacaoTipo,
         avaliacao_anestesista_data: new Date().toISOString()
@@ -367,6 +406,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         updateData.avaliacao_anestesista_motivo_reprovacao = null;
       }
 
+      console.log('🔍 DEBUG - Dados que serão enviados:', updateData);
+
       await agendamentoService.update(agendamentoId, updateData);
 
       // Atualizar estado local
@@ -379,10 +420,43 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       // Limpar formulário
       handleCancelarAvaliacao();
 
-      alert('✅ Avaliação salva com sucesso!');
+      mostrarToast('Avaliação salva com sucesso!', 'success');
     } catch (error: any) {
       console.error('Erro ao salvar avaliação:', error);
-      alert(`❌ Erro ao salvar avaliação: ${error.message}`);
+      mostrarToast(`Erro ao salvar avaliação: ${error.message}`, 'error');
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
+  };
+  
+  // Limpar/Remover avaliação do anestesista
+  const handleLimparAvaliacao = async (agendamentoId: string) => {
+    setSalvandoAvaliacao(true);
+    try {
+      const updateData: Partial<Agendamento> = {
+        avaliacao_anestesista: null,
+        avaliacao_anestesista_observacao: null,
+        avaliacao_anestesista_motivo_reprovacao: null,
+        avaliacao_anestesista_complementares: null,
+        avaliacao_anestesista_data: null
+      };
+
+      await agendamentoService.update(agendamentoId, updateData);
+
+      // Atualizar estado local
+      setAgendamentos(prev => prev.map(ag => 
+        ag.id === agendamentoId 
+          ? { ...ag, ...updateData }
+          : ag
+      ));
+
+      // Limpar formulário
+      handleCancelarAvaliacao();
+
+      mostrarToast('Avaliação removida com sucesso!', 'info');
+    } catch (error: any) {
+      console.error('Erro ao limpar avaliação:', error);
+      mostrarToast(`Erro ao limpar avaliação: ${error.message}`, 'error');
     } finally {
       setSalvandoAvaliacao(false);
     }
@@ -393,9 +467,16 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     const expandida = isLinhaExpandida(ag.id);
     const estaEditando = avaliacaoEmEdicao === ag.id;
     
+    // Sinalização verde: paciente com exames E ficha pré-anestésica (igual tela Documentação)
+    const temExamesEPreOp = ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
+    
     return (
       <React.Fragment key={ag.id}>
-        <tr className="hover:bg-gray-50">
+        <tr className={`transition-colors ${
+          temExamesEPreOp 
+            ? 'bg-green-50/50 hover:bg-green-100/50 border-l-4 border-green-500' 
+            : 'hover:bg-gray-50'
+        }`}>
           {/* Paciente */}
           <td className="px-4 py-3 w-48">
             <div 
@@ -532,7 +613,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           
           {/* Ação */}
           <td className="px-4 py-3 text-center w-36">
-            {abaAtiva === 'pendentes' ? (
+            {/* Se não tem ficha, mostrar botão de anexar. Se tem ficha, mostrar botão de visualizar */}
+            {ag.ficha_pre_anestesica_ok !== true ? (
               <button
                 onClick={() => handleAbrirModal(ag)}
                 className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded transition-colors"
@@ -720,6 +802,22 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                               </>
                             )}
                           </button>
+                          
+                          {/* Botão Limpar: só mostra se já existe avaliação salva */}
+                          {ag.avaliacao_anestesista && (
+                            <button
+                              onClick={() => handleLimparAvaliacao(ag.id!)}
+                              disabled={salvandoAvaliacao}
+                              className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                              title="Remover avaliação completamente"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Limpar
+                            </button>
+                          )}
+                          
                           <button
                             onClick={handleCancelarAvaliacao}
                             disabled={salvandoAvaliacao}
@@ -795,7 +893,21 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Filtro de Status (substituindo abas) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Status Ficha Pré-Anestésica</label>
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value as 'todos' | 'pendentes' | 'concluidos')}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white"
+            >
+              <option value="todos">🔵 Todos ({totalTodos})</option>
+              <option value="pendentes">🟠 Pendentes ({totalPendentes})</option>
+              <option value="concluidos">🟢 Concluídos ({totalConcluidos})</option>
+            </select>
+          </div>
+          
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
             <input
@@ -833,7 +945,17 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         {temFiltrosAtivos && (
           <div className="mt-3 pt-3 border-t border-gray-200">
             <p className="text-xs text-gray-600">
-              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentos.length}</span> pacientes
+              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{totalTodos}</span> pacientes
+              {filtroStatus !== 'todos' && (
+                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
+                  filtroStatus === 'pendentes' ? 'bg-orange-100 text-orange-800' :
+                  filtroStatus === 'concluidos' ? 'bg-green-100 text-green-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>
+                  {filtroStatus === 'pendentes' && '🟠 Pendentes'}
+                  {filtroStatus === 'concluidos' && '🟢 Concluídos'}
+                </span>
+              )}
             </p>
           </div>
         )}
@@ -848,59 +970,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         </div>
       ) : (
         <>
-          {/* Paginação Superior com Abas Integradas */}
+          {/* Paginação Superior */}
           {totalRegistros > 0 && (
             <div ref={tabelaRef} className="mb-4 bg-white rounded-lg shadow overflow-hidden">
-              {/* Abas */}
-              <div className="flex border-b border-gray-200">
-                <button
-                  onClick={() => setAbaAtiva('pendentes')}
-                  className={`flex-1 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                    abaAtiva === 'pendentes'
-                      ? 'bg-orange-50 text-orange-700 border-b-2 border-orange-600'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Pendentes</span>
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${
-                      abaAtiva === 'pendentes' 
-                        ? 'bg-orange-100 text-orange-800'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {totalPendentes}
-                    </span>
-                  </div>
-                </button>
-                
-                <button
-                  onClick={() => setAbaAtiva('concluidos')}
-                  className={`flex-1 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                    abaAtiva === 'concluidos'
-                      ? 'bg-green-50 text-green-700 border-b-2 border-green-600'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Concluídos</span>
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${
-                      abaAtiva === 'concluidos' 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {totalConcluidos}
-                    </span>
-                  </div>
-                </button>
-              </div>
-              
-              {/* Paginação */}
               <div className="p-4">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -1062,13 +1134,14 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <p className="text-gray-500 font-medium">
-                            {abaAtiva === 'pendentes' ? 'Nenhum paciente pendente' : 'Nenhum paciente concluído'}
+                            {filtroStatus === 'pendentes' && 'Nenhum paciente pendente encontrado'}
+                            {filtroStatus === 'concluidos' && 'Nenhum paciente concluído encontrado'}
+                            {filtroStatus === 'todos' && 'Nenhum paciente encontrado'}
                           </p>
                           <p className="text-sm text-gray-400">
-                            {abaAtiva === 'pendentes' 
-                              ? 'Todos os pacientes já têm ficha pré-anestésica!'
-                              : 'Ainda não há pacientes com exames e pré-operatório completos.'
-                            }
+                            {filtroStatus === 'pendentes' && 'Todos os pacientes já têm ficha pré-anestésica!'}
+                            {filtroStatus === 'concluidos' && 'Ainda não há pacientes com exames e pré-operatório completos.'}
+                            {filtroStatus === 'todos' && 'Ajuste os filtros ou verifique se há agendamentos cadastrados.'}
                           </p>
                         </div>
                       </td>
@@ -1462,6 +1535,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           </div>
         </div>
       </Modal>
+      
+      {/* Sistema de Toasts */}
+      <ToastContainer toasts={toasts} onRemoveToast={removerToast} />
     </div>
   );
 };
