@@ -625,8 +625,45 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             ? 'bg-green-50/50 hover:bg-green-100/50 border-l-4 border-green-500' 
             : 'hover:bg-gray-50'
         }`}>
-          {/* Documentação - SEMÁFORO COM CHECKBOXES - DESTAQUE */}
-          <td className="px-3 py-3 bg-gradient-to-r from-blue-50/40 to-blue-50/60 border-r-2 border-blue-200 w-64 min-w-64 max-w-64">
+          {/* Paciente */}
+          <td className="px-4 py-3 w-48">
+            <div 
+              className="text-sm font-medium text-gray-900 truncate"
+              title={ag.nome_paciente || ag.nome || '-'}
+            >
+              {ag.nome_paciente || ag.nome || '-'}
+            </div>
+          </td>
+          
+          {/* Procedimento */}
+          <td className="px-4 py-3 w-56">
+            <div 
+              className="text-sm text-gray-700 truncate"
+              title={ag.procedimentos || '-'}
+            >
+              {ag.procedimentos || '-'}
+            </div>
+          </td>
+          
+          {/* Data Consulta */}
+          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
+            {formatarData(ag.data_consulta)}
+          </td>
+          
+          {/* Data Cirurgia */}
+          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
+            {formatarData(ag.data_agendamento || ag.dataAgendamento)}
+          </td>
+          
+          {/* Status */}
+          <td className="px-6 py-3 whitespace-nowrap w-36">
+            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
+              {status.texto}
+            </span>
+          </td>
+          
+          {/* Documentação - SEMÁFORO COM CHECKBOXES */}
+          <td className="px-6 py-3 w-64">
             <div className="flex items-center gap-2 justify-start flex-nowrap overflow-hidden">
               {/* Checkbox 1: EXAMES */}
               <div className="flex items-center gap-1">
@@ -752,43 +789,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 );
               })()}
             </div>
-          </td>
-          
-          {/* Paciente */}
-          <td className="px-4 py-3 w-48">
-            <div 
-              className="text-sm font-medium text-gray-900 truncate"
-              title={ag.nome_paciente || ag.nome || '-'}
-            >
-              {ag.nome_paciente || ag.nome || '-'}
-            </div>
-          </td>
-          
-          {/* Procedimento */}
-          <td className="px-4 py-3 w-56">
-            <div 
-              className="text-sm text-gray-700 truncate"
-              title={ag.procedimentos || '-'}
-            >
-              {ag.procedimentos || '-'}
-            </div>
-          </td>
-          
-          {/* Data Consulta */}
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
-            {formatarData(ag.data_consulta)}
-          </td>
-          
-          {/* Data Cirurgia */}
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
-            {formatarData(ag.data_agendamento || ag.dataAgendamento)}
-          </td>
-          
-          {/* Status */}
-          <td className="px-4 py-3 whitespace-nowrap w-36">
-            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
-              {status.texto}
-            </span>
           </td>
           
           {/* Botão Expandir/Recolher */}
@@ -1393,12 +1393,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gradient-to-r from-blue-50/40 to-blue-50/60 border-r-2 border-blue-200 w-64 min-w-64 max-w-64">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-blue-700 font-bold text-xs">📋 DOCUMENTAÇÃO</span>
-                        <span className="text-[9px] text-gray-500 font-normal normal-case">(Clique nos itens)</span>
-                      </div>
-                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
                       Paciente
                     </th>
@@ -1412,7 +1406,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       Data Cirurgia
                     </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-36"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-36"
                       onClick={toggleAgruparPorStatus}
                       title={agruparPorStatus ? 'Clique para desagrupar' : 'Clique para agrupar por status'}
                     >
@@ -1423,6 +1417,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
                           </svg>
                         )}
+                      </div>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-bold text-xs">📋 DOCUMENTAÇÃO</span>
+                        <span className="text-[9px] text-gray-500 font-normal normal-case">(Clique nos itens)</span>
                       </div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
