@@ -16,6 +16,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Estado para controlar ordenação por anestesista
   const [ordenarPorAnestesista, setOrdenarPorAnestesista] = useState(false);
   
+  // ⚠️ NOVO: Estado para controlar agrupamento por paciente único
+  const [agruparPorPaciente, setAgruparPorPaciente] = useState(false);
+  
   // Estados para filtros de busca
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
@@ -64,21 +67,83 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       console.log('📊 Total de registros:', dados.length);
       
       // Filtrar registros de grade cirúrgica (não devem aparecer na tela de Documentação)
-      // Registros de grade: is_grade_cirurgica = true OU (procedimentos IS NULL E nome_paciente = '')
+      // CRITÉRIO: Excluir apenas registros ESTRUTURAIS da grade (sem paciente cadastrado)
+      // INCLUIR: Registros com pacientes reais, mesmo que venham da grade
       const agendamentosFiltrados = dados.filter(ag => {
-        // Se tem flag is_grade_cirurgica = true, excluir
-        if (ag.is_grade_cirurgica === true) {
+        // ✅ MUDANÇA: Permitir registros de grade que TÊM paciente cadastrado
+        // Registros de grade SEM paciente = estrutura (especialidade/procedimento vazio)
+        // Registros de grade COM paciente = agendamento real
+        
+        const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+        const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+        
+        // CASO 1: Tem paciente E procedimento → SEMPRE MOSTRAR (mesmo se is_grade_cirurgica = true)
+        if (temPaciente && temProcedimento) {
+          return true; // ✅ Mostrar na Documentação
+        }
+        
+        // CASO 2: Registro estrutural de grade (sem paciente) → OCULTAR
+        if (ag.is_grade_cirurgica === true && !temPaciente) {
+          return false; // ❌ Ocultar (é apenas estrutura)
+        }
+        
+        // CASO 3: Registro vazio (compatibilidade) → OCULTAR
+        if (!temProcedimento && !temPaciente) {
           return false;
         }
-        // Se não tem procedimentos E não tem nome_paciente, é linha de grade (compatibilidade)
-        if ((!ag.procedimentos || ag.procedimentos.trim() === '') && 
-            (!ag.nome_paciente || ag.nome_paciente.trim() === '')) {
-          return false;
-        }
+        
+        // CASO 4: Demais casos → MOSTRAR
         return true;
       });
       
-      console.log('📋 Agendamentos após filtrar grade cirúrgica:', agendamentosFiltrados.length);
+      // ⚠️ DEBUG: Análise detalhada do filtro
+      const totalOriginal = dados.length;
+      const totalFiltrado = agendamentosFiltrados.length;
+      const totalExcluidos = totalOriginal - totalFiltrado;
+      
+      console.log('📋 FILTRO DE GRADE CIRÚRGICA:');
+      console.log(`  Total original: ${totalOriginal}`);
+      console.log(`  Total após filtro: ${totalFiltrado}`);
+      console.log(`  Total excluídos: ${totalExcluidos}`);
+      
+      // Analisar registros excluídos
+      const excluidos = dados.filter(ag => !agendamentosFiltrados.includes(ag));
+      const excluidosComPaciente = excluidos.filter(ag => ag.nome_paciente && ag.nome_paciente.trim() !== '');
+      const excluidosSemPaciente = excluidos.filter(ag => !ag.nome_paciente || ag.nome_paciente.trim() === '');
+      
+      if (excluidosComPaciente.length > 0) {
+        console.log(`  ⚠️ ATENÇÃO: ${excluidosComPaciente.length} registros COM PACIENTE foram excluídos!`);
+        console.log('  Primeiros 3:', excluidosComPaciente.slice(0, 3).map(ag => ({
+          paciente: ag.nome_paciente,
+          procedimento: ag.procedimentos,
+          is_grade: ag.is_grade_cirurgica,
+          data: ag.data_agendamento
+        })));
+      }
+      
+      if (excluidosSemPaciente.length > 0) {
+        console.log(`  ✅ ${excluidosSemPaciente.length} registros estruturais (sem paciente) foram excluídos corretamente`);
+      }
+      
+      // ⚠️ DEBUG: Mostrar distribuição por data
+      const porData: Record<string, number> = {};
+      agendamentosFiltrados.forEach(ag => {
+        const data = ag.data_agendamento || ag.dataAgendamento || 'sem_data';
+        porData[data] = (porData[data] || 0) + 1;
+      });
+      console.log('📅 Registros por data:', porData);
+      
+      // ⚠️ DEBUG: Agrupar por paciente para ver duplicatas
+      const porPaciente: Record<string, number> = {};
+      agendamentosFiltrados.forEach(ag => {
+        const nome = (ag.nome_paciente || ag.nome || 'sem_nome').trim().toLowerCase();
+        porPaciente[nome] = (porPaciente[nome] || 0) + 1;
+      });
+      const comDuplicatas = Object.entries(porPaciente).filter(([_, count]) => count > 1);
+      if (comDuplicatas.length > 0) {
+        console.log('👥 Pacientes com múltiplos registros:', Object.fromEntries(comDuplicatas));
+      }
+      
       setAgendamentos(agendamentosFiltrados);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
@@ -193,7 +258,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   });
   
   // AGRUPAR POR PACIENTE ÚNICO (mostrar apenas 1 linha por paciente)
-  let agendamentosFiltrados = agruparPorPacienteUnico(agendamentosFiltradosCompletos);
+  // ⚠️ MODIFICADO: Agora é opcional (controlado por toggle)
+  let agendamentosFiltrados = agruparPorPaciente 
+    ? agruparPorPacienteUnico(agendamentosFiltradosCompletos)
+    : agendamentosFiltradosCompletos;
   
   // ORDENAR POR DATA DE CIRURGIA (cirurgias mais próximas primeiro)
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
@@ -627,11 +695,32 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         }`}>
           {/* Paciente */}
           <td className="px-4 py-3 w-48">
-            <div 
-              className="text-sm font-medium text-gray-900 truncate"
-              title={ag.nome_paciente || ag.nome || '-'}
-            >
-              {ag.nome_paciente || ag.nome || '-'}
+            <div className="flex items-center gap-2">
+              <div 
+                className="text-sm font-medium text-gray-900 truncate flex-1"
+                title={ag.nome_paciente || ag.nome || '-'}
+              >
+                {ag.nome_paciente || ag.nome || '-'}
+              </div>
+              {/* ⚠️ NOVO: Indicador de registros agrupados */}
+              {agruparPorPaciente && (() => {
+                const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
+                const totalRegistros = agendamentosFiltradosCompletos.filter(a => 
+                  (a.nome_paciente || a.nome || '').trim().toLowerCase() === nomePaciente
+                ).length;
+                
+                if (totalRegistros > 1) {
+                  return (
+                    <span 
+                      className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded border border-blue-300"
+                      title={`Este paciente tem ${totalRegistros} registros no total. Apenas o mais recente está sendo exibido.`}
+                    >
+                      +{totalRegistros - 1}
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </td>
           
@@ -1111,17 +1200,40 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-700">🔍 Filtros de Busca</h3>
-          {temFiltrosAtivos && (
+          <div className="flex items-center gap-3">
+            {/* ⚠️ NOVO: Toggle para agrupar por paciente */}
             <button
-              onClick={limparFiltros}
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+              onClick={() => setAgruparPorPaciente(prev => !prev)}
+              className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                agruparPorPaciente
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                  : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+              }`}
+              title={agruparPorPaciente ? 'Mostrando 1 linha por paciente (clique para ver todos os registros)' : 'Mostrando todos os registros (clique para agrupar por paciente)'}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              Limpar filtros
+              {agruparPorPaciente ? 'Paciente Único' : 'Todos Registros'}
+              {agruparPorPaciente && (
+                <span className="ml-1 px-1.5 py-0.5 bg-blue-200 text-blue-800 rounded text-[10px] font-bold">
+                  ON
+                </span>
+              )}
             </button>
-          )}
+            
+            {temFiltrosAtivos && (
+              <button
+                onClick={limparFiltros}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Limpar filtros
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1240,10 +1352,31 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </div>
         
         {/* Indicador de resultados filtrados */}
-        {temFiltrosAtivos && (
+        {(temFiltrosAtivos || agruparPorPaciente) && (
           <div className="mt-3 pt-3 border-t border-gray-200">
+            {agruparPorPaciente && (
+              <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-xs text-yellow-800 font-medium flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  ⚠️ Modo "Paciente Único" ativo: Mostrando apenas 1 linha por paciente. Pacientes com múltiplos procedimentos terão outros registros ocultos.
+                  <button
+                    onClick={() => setAgruparPorPaciente(false)}
+                    className="ml-2 px-2 py-0.5 bg-yellow-600 text-white text-[10px] font-bold rounded hover:bg-yellow-700"
+                  >
+                    Ver Todos
+                  </button>
+                </p>
+              </div>
+            )}
             <p className="text-xs text-gray-600">
-              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentos.length}</span> agendamentos
+              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> {agruparPorPaciente ? 'paciente(s)' : 'registro(s)'} de <span className="font-semibold text-gray-800">{agendamentosFiltradosCompletos.length}</span> total
+              {agruparPorPaciente && agendamentosFiltrados.length !== agendamentosFiltradosCompletos.length && (
+                <span className="ml-1 text-red-600 font-bold">
+                  ({agendamentosFiltradosCompletos.length - agendamentosFiltrados.length} registros ocultos pelo agrupamento)
+                </span>
+              )}
             </p>
           </div>
         )}
