@@ -104,6 +104,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       return dataStr || '-';
     }
   };
+  
+  // Formatar procedimento com especificação (se houver)
+  const formatarProcedimento = (ag: Agendamento): string => {
+    const base = ag.procedimentos || '';
+    const especificacao = ag.procedimento_especificacao || '';
+    
+    if (!base) return '-';
+    if (!especificacao) return base;
+    
+    return `${base} - ${especificacao}`;
+  };
 
   // FILTRO PRINCIPAL: Apenas registros COM PACIENTE (não contar procedimentos vazios)
   const agendamentosComPaciente = agendamentos.filter(ag => {
@@ -504,9 +515,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           <td className="px-4 py-3 w-56">
             <div 
               className="text-sm text-gray-700 truncate"
-              title={ag.procedimentos || '-'}
+              title={formatarProcedimento(ag)}
             >
-              {ag.procedimentos || '-'}
+              {formatarProcedimento(ag)}
             </div>
           </td>
           

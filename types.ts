@@ -14,7 +14,8 @@ export interface Agendamento {
   hospital_id?: string | null; // CAMPO REAL DO BANCO (nullable)
   especialidade?: string | null; // NOVO CAMPO - Nome da especialidade
   medico?: string | null; // NOVO CAMPO - Nome do médico
-  procedimentos?: string | null; // NOVO CAMPO - Nome do procedimento
+  procedimentos?: string | null; // NOVO CAMPO - Nome do procedimento (FIXO - marca d'água)
+  procedimento_especificacao?: string | null; // NOVO CAMPO - Especificação/subnome do procedimento (editável)
   created_at?: string;
   updated_at?: string;
   

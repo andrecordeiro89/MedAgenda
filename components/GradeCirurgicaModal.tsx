@@ -95,13 +95,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   
   // Estados para edição de procedimento
   const [modalAlterarProcAberto, setModalAlterarProcAberto] = useState(false);
+  const [modoCriacaoProc, setModoCriacaoProc] = useState(false); // true = criando novo, false = editando existente
   const [procedimentoEmEdicao, setProcedimentoEmEdicao] = useState<{
     gradeIndex: number;
     itemId: string;
     agendamentoId: string;
     textoAtual: string;
+    especificacaoAtual: string;
+    especialidadeId?: string;
   } | null>(null);
   const [novoProcedimentoTexto, setNovoProcedimentoTexto] = useState('');
+  const [novaEspecificacaoTexto, setNovaEspecificacaoTexto] = useState('');
+  const [medicoSelecionadoParaProc, setMedicoSelecionadoParaProc] = useState('');
 
   // Carregar médicos do hospital ao abrir o modal
   useEffect(() => {
@@ -133,7 +138,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     try {
       console.log('🔄 Recarregando agendamentos do Supabase para as datas:', proximasDatas.map(d => d.toISOString().split('T')[0]));
       
-      // Buscar agendamentos reais do banco para cada data
+      // 1. PRIMEIRO: Carregar médicos do hospital
+      console.log('👨‍⚕️ Carregando médicos para relacionar aos procedimentos...');
+      let medicosCarregados: Medico[] = [];
+      try {
+        medicosCarregados = await medicoService.getAll(hospitalId);
+        console.log(`✅ ${medicosCarregados.length} médicos carregados`);
+      } catch (error) {
+        console.error('❌ Erro ao carregar médicos:', error);
+        medicosCarregados = [];
+      }
+      
+      // 2. DEPOIS: Buscar agendamentos reais do banco para cada data
       const gradesCarregadas = await Promise.all(
         proximasDatas.map(async (data, index) => {
             const dataFormatada = data.toISOString().split('T')[0];
@@ -190,16 +206,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     // Incluir médico associado ao procedimento (se houver)
                     if (agendamento.medico) {
                       // Buscar médico pelo nome na lista de médicos carregados
-                      let medicoEncontrado = null;
-                      if (medicosParaProcedimentos.length > 0) {
-                        medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === agendamento.medico);
-                      }
+                      const medicoEncontrado = medicosCarregados.find(m => m.nome === agendamento.medico);
+                      
                       if (medicoEncontrado) {
                         procedimentoData.medicoId = medicoEncontrado.id;
                         procedimentoData.medicoNome = agendamento.medico;
+                        console.log(`✅ Médico encontrado: ${agendamento.medico} (ID: ${medicoEncontrado.id})`);
                       } else {
                         // Se não encontrar pelo nome, usar apenas o nome do médico
                         procedimentoData.medicoNome = agendamento.medico;
+                        console.warn(`⚠️ Médico não encontrado na lista: ${agendamento.medico}`);
                       }
                     }
                     
@@ -258,6 +274,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     ...(proc.medicoId && { medicoId: proc.medicoId }),
                     ...(proc.medicoNome && { medicoNome: proc.medicoNome })
                   });
+                  
+                  // Log de debug
+                  if (proc.medicoId) {
+                    console.log(`📋 Procedimento: ${proc.nome} → Médico ID: ${proc.medicoId}, Nome: ${proc.medicoNome}`);
+                  }
                 });
               });
               
@@ -856,61 +877,28 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setNovoProcedimentoNome('');
   };
 
-  // Adicionar procedimento (COM AUTO-SAVE)
+  // Adicionar procedimento (ABRE MODAL EM VEZ DE CRIAR LINHA VAZIA)
   const handleAddProcedimento = (gradeIndex: number, especialidadeId?: string) => {
-    // Calcular novo estado
-    const updatedGrades = grades.map((grade, i) => {
-      if (i === gradeIndex) {
-        const novoItem: GradeCirurgicaItem = {
-          id: `temp-${Date.now()}-${Math.random()}`,
-          tipo: 'procedimento',
-          texto: '',
-          ordem: 0, // Será recalculado
-          pacientes: [] // Array vazio de pacientes
-        };
-
-        // Se foi passado o ID da especialidade, inserir logo após ela
-        if (especialidadeId) {
-          const especialidadeIndex = grade.itens.findIndex(item => item.id === especialidadeId);
-          
-          if (especialidadeIndex !== -1) {
-            // Encontrar a posição do último procedimento desta especialidade
-            let insertIndex = especialidadeIndex + 1;
-            
-            // Avançar até encontrar outra especialidade ou o fim
-            while (
-              insertIndex < grade.itens.length && 
-              grade.itens[insertIndex].tipo === 'procedimento'
-            ) {
-              insertIndex++;
-            }
-            
-            // Inserir o novo procedimento nessa posição
-            const novosItens = [
-              ...grade.itens.slice(0, insertIndex),
-              novoItem,
-              ...grade.itens.slice(insertIndex)
-            ];
-            
-            // Reordenar todos os itens
-            return {
-              ...grade,
-              itens: novosItens.map((item, idx) => ({ ...item, ordem: idx }))
-            };
-          }
-        }
-        
-        // Se não foi passado especialidadeId ou não encontrou, adiciona no final
-        return { 
-          ...grade, 
-          itens: [...grade.itens, { ...novoItem, ordem: grade.itens.length }] 
-        };
-      }
-      return grade;
+    // Buscar informações da especialidade
+    const grade = grades[gradeIndex];
+    const especialidade = grade.itens.find(item => item.id === especialidadeId);
+    
+    // Abrir modal em modo criação
+    setModoCriacaoProc(true);
+    setProcedimentoEmEdicao({
+      gradeIndex,
+      itemId: '',
+      agendamentoId: '',
+      textoAtual: '',
+      especificacaoAtual: '',
+      especialidadeId: especialidadeId
     });
-
-    // Atualizar estado local
-    setGrades(updatedGrades);
+    setNovoProcedimentoTexto('');
+    setNovaEspecificacaoTexto('');
+    setMedicoSelecionadoParaProc('');
+    setModalAlterarProcAberto(true);
+    
+    console.log('📝 Abrindo modal para criar procedimento na especialidade:', especialidade?.texto);
   };
 
   // Atualizar médico associado ao procedimento
@@ -1021,6 +1009,116 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     
     try {
       const grade = grades[procedimentoEmEdicao.gradeIndex];
+      
+      // MODO CRIAÇÃO: Criar novo procedimento
+      if (modoCriacaoProc) {
+        console.log('💾 Criando novo procedimento no banco...', {
+          procedimento: novoProcedimentoTexto,
+          medico: medicoSelecionadoParaProc,
+          data: grade.data
+        });
+        
+        // Buscar especialidade associada
+        const especialidade = grade.itens.find(i => i.id === procedimentoEmEdicao.especialidadeId);
+        
+        if (!especialidade) {
+          throw new Error('Especialidade não encontrada');
+        }
+        
+        // Extrair nome da especialidade e médico
+        let especialidadeNome = especialidade.texto;
+        let medicoNome = null;
+        
+        if (especialidadeNome.includes(' - ')) {
+          const partes = especialidadeNome.split(' - ');
+          especialidadeNome = partes[0];
+          medicoNome = partes[1];
+        }
+        
+        // Se usuário selecionou outro médico no modal, usar esse
+        if (medicoSelecionadoParaProc) {
+          const medicoObj = medicosParaProcedimentos.find(m => m.id === medicoSelecionadoParaProc);
+          if (medicoObj) {
+            medicoNome = medicoObj.nome;
+          }
+        }
+        
+        // Criar no banco
+        const novoAgendamento = await agendamentoService.create({
+          nome_paciente: '',
+          data_nascimento: '2000-01-01',
+          data_agendamento: grade.data,
+          especialidade: especialidadeNome,
+          medico: medicoNome,
+          procedimentos: novoProcedimentoTexto.trim(),
+          hospital_id: hospitalId || null,
+          cidade_natal: null,
+          telefone: null,
+          is_grade_cirurgica: true
+        });
+        
+        console.log('✅ Procedimento criado com sucesso! ID:', novoAgendamento.id);
+        
+        // ATUALIZAR ESTADO LOCAL em vez de recarregar tudo
+        // Isso mantém a posição da tela e evita perder o scroll
+        const novoItem: GradeCirurgicaItem = {
+          id: `proc-${Date.now()}-${Math.random()}`,
+          tipo: 'procedimento',
+          texto: novoProcedimentoTexto.trim(),
+          ordem: 0, // Será recalculado
+          pacientes: [],
+          agendamentoId: novoAgendamento.id,
+          medicoId: medicoSelecionadoParaProc || undefined,
+          medicoNome: medicoNome || undefined
+        };
+        
+        // Atualizar a grade com o novo procedimento
+        setGrades(prevGrades => prevGrades.map((g, i) => {
+          if (i === procedimentoEmEdicao.gradeIndex) {
+            // Encontrar a posição correta para inserir (após a especialidade)
+            const especialidadeIndex = g.itens.findIndex(item => item.id === procedimentoEmEdicao.especialidadeId);
+            
+            if (especialidadeIndex !== -1) {
+              let insertIndex = especialidadeIndex + 1;
+              
+              // Avançar até o final dos procedimentos dessa especialidade
+              while (
+                insertIndex < g.itens.length && 
+                g.itens[insertIndex].tipo === 'procedimento'
+              ) {
+                insertIndex++;
+              }
+              
+              // Inserir o novo procedimento nessa posição
+              const novosItens = [
+                ...g.itens.slice(0, insertIndex),
+                novoItem,
+                ...g.itens.slice(insertIndex)
+              ];
+              
+              // Reordenar todos os itens
+              return {
+                ...g,
+                itens: novosItens.map((item, idx) => ({ ...item, ordem: idx }))
+              };
+            }
+          }
+          return g;
+        }));
+        
+        // Fechar modal
+        setModalAlterarProcAberto(false);
+        setProcedimentoEmEdicao(null);
+        setNovoProcedimentoTexto('');
+        setMedicoSelecionadoParaProc('');
+        setModoCriacaoProc(false);
+        setSalvandoPaciente(false);
+        
+        mostrarMensagem('✅ Sucesso', 'Procedimento criado com sucesso!', 'sucesso');
+        return;
+      }
+      
+      // MODO EDIÇÃO: Atualizar procedimento existente
       const item = grade.itens.find(i => i.id === procedimentoEmEdicao.itemId);
       
       if (!item) {
@@ -1033,11 +1131,22 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         console.log('✏️ Atualizando procedimento existente no banco...', {
           agendamentoId: procedimentoEmEdicao.agendamentoId,
           procedimentoAntigo: procedimentoEmEdicao.textoAtual,
-          procedimentoNovo: novoProcedimentoTexto
+          procedimentoNovo: novoProcedimentoTexto,
+          medico: medicoSelecionadoParaProc
         });
         
+        // Buscar nome do médico se foi selecionado
+        let medicoNome = null;
+        if (medicoSelecionadoParaProc) {
+          const medicoObj = medicosParaProcedimentos.find(m => m.id === medicoSelecionadoParaProc);
+          if (medicoObj) {
+            medicoNome = medicoObj.nome;
+          }
+        }
+        
         await agendamentoService.update(procedimentoEmEdicao.agendamentoId, {
-          procedimentos: novoProcedimentoTexto.trim()
+          procedimentos: novoProcedimentoTexto.trim(),
+          medico: medicoNome
         });
         
         console.log('✅ Procedimento atualizado com sucesso!');
@@ -3650,12 +3759,33 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           setProcedimentoEmEdicao(null);
           setNovoProcedimentoTexto('');
         }}
-        title={procedimentoEmEdicao.agendamentoId ? "✏️ Alterar Procedimento" : "➕ Novo Procedimento"}
+        title={modoCriacaoProc ? "➕ Novo Procedimento" : "✏️ Alterar Procedimento"}
         size="medium"
       >
         <div className="p-6">
-          {/* Informações do Procedimento Atual (só mostrar se tiver texto) */}
-          {procedimentoEmEdicao.textoAtual && (
+          {/* Informações da Especialidade (modo criação) */}
+          {modoCriacaoProc && procedimentoEmEdicao.especialidadeId && (() => {
+            const grade = grades[procedimentoEmEdicao.gradeIndex];
+            const especialidade = grade.itens.find(i => i.id === procedimentoEmEdicao.especialidadeId);
+            return (
+              <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <div className="text-sm font-bold text-blue-800">Especialidade:</div>
+                    <div className="text-base font-semibold text-blue-900 mt-1">
+                      {especialidade?.texto || '-'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        
+          {/* Informações do Procedimento Atual (só mostrar se tiver texto e não for modo criação) */}
+          {!modoCriacaoProc && procedimentoEmEdicao.textoAtual && (
             <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">📋 Procedimento Atual</h3>
               <p className="text-sm text-gray-700">
@@ -3672,7 +3802,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             <Input
               value={novoProcedimentoTexto}
               onChange={(e) => setNovoProcedimentoTexto(e.target.value)}
-              placeholder="Ex: Artroscopia de Joelho - LCA"
+              placeholder="Ex: MENISCO, LCA, CISTOLITOTRIPSIA"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
@@ -3680,6 +3810,33 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               {procedimentoEmEdicao.agendamentoId 
                 ? 'Esta alteração atualizará o procedimento no banco de dados.' 
                 : 'Este procedimento será salvo no banco de dados.'}
+            </p>
+          </div>
+          
+          {/* Campo para Selecionar Médico */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Médico Responsável:
+              <span className="text-gray-500 font-normal ml-2">(opcional)</span>
+            </label>
+            <select
+              value={medicoSelecionadoParaProc}
+              onChange={(e) => setMedicoSelecionadoParaProc(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">Sem médico (equipe médica)</option>
+              {carregandoMedicosParaProcedimentos ? (
+                <option disabled>Carregando...</option>
+              ) : (
+                medicosParaProcedimentos.map((medico) => (
+                  <option key={medico.id} value={medico.id}>
+                    {medico.nome}
+                  </option>
+                ))
+              )}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Selecione o médico que irá realizar este procedimento.
             </p>
           </div>
 
@@ -3690,6 +3847,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 setModalAlterarProcAberto(false);
                 setProcedimentoEmEdicao(null);
                 setNovoProcedimentoTexto('');
+                setMedicoSelecionadoParaProc('');
+                setModoCriacaoProc(false);
               }}
               variant="secondary"
             >
@@ -3700,7 +3859,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               disabled={!novoProcedimentoTexto.trim() || salvandoPaciente}
               className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {salvandoPaciente ? 'Salvando...' : 'Salvar Alteração'}
+              {salvandoPaciente 
+                ? '💾 Salvando...' 
+                : modoCriacaoProc
+                  ? '💾 Criar Procedimento'
+                  : '✏️ Salvar Alteração'
+              }
             </Button>
           </div>
         </div>
