@@ -284,15 +284,36 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
   };
   
-  // Marcar como LIBERADO (apenas visual, não salva no banco)
+  // Marcar como LIBERADO
   const handleMarcarLiberado = async (ag: Agendamento) => {
     if (!ag.id) return;
     
     // Se já está marcado como NÃO LIBERADO, limpar a marcação
     if (ag.faturamento_liberado === false) {
-      const confirmar = confirm('Este paciente está marcado como NÃO LIBERADO. Deseja limpar esta marcação?');
+      const confirmar = confirm('Este paciente está marcado como NÃO LIBERADO. Deseja limpar esta marcação e marcar como LIBERADO?');
       if (!confirmar) return;
       
+      try {
+        const updateData: Partial<Agendamento> = {
+          faturamento_liberado: true,
+          faturamento_observacao: null,
+          faturamento_data: new Date().toISOString()
+        };
+        
+        await agendamentoService.update(ag.id, updateData);
+        
+        // Atualizar lista local
+        setAgendamentos(prev => prev.map(agItem => 
+          agItem.id === ag.id 
+            ? { ...agItem, ...updateData }
+            : agItem
+        ));
+      } catch (error) {
+        console.error('Erro ao marcar como liberado:', error);
+        alert('❌ Erro ao salvar. Tente novamente.');
+      }
+    } else if (ag.faturamento_liberado === true) {
+      // Se já está LIBERADO, desmarcar (voltar para null)
       try {
         const updateData: Partial<Agendamento> = {
           faturamento_liberado: null,
@@ -308,15 +329,30 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             ? { ...agItem, ...updateData }
             : agItem
         ));
-        
-        alert('✅ Marcação removida!');
       } catch (error) {
-        console.error('Erro ao limpar marcação:', error);
-        alert('❌ Erro ao limpar marcação. Tente novamente.');
+        console.error('Erro ao desmarcar:', error);
+        alert('❌ Erro ao desmarcar. Tente novamente.');
       }
     } else {
-      // LIBERADO é apenas visual, não faz nada no banco
-      // Usuário pode clicar para "marcar visualmente" mas não salva
+      // Se está null (sem seleção), marcar como LIBERADO
+      try {
+        const updateData: Partial<Agendamento> = {
+          faturamento_liberado: true,
+          faturamento_data: new Date().toISOString()
+        };
+        
+        await agendamentoService.update(ag.id, updateData);
+        
+        // Atualizar lista local
+        setAgendamentos(prev => prev.map(agItem => 
+          agItem.id === ag.id 
+            ? { ...agItem, ...updateData }
+            : agItem
+        ));
+      } catch (error) {
+        console.error('Erro ao marcar como liberado:', error);
+        alert('❌ Erro ao salvar. Tente novamente.');
+      }
     }
   };
   
@@ -502,34 +538,24 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           <td className="px-4 py-4 w-56">
             <div className="flex items-center gap-2">
               {/* Checkbox LIBERADO */}
-              <label 
+              <button
+                onClick={() => handleMarcarLiberado(ag)}
                 className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${getCorLiberado(ag)}`}
-                title="Liberado para faturamento (visual, não salva)"
+                title="Liberado para faturamento - Clique para marcar/desmarcar"
+                type="button"
               >
-                <input
-                  type="radio"
-                  name={`liberacao-${ag.id}`}
-                  checked={ag.faturamento_liberado === true}
-                  onChange={() => handleMarcarLiberado(ag)}
-                  className="w-0 h-0 opacity-0 absolute"
-                />
                 ✅ LIBERADO
-              </label>
+              </button>
 
               {/* Checkbox NÃO LIBERADO */}
-              <label 
+              <button
+                onClick={() => handleAbrirModalNaoLiberado(ag)}
                 className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${getCorNaoLiberado(ag)}`}
                 title="Não liberado - requer observação (salva no banco)"
+                type="button"
               >
-                <input
-                  type="radio"
-                  name={`liberacao-${ag.id}`}
-                  checked={ag.faturamento_liberado === false}
-                  onChange={() => handleAbrirModalNaoLiberado(ag)}
-                  className="w-0 h-0 opacity-0 absolute"
-                />
                 ❌ NÃO LIBERADO
-              </label>
+              </button>
             </div>
           </td>
           
