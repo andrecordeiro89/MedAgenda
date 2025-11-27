@@ -72,29 +72,51 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     try {
       const dados = await agendamentoService.getAll(hospitalId);
       
-      console.log('🔍 DEBUG - Total de agendamentos retornados:', dados.length);
+      console.log('🩺 ANESTESIA - Total de agendamentos retornados:', dados.length);
       
-      // Verificar se há agendamentos com avaliação
-      const comAvaliacao = dados.filter(ag => ag.avaliacao_anestesista);
-      console.log('🔍 DEBUG - Agendamentos COM avaliação:', comAvaliacao.length);
-      if (comAvaliacao.length > 0) {
-        console.log('🔍 DEBUG - Exemplo de agendamento com avaliação:', {
-          id: comAvaliacao[0].id,
-          nome: comAvaliacao[0].nome_paciente,
-          avaliacao: comAvaliacao[0].avaliacao_anestesista,
-          observacao: comAvaliacao[0].avaliacao_anestesista_observacao
-        });
-      }
-      
-      // Filtrar apenas registros válidos (excluir grade cirúrgica)
+      // Filtrar apenas registros válidos (MESMA LÓGICA que Documentação e Faturamento)
       const agendamentosFiltrados = dados.filter(ag => {
-        // Excluir grade cirúrgica
-        if (ag.is_grade_cirurgica === true) return false;
-        if ((!ag.procedimentos || ag.procedimentos.trim() === '') && 
-            (!ag.nome_paciente || ag.nome_paciente.trim() === '')) return false;
+        const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+        const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
         
-        return true; // Retorna TODOS os agendamentos válidos
+        // CASO 1: Tem paciente E procedimento → SEMPRE MOSTRAR (mesmo se is_grade_cirurgica = true)
+        if (temPaciente && temProcedimento) {
+          return true; // ✅ Incluir
+        }
+        
+        // CASO 2: Registro estrutural de grade (sem paciente) → OCULTAR
+        if (ag.is_grade_cirurgica === true && !temPaciente) {
+          return false; // ❌ Excluir (é apenas estrutura)
+        }
+        
+        // CASO 3: Registro vazio (sem procedimento E sem paciente) → OCULTAR
+        if (!temProcedimento && !temPaciente) {
+          return false; // ❌ Excluir
+        }
+        
+        // CASO 4: Demais casos (registros parcialmente preenchidos) → OCULTAR
+        return false; // ❌ Excluir para manter consistência
       });
+      
+      // DEBUG: Análise detalhada e contagem de pacientes únicos
+      const totalOriginal = dados.length;
+      const totalFiltrado = agendamentosFiltrados.length;
+      const totalExcluidos = totalOriginal - totalFiltrado;
+      
+      // Contar pacientes ÚNICOS no total filtrado
+      const pacientesUnicos = new Set<string>();
+      agendamentosFiltrados.forEach(ag => {
+        const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
+        if (nomePaciente && nomePaciente !== '') {
+          pacientesUnicos.add(nomePaciente);
+        }
+      });
+      
+      console.log('🩺 ANESTESIA - CONTAGEM:');
+      console.log(`  Total de REGISTROS no banco: ${totalOriginal}`);
+      console.log(`  Total de REGISTROS após filtro: ${totalFiltrado}`);
+      console.log(`  Total de REGISTROS excluídos: ${totalExcluidos}`);
+      console.log(`  🎯 PACIENTES ÚNICOS (final): ${pacientesUnicos.size}`);
       
       setAgendamentos(agendamentosFiltrados);
     } catch (error) {
@@ -119,7 +141,19 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     }
   };
 
-  // Agrupar por paciente único
+  // Helper: Contar pacientes únicos em uma lista de agendamentos
+  const getPacientesUnicos = (agendamentosList: Agendamento[]): number => {
+    const pacientes = new Set<string>();
+    agendamentosList.forEach(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
+      if (nomePaciente && nomePaciente !== '') {
+        pacientes.add(nomePaciente);
+      }
+    });
+    return pacientes.size;
+  };
+
+  // Agrupar por paciente único (para a tabela)
   const agruparPorPacienteUnico = (agendamentosList: Agendamento[]): Agendamento[] => {
     const pacientesMap = new Map<string, Agendamento>();
     
@@ -143,15 +177,14 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     return Array.from(pacientesMap.values());
   };
   
-  // Calcular contadores para os filtros (PACIENTES ÚNICOS)
-  const pacientesUnicos = agruparPorPacienteUnico(agendamentos);
-  const totalTodos = pacientesUnicos.length;
-  const totalPendentes = agruparPorPacienteUnico(
+  // Calcular contadores para os filtros (PACIENTES ÚNICOS usando Set)
+  const totalTodos = getPacientesUnicos(agendamentos);
+  const totalPendentes = getPacientesUnicos(
     agendamentos.filter(ag => ag.ficha_pre_anestesica_ok !== true)
-  ).length;
-  const totalConcluidos = agruparPorPacienteUnico(
+  );
+  const totalConcluidos = getPacientesUnicos(
     agendamentos.filter(ag => ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true)
-  ).length;
+  );
   
   // Filtrar agendamentos por status (substituindo a lógica de abas)
   const agendamentosPorStatus = agendamentos.filter(ag => {

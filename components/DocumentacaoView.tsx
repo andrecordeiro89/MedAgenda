@@ -93,15 +93,25 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return true;
       });
       
-      // ⚠️ DEBUG: Análise detalhada do filtro
+      // DEBUG: Análise detalhada e contagem de pacientes únicos
       const totalOriginal = dados.length;
       const totalFiltrado = agendamentosFiltrados.length;
       const totalExcluidos = totalOriginal - totalFiltrado;
       
-      console.log('📋 FILTRO DE GRADE CIRÚRGICA:');
-      console.log(`  Total original: ${totalOriginal}`);
-      console.log(`  Total após filtro: ${totalFiltrado}`);
-      console.log(`  Total excluídos: ${totalExcluidos}`);
+      // Contar pacientes ÚNICOS no total filtrado
+      const pacientesUnicos = new Set<string>();
+      agendamentosFiltrados.forEach(ag => {
+        const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
+        if (nomePaciente && nomePaciente !== '') {
+          pacientesUnicos.add(nomePaciente);
+        }
+      });
+      
+      console.log('📋 DOCUMENTAÇÃO - CONTAGEM:');
+      console.log(`  Total de REGISTROS no banco: ${totalOriginal}`);
+      console.log(`  Total de REGISTROS após filtro: ${totalFiltrado}`);
+      console.log(`  Total de REGISTROS excluídos: ${totalExcluidos}`);
+      console.log(`  🎯 PACIENTES ÚNICOS (final): ${pacientesUnicos.size}`);
       
       // Analisar registros excluídos
       const excluidos = dados.filter(ag => !agendamentosFiltrados.includes(ag));
