@@ -40,6 +40,11 @@ export interface Agendamento {
   avaliacao_anestesista_complementares?: string | null; // Observações complementares
   avaliacao_anestesista_data?: string | null; // Data/hora da avaliação
   
+  // Campos de liberação para faturamento G-SUS
+  faturamento_liberado?: boolean | null; // NULL=não avaliado, TRUE=liberado (visual), FALSE=não liberado (salvo)
+  faturamento_observacao?: string | null; // Observação obrigatória quando faturamento_liberado = FALSE
+  faturamento_data?: string | null; // Data/hora da marcação
+  
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;
   procedimento_id?: string;

@@ -16,9 +16,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Estado para controlar ordenação por anestesista
   const [ordenarPorAnestesista, setOrdenarPorAnestesista] = useState(false);
   
-  // ⚠️ NOVO: Estado para controlar agrupamento por paciente único
-  const [agruparPorPaciente, setAgruparPorPaciente] = useState(false);
-  
   // Estados para filtros de busca
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
@@ -257,18 +254,33 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     return true;
   });
   
-  // AGRUPAR POR PACIENTE ÚNICO (mostrar apenas 1 linha por paciente)
-  // ⚠️ MODIFICADO: Agora é opcional (controlado por toggle)
-  let agendamentosFiltrados = agruparPorPaciente 
-    ? agruparPorPacienteUnico(agendamentosFiltradosCompletos)
-    : agendamentosFiltradosCompletos;
+  // SEMPRE MOSTRAR TODOS OS REGISTROS (sem agrupamento por paciente)
+  let agendamentosFiltrados = agendamentosFiltradosCompletos;
   
-  // ORDENAR POR DATA DE CIRURGIA (cirurgias mais próximas primeiro)
+  // ORDENAR: 1º por DATA DE CIRURGIA, 2º por MÉDICO (alfabético dentro de cada dia)
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
+    // PRIORIDADE 1: Ordenar por data (mais próxima primeiro)
     const dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
     const dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
     
-    // Se ordenar por anestesista está ativo, usar essa ordenação como secundária
+    // Se datas diferentes, ordenar por data
+    if (dataA !== dataB) {
+      return dataA.localeCompare(dataB);
+    }
+    
+    // PRIORIDADE 2: Se mesma data, ordenar por nome do médico (alfabético)
+    const medicoA = (a.medico || '').trim().toUpperCase();
+    const medicoB = (b.medico || '').trim().toUpperCase();
+    
+    // Se médicos diferentes, ordenar alfabeticamente
+    if (medicoA !== medicoB) {
+      // Colocar registros sem médico no final
+      if (!medicoA) return 1;
+      if (!medicoB) return -1;
+      return medicoA.localeCompare(medicoB, 'pt-BR');
+    }
+    
+    // PRIORIDADE 3: Se ordenar por anestesista está ativo, usar essa ordenação
     if (ordenarPorAnestesista) {
       const statusA = a.status_liberacao || 'anestesista';
       const statusB = b.status_liberacao || 'anestesista';
@@ -289,8 +301,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
     }
     
-    // Ordenar por data (mais próxima primeiro)
-    return dataA.localeCompare(dataB);
+    // PRIORIDADE 4: Se tudo igual, manter ordem de criação
+    return 0;
   });
   
   // Total de registros (antes da paginação)
@@ -695,32 +707,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         }`}>
           {/* Paciente */}
           <td className="px-4 py-3 w-48">
-            <div className="flex items-center gap-2">
-              <div 
-                className="text-sm font-medium text-gray-900 truncate flex-1"
-                title={ag.nome_paciente || ag.nome || '-'}
-              >
-                {ag.nome_paciente || ag.nome || '-'}
-              </div>
-              {/* ⚠️ NOVO: Indicador de registros agrupados */}
-              {agruparPorPaciente && (() => {
-                const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
-                const totalRegistros = agendamentosFiltradosCompletos.filter(a => 
-                  (a.nome_paciente || a.nome || '').trim().toLowerCase() === nomePaciente
-                ).length;
-                
-                if (totalRegistros > 1) {
-                  return (
-                    <span 
-                      className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded border border-blue-300"
-                      title={`Este paciente tem ${totalRegistros} registros no total. Apenas o mais recente está sendo exibido.`}
-                    >
-                      +{totalRegistros - 1}
-                    </span>
-                  );
-                }
-                return null;
-              })()}
+            <div 
+              className="text-sm font-medium text-gray-900 truncate"
+              title={ag.nome_paciente || ag.nome || '-'}
+            >
+              {ag.nome_paciente || ag.nome || '-'}
             </div>
           </td>
           
@@ -731,6 +722,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               title={ag.procedimentos || '-'}
             >
               {ag.procedimentos || '-'}
+            </div>
+          </td>
+          
+          {/* Médico */}
+          <td className="px-4 py-3 w-40">
+            <div 
+              className="text-sm text-gray-700 truncate"
+              title={ag.medico || '-'}
+            >
+              {ag.medico || '-'}
             </div>
           </td>
           
@@ -902,7 +903,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
          {/* Linha expandida com detalhes */}
          {expandida && (
            <tr className={temExamesEPreOp ? 'bg-green-50/50' : 'bg-gray-50'}>
-             <td colSpan={7} className="px-4 py-4">
+             <td colSpan={8} className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Nascimento */}
                 <div>
@@ -1200,40 +1201,17 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-700">🔍 Filtros de Busca</h3>
-          <div className="flex items-center gap-3">
-            {/* ⚠️ NOVO: Toggle para agrupar por paciente */}
+          {temFiltrosAtivos && (
             <button
-              onClick={() => setAgruparPorPaciente(prev => !prev)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                agruparPorPaciente
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
-              }`}
-              title={agruparPorPaciente ? 'Mostrando 1 linha por paciente (clique para ver todos os registros)' : 'Mostrando todos os registros (clique para agrupar por paciente)'}
+              onClick={limparFiltros}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              {agruparPorPaciente ? 'Paciente Único' : 'Todos Registros'}
-              {agruparPorPaciente && (
-                <span className="ml-1 px-1.5 py-0.5 bg-blue-200 text-blue-800 rounded text-[10px] font-bold">
-                  ON
-                </span>
-              )}
+              Limpar filtros
             </button>
-            
-            {temFiltrosAtivos && (
-              <button
-                onClick={limparFiltros}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Limpar filtros
-              </button>
-            )}
-          </div>
+          )}
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1352,31 +1330,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </div>
         
         {/* Indicador de resultados filtrados */}
-        {(temFiltrosAtivos || agruparPorPaciente) && (
+        {temFiltrosAtivos && (
           <div className="mt-3 pt-3 border-t border-gray-200">
-            {agruparPorPaciente && (
-              <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-xs text-yellow-800 font-medium flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  ⚠️ Modo "Paciente Único" ativo: Mostrando apenas 1 linha por paciente. Pacientes com múltiplos procedimentos terão outros registros ocultos.
-                  <button
-                    onClick={() => setAgruparPorPaciente(false)}
-                    className="ml-2 px-2 py-0.5 bg-yellow-600 text-white text-[10px] font-bold rounded hover:bg-yellow-700"
-                  >
-                    Ver Todos
-                  </button>
-                </p>
-              </div>
-            )}
             <p className="text-xs text-gray-600">
-              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> {agruparPorPaciente ? 'paciente(s)' : 'registro(s)'} de <span className="font-semibold text-gray-800">{agendamentosFiltradosCompletos.length}</span> total
-              {agruparPorPaciente && agendamentosFiltrados.length !== agendamentosFiltradosCompletos.length && (
-                <span className="ml-1 text-red-600 font-bold">
-                  ({agendamentosFiltradosCompletos.length - agendamentosFiltrados.length} registros ocultos pelo agrupamento)
-                </span>
-              )}
+              Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> registro(s) de <span className="font-semibold text-gray-800">{agendamentos.length}</span> total
             </p>
           </div>
         )}
@@ -1532,6 +1489,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
                       Procedimento
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                      Médico
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                       Data Consulta
                     </th>
@@ -1573,7 +1533,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       if (lista.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={7} className="px-4 py-8 text-center">
+                            <td colSpan={8} className="px-4 py-8 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1609,7 +1569,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         <React.Fragment key={grupoInfo.chave}>
                           {/* Cabeçalho do grupo */}
                           <tr className={`${grupoInfo.cor} border-t-2 border-b-2`}>
-                            <td colSpan={7} className="px-4 py-3">
+                            <td colSpan={8} className="px-4 py-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-gray-800">{grupoInfo.titulo}</span>
