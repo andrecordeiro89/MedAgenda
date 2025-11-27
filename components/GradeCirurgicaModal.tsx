@@ -21,6 +21,7 @@ interface GradeCirurgicaModalProps {
   diaSemanaClicado: number; // 0=Dom, 1=Seg, 2=Ter, ..., 6=Sáb
   hospitalId: string;
   especialidades: Especialidade[]; // NOVA PROP: Lista de especialidades do banco
+  userEmail?: string; // Email do usuário logado (para verificar se é TI)
 }
 
 // Mapeamento de número do dia (getDay()) para DiaSemana
@@ -51,8 +52,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   mesAtual,
   diaSemanaClicado,
   hospitalId,
-  especialidades // Receber especialidades
+  especialidades, // Receber especialidades
+  userEmail // Email do usuário logado
 }) => {
+  // Verificar se é usuário TI (permissão especial para alterar procedimentos base)
+  const isUsuarioTI = userEmail?.toLowerCase() === 'tifoz@medagenda.com';
+  
   // Estado para controlar a navegação entre meses (offset)
   const [offsetMes, setOffsetMes] = useState(1); // 1 = próximo mês (padrão)
   
@@ -107,6 +112,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [novoProcedimentoTexto, setNovoProcedimentoTexto] = useState('');
   const [novaEspecificacaoTexto, setNovaEspecificacaoTexto] = useState('');
   const [medicoSelecionadoParaProc, setMedicoSelecionadoParaProc] = useState('');
+  const [medicoVemDaEspecialidade, setMedicoVemDaEspecialidade] = useState(false); // Se true, campo fica bloqueado
 
   // Carregar médicos do hospital ao abrir o modal
   useEffect(() => {
@@ -200,8 +206,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   if (agendamento.procedimentos && agendamento.procedimentos.trim() && agendamento.id) {
                     const procedimentoData: any = {
                       nome: agendamento.procedimentos,
-                      agendamentoId: agendamento.id
+                      agendamentoId: agendamento.id,
+                      especificacao: agendamento.procedimento_especificacao || undefined // Carregar especificação
                     };
+                    
+                    // Log para debug de especificação
+                    if (agendamento.procedimento_especificacao) {
+                      console.log('📋 Carregando especificação do banco:', {
+                        procedimento: agendamento.procedimentos,
+                        especificacao: agendamento.procedimento_especificacao,
+                        agendamentoId: agendamento.id
+                      });
+                    }
                     
                     // Incluir médico associado ao procedimento (se houver)
                     if (agendamento.medico) {
@@ -264,7 +280,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       }]
                     : [];
                   
-                  itens.push({
+                  const itemProcedimento: any = {
                     id: `proc-${Date.now()}-${Math.random()}-${idx}`,
                     tipo: 'procedimento',
                     texto: proc.nome,
@@ -273,7 +289,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     agendamentoId: proc.agendamentoId,
                     ...(proc.medicoId && { medicoId: proc.medicoId }),
                     ...(proc.medicoNome && { medicoNome: proc.medicoNome })
-                  });
+                  };
+                  
+                  // Sempre incluir especificação (mesmo que seja undefined)
+                  if ((proc as any).especificacao) {
+                    itemProcedimento.especificacao = (proc as any).especificacao;
+                    console.log(`📋 Procedimento carregado com especificação: ${proc.nome} → "${(proc as any).especificacao}"`);
+                  }
+                  
+                  itens.push(itemProcedimento);
                   
                   // Log de debug
                   if (proc.medicoId) {
@@ -303,6 +327,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         );
         
         console.log('✅ Grades carregadas do Supabase:', gradesCarregadas);
+        
+        // Log detalhado de procedimentos com especificação
+        gradesCarregadas.forEach((grade, idx) => {
+          const procsComEspecificacao = grade.itens.filter(it => it.tipo === 'procedimento' && it.especificacao);
+          if (procsComEspecificacao.length > 0) {
+            console.log(`📋 Grade ${idx} (${grade.data}) - Procedimentos com especificação:`, 
+              procsComEspecificacao.map(p => ({ texto: p.texto, especificacao: p.especificacao }))
+            );
+          }
+        });
+        
         setGrades(gradesCarregadas);
         
       } catch (error) {
@@ -976,12 +1011,51 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // NOVA FUNÇÃO: Abrir modal para alterar procedimento
   const handleAbrirAlterarProcedimento = (gradeIndex: number, itemId: string) => {
+    console.log('🔍 Abrindo modal para editar procedimento:', { gradeIndex, itemId, totalGrades: grades.length });
+    
+    if (gradeIndex < 0 || gradeIndex >= grades.length) {
+      console.error('❌ Índice de grade inválido:', gradeIndex);
+      mostrarAlerta('❌ Erro', `Índice de grade inválido: ${gradeIndex}`);
+      return;
+    }
+    
     const grade = grades[gradeIndex];
+    console.log('✅ Grade encontrada:', { data: grade.data, totalItens: grade.itens.length });
+    
     const item = grade.itens.find(i => i.id === itemId);
     
     if (!item || item.tipo !== 'procedimento') {
+      console.error('❌ Procedimento não encontrado:', { itemId, itensDisponiveis: grade.itens.map(i => ({ id: i.id, tipo: i.tipo })) });
       mostrarAlerta('❌ Erro', 'Procedimento não encontrado');
       return;
+    }
+    
+    console.log('✅ Procedimento encontrado:', { id: item.id, texto: item.texto, especificacao: item.especificacao });
+    
+    // Buscar a especialidade deste procedimento (item anterior do tipo 'especialidade')
+    let medicoIdDaEspecialidade = '';
+    let medicoNomeDaEspecialidade = '';
+    let temMedicoNaEspecialidade = false;
+    
+    const itemIndex = grade.itens.findIndex(it => it.id === itemId);
+    for (let i = itemIndex - 1; i >= 0; i--) {
+      if (grade.itens[i].tipo === 'especialidade') {
+        const especialidadeTexto = grade.itens[i].texto;
+        
+        // Verificar se a especialidade tem médico (formato: "Especialidade - Médico")
+        if (especialidadeTexto.includes(' - ')) {
+          const partes = especialidadeTexto.split(' - ');
+          medicoNomeDaEspecialidade = partes[1];
+          
+          // Buscar ID do médico na lista
+          const medicoEncontrado = medicosParaProcedimentos.find(m => m.nome === medicoNomeDaEspecialidade);
+          if (medicoEncontrado) {
+            medicoIdDaEspecialidade = medicoEncontrado.id;
+            temMedicoNaEspecialidade = true;
+          }
+        }
+        break;
+      }
     }
     
     // Se não tem agendamentoId, é um procedimento novo (ainda não salvo no banco)
@@ -990,9 +1064,22 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       gradeIndex,
       itemId,
       agendamentoId: item.agendamentoId || '', // Pode ser vazio para procedimentos novos
-      textoAtual: item.texto
+      textoAtual: item.texto, // Procedimento base (imutável - marca d'água)
+      especificacaoAtual: item.especificacao || '' // Especificação (editável)
     });
-    setNovoProcedimentoTexto(item.texto || ''); // Iniciar vazio se for novo
+    setNovoProcedimentoTexto(item.texto || ''); // Procedimento base (readonly)
+    setNovaEspecificacaoTexto(item.especificacao || ''); // Especificação (editável)
+    
+    // Definir médico da especialidade (se houver)
+    if (temMedicoNaEspecialidade) {
+      setMedicoSelecionadoParaProc(medicoIdDaEspecialidade);
+      setMedicoVemDaEspecialidade(true); // Bloquear campo
+    } else {
+      // Se não tem médico na especialidade, permitir seleção
+      setMedicoSelecionadoParaProc(item.medicoId || '');
+      setMedicoVemDaEspecialidade(false); // Desbloquear campo
+    }
+    
     setModalAlterarProcAberto(true);
   };
 
@@ -1008,7 +1095,24 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setSalvandoPaciente(true);
     
     try {
+      console.log('🔍 Iniciando salvamento - Estado atual:', {
+        procedimentoEmEdicao,
+        totalGrades: grades.length,
+        gradeIndex: procedimentoEmEdicao.gradeIndex
+      });
+      
       const grade = grades[procedimentoEmEdicao.gradeIndex];
+      
+      if (!grade) {
+        console.error('❌ Grade não encontrada no índice:', procedimentoEmEdicao.gradeIndex);
+        throw new Error(`Grade não encontrada no índice ${procedimentoEmEdicao.gradeIndex}`);
+      }
+      
+      console.log('✅ Grade encontrada:', {
+        data: grade.data,
+        totalItens: grade.itens.length,
+        itens: grade.itens.map(i => ({ id: i.id, tipo: i.tipo, texto: i.texto }))
+      });
       
       // MODO CRIAÇÃO: Criar novo procedimento
       if (modoCriacaoProc) {
@@ -1110,7 +1214,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         setModalAlterarProcAberto(false);
         setProcedimentoEmEdicao(null);
         setNovoProcedimentoTexto('');
+        setNovaEspecificacaoTexto('');
         setMedicoSelecionadoParaProc('');
+        setMedicoVemDaEspecialidade(false);
         setModoCriacaoProc(false);
         setSalvandoPaciente(false);
         
@@ -1119,20 +1225,35 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }
       
       // MODO EDIÇÃO: Atualizar procedimento existente
+      console.log('🔍 Procurando item na grade:', {
+        itemIdProcurado: procedimentoEmEdicao.itemId,
+        itensDisponiveis: grade.itens.map(i => ({ id: i.id, tipo: i.tipo, texto: i.texto }))
+      });
+      
       const item = grade.itens.find(i => i.id === procedimentoEmEdicao.itemId);
       
       if (!item) {
-        throw new Error('Item não encontrado');
+        console.error('❌ Item não encontrado! Detalhes:', {
+          itemIdProcurado: procedimentoEmEdicao.itemId,
+          gradeIndex: procedimentoEmEdicao.gradeIndex,
+          itensNaGrade: grade.itens.map(i => i.id)
+        });
+        throw new Error(`Item não encontrado (ID: ${procedimentoEmEdicao.itemId})`);
       }
+      
+      console.log('✅ Item encontrado:', { id: item.id, tipo: item.tipo, texto: item.texto });
       
       // Verificar se é um procedimento novo (sem agendamentoId) ou existente
       if (procedimentoEmEdicao.agendamentoId) {
         // CASO 1: Procedimento JÁ EXISTE no banco → UPDATE
-        console.log('✏️ Atualizando procedimento existente no banco...', {
+        console.log('✏️ Atualizando procedimento no banco...', {
           agendamentoId: procedimentoEmEdicao.agendamentoId,
-          procedimentoAntigo: procedimentoEmEdicao.textoAtual,
-          procedimentoNovo: novoProcedimentoTexto,
-          medico: medicoSelecionadoParaProc
+          procedimentoBaseAntigo: procedimentoEmEdicao.textoAtual,
+          procedimentoBaseNovo: novoProcedimentoTexto,
+          especificacaoAntiga: procedimentoEmEdicao.especificacaoAtual,
+          especificacaoNova: novaEspecificacaoTexto,
+          medico: medicoSelecionadoParaProc,
+          isUsuarioTI
         });
         
         // Buscar nome do médico se foi selecionado
@@ -1144,12 +1265,28 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           }
         }
         
-        await agendamentoService.update(procedimentoEmEdicao.agendamentoId, {
-          procedimentos: novoProcedimentoTexto.trim(),
+        // Preparar dados para atualização
+        const updateData: any = {
+          procedimento_especificacao: novaEspecificacaoTexto.trim() || null,
           medico: medicoNome
+        };
+        
+        // Se for usuário TI, permitir alterar o procedimento base também
+        if (isUsuarioTI && novoProcedimentoTexto.trim() !== procedimentoEmEdicao.textoAtual) {
+          updateData.procedimentos = novoProcedimentoTexto.trim().toUpperCase();
+          console.log('🔧 [MODO TI] Atualizando também o procedimento base:', updateData.procedimentos);
+        }
+        
+        // Atualizar no banco
+        console.log('📤 Enviando UPDATE para o banco:', { 
+          agendamentoId: procedimentoEmEdicao.agendamentoId, 
+          updateData 
         });
         
-        console.log('✅ Procedimento atualizado com sucesso!');
+        const resultado = await agendamentoService.update(procedimentoEmEdicao.agendamentoId, updateData);
+        
+        console.log('✅ Procedimento atualizado com sucesso no banco!', resultado);
+        console.log('🔍 Especificação salva:', updateData.procedimento_especificacao);
       } else {
         // CASO 2: Procedimento NOVO (ainda não salvo no banco) → INSERT
         console.log('💾 Criando novo procedimento no banco...', {
@@ -1208,9 +1345,21 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             ...g,
             itens: g.itens.map(it => {
               if (it.id === procedimentoEmEdicao.itemId && it.tipo === 'procedimento') {
+                const novaEspecificacaoFinal = novaEspecificacaoTexto.trim() || undefined;
+                console.log('🔄 Atualizando UI - Especificação:', {
+                  procedimento: it.texto,
+                  especificacaoAntiga: it.especificacao,
+                  especificacaoNova: novaEspecificacaoFinal,
+                  novaEspecificacaoTextoOriginal: novaEspecificacaoTexto
+                });
+                
                 return {
                   ...it,
-                  texto: novoProcedimentoTexto.trim(),
+                  // Se for usuário TI E alterou o texto base, atualizar; caso contrário, manter o original
+                  texto: isUsuarioTI && novoProcedimentoTexto.trim() !== procedimentoEmEdicao.textoAtual
+                    ? novoProcedimentoTexto.trim().toUpperCase()
+                    : (procedimentoEmEdicao.textoAtual || novoProcedimentoTexto.trim()),
+                  especificacao: novaEspecificacaoFinal, // Atualizar especificação
                   agendamentoId: it.agendamentoId || item.agendamentoId // Atualizar com novo ID se foi criado
                 };
               }
@@ -1221,15 +1370,33 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         return g;
       });
       
+      console.log('✅ UI atualizada. Grades após update:', updatedGrades.map(g => ({
+        data: g.data,
+        itens: g.itens.map(it => ({ tipo: it.tipo, texto: it.texto, especificacao: it.especificacao }))
+      })));
+      
       setGrades(updatedGrades);
       
       // Fechar modal
       setModalAlterarProcAberto(false);
       setProcedimentoEmEdicao(null);
       setNovoProcedimentoTexto('');
+      setNovaEspecificacaoTexto('');
+      setMedicoSelecionadoParaProc('');
+      setMedicoVemDaEspecialidade(false);
       
       // Mostrar mensagem de sucesso
-      mostrarMensagem('✅ Sucesso', `Procedimento ${procedimentoEmEdicao.agendamentoId ? 'atualizado' : 'criado'} com sucesso!`, 'sucesso');
+      const mensagemSucesso = procedimentoEmEdicao.agendamentoId 
+        ? (isUsuarioTI && novoProcedimentoTexto.trim() !== procedimentoEmEdicao.textoAtual
+            ? '🔧 Procedimento base e especificação atualizados (MODO TI)'
+            : 'Especificação atualizada')
+        : 'Procedimento criado';
+      
+      mostrarMensagem('✅ Sucesso', `${mensagemSucesso} com sucesso!`, 'sucesso');
+      
+      // ✅ Não recarregar do banco - a UI já foi atualizada localmente
+      // A especificação foi salva no banco e o estado local já reflete a mudança
+      console.log('✅ Especificação salva no banco e UI atualizada localmente!');
       
     } catch (error) {
       console.error('❌ Erro ao salvar procedimento:', error);
@@ -2979,14 +3146,33 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               {/* Coluna Procedimento */}
                                               <td className="px-3 py-2 border-r border-slate-200 w-56 overflow-hidden">
                                                 {isFirstPaciente ? (
-                                                  <div className="flex items-center gap-1 group">
-                                                    <span className="text-sm font-medium text-slate-800 truncate flex-1" title={proc.texto}>
-                                                      {proc.texto}
-                                                    </span>
+                                                  <div className="flex items-center gap-1 group relative">
+                                                    {/* Exibição com Marca d'Água + Especificação */}
+                                                    <div className="flex-1 flex items-center gap-2 min-h-[1.5rem]">
+                                                      {/* Marca d'Água (Procedimento Base) */}
+                                                      <span className="text-2xl font-bold text-slate-300 uppercase select-none tracking-wider flex-shrink-0">
+                                                        {proc.texto}
+                                                      </span>
+                                                      
+                                                      {/* Especificação (Texto Normal) - À direita da marca d'água */}
+                                                      {proc.especificacao ? (
+                                                        <span 
+                                                          className="text-sm font-semibold text-slate-900 bg-blue-50 border border-blue-200 px-2 py-1 rounded shadow-sm flex-shrink-0"
+                                                          title={`${proc.texto} - ${proc.especificacao}`}
+                                                        >
+                                                          {proc.especificacao}
+                                                        </span>
+                                                      ) : (
+                                                        <span className="text-xs text-slate-400 italic">
+                                                          (sem especificação)
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    
                                                     <button
                                                       onClick={() => handleAbrirAlterarProcedimento(index, proc.id)}
-                                                      className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                                      title="Alterar procedimento"
+                                                      className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-50 rounded transition-all flex-shrink-0"
+                                                      title="Adicionar/Editar especificação"
                                                     >
                                                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2994,7 +3180,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     </button>
                                                   </div>
                                                 ) : (
-                                                  <span className="text-sm text-slate-500 italic truncate block">└ {proc.texto}</span>
+                                                  <span className="text-sm text-slate-500 italic truncate block">
+                                                    └ {proc.especificacao || proc.texto}
+                                                  </span>
                                                 )}
                                               </td>
                                               
@@ -3185,14 +3373,33 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           >
                                             {/* Coluna Procedimento */}
                                             <td className="px-3 py-2 border-r border-slate-200 w-56 overflow-hidden">
-                                              <div className="flex items-center gap-1 group">
-                                                <span className="text-sm font-medium text-slate-800 truncate flex-1" title={proc.texto}>
-                                                  {proc.texto}
-                                                </span>
+                                              <div className="flex items-center gap-1 group relative">
+                                                {/* Exibição com Marca d'Água + Especificação */}
+                                                <div className="flex-1 flex items-center gap-2 min-h-[1.5rem]">
+                                                  {/* Marca d'Água (Procedimento Base) */}
+                                                  <span className="text-2xl font-bold text-slate-300 uppercase select-none tracking-wider flex-shrink-0">
+                                                    {proc.texto}
+                                                  </span>
+                                                  
+                                                  {/* Especificação (Texto Normal) - À direita da marca d'água */}
+                                                  {proc.especificacao ? (
+                                                    <span 
+                                                      className="text-sm font-semibold text-slate-900 bg-blue-50 border border-blue-200 px-2 py-1 rounded shadow-sm flex-shrink-0"
+                                                      title={`${proc.texto} - ${proc.especificacao}`}
+                                                    >
+                                                      {proc.especificacao}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-xs text-slate-400 italic">
+                                                      (sem especificação)
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                
                                                 <button
                                                   onClick={() => handleAbrirAlterarProcedimento(index, proc.id)}
-                                                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                                  title="Alterar procedimento"
+                                                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-50 rounded transition-all flex-shrink-0"
+                                                  title="Adicionar/Editar especificação"
                                                 >
                                                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -3758,6 +3965,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           setModalAlterarProcAberto(false);
           setProcedimentoEmEdicao(null);
           setNovoProcedimentoTexto('');
+          setNovaEspecificacaoTexto('');
+          setMedicoSelecionadoParaProc('');
+          setMedicoVemDaEspecialidade(false);
         }}
         title={modoCriacaoProc ? "➕ Novo Procedimento" : "✏️ Alterar Procedimento"}
         size="medium"
@@ -3784,45 +3994,108 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             );
           })()}
         
-          {/* Informações do Procedimento Atual (só mostrar se tiver texto e não for modo criação) */}
+          {/* Procedimento Base (Marca d'Água - Imutável ou Editável para TI) */}
           {!modoCriacaoProc && procedimentoEmEdicao.textoAtual && (
-            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-800 mb-2">📋 Procedimento Atual</h3>
-              <p className="text-sm text-gray-700">
-                <strong>{procedimentoEmEdicao.textoAtual}</strong>
+            <div className="mb-6 relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                📋 Procedimento Base {isUsuarioTI ? '(Editável - TI)' : '(Fixo)'}
+                {isUsuarioTI && (
+                  <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded">
+                    🔧 MODO TI
+                  </span>
+                )}
+              </label>
+              {isUsuarioTI ? (
+                // MODO TI: Campo editável
+                <div>
+                  <Input
+                    value={novoProcedimentoTexto}
+                    onChange={(e) => setNovoProcedimentoTexto(e.target.value.toUpperCase())}
+                    placeholder="Ex: MENISCO, LCA, CISTOLITOTRIPSIA"
+                    className="w-full px-3 py-2 border-2 border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-bold text-lg uppercase bg-purple-50"
+                    autoFocus
+                  />
+                  <p className="text-xs text-purple-600 mt-1 flex items-center gap-1 font-medium">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    ⚠️ ATENÇÃO: Você está alterando o procedimento base. Esta alteração afetará este registro específico.
+                  </p>
+                </div>
+              ) : (
+                // MODO NORMAL: Apenas visualização (marca d'água)
+                <div>
+                  <div className="relative bg-slate-50 border-2 border-slate-300 rounded-lg p-4 min-h-[4rem] flex items-center">
+                    {/* Marca d'Água Grande */}
+                    <span className="text-4xl font-bold text-slate-200 uppercase select-none tracking-wider">
+                      {procedimentoEmEdicao.textoAtual}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 italic">
+                    ⚠️ O procedimento base não pode ser alterado. Adicione uma especificação abaixo.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Campo para Especificação (Editável) */}
+          {!modoCriacaoProc && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                ✏️ Especificação do Procedimento
+              </label>
+              <Input
+                value={novaEspecificacaoTexto}
+                onChange={(e) => setNovaEspecificacaoTexto(e.target.value)}
+                placeholder={`Ex: ${procedimentoEmEdicao.textoAtual === 'MENISCO' ? 'meniscectomia medial à esquerda' : 'detalhes específicos do procedimento'}`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Adicione detalhes como lateralidade, tipo específico, etc.
               </p>
             </div>
           )}
 
-          {/* Campo para Novo Procedimento */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {procedimentoEmEdicao.agendamentoId ? 'Novo Nome do Procedimento' : 'Nome do Procedimento'}: <span className="text-red-500">*</span>
-            </label>
-            <Input
-              value={novoProcedimentoTexto}
-              onChange={(e) => setNovoProcedimentoTexto(e.target.value)}
-              placeholder="Ex: MENISCO, LCA, CISTOLITOTRIPSIA"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {procedimentoEmEdicao.agendamentoId 
-                ? 'Esta alteração atualizará o procedimento no banco de dados.' 
-                : 'Este procedimento será salvo no banco de dados.'}
-            </p>
-          </div>
+          {/* Campo para Novo Procedimento (Modo Criação) */}
+          {modoCriacaoProc && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome do Procedimento: <span className="text-red-500">*</span>
+              </label>
+              <Input
+                value={novoProcedimentoTexto}
+                onChange={(e) => setNovoProcedimentoTexto(e.target.value)}
+                placeholder="Ex: MENISCO, LCA, CISTOLITOTRIPSIA"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Este procedimento será salvo no banco de dados.
+              </p>
+            </div>
+          )}
           
           {/* Campo para Selecionar Médico */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Médico Responsável:
-              <span className="text-gray-500 font-normal ml-2">(opcional)</span>
+              {medicoVemDaEspecialidade ? (
+                <span className="text-blue-600 font-normal ml-2">(definido pela especialidade)</span>
+              ) : (
+                <span className="text-gray-500 font-normal ml-2">(opcional)</span>
+              )}
             </label>
             <select
               value={medicoSelecionadoParaProc}
               onChange={(e) => setMedicoSelecionadoParaProc(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              disabled={medicoVemDaEspecialidade}
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                medicoVemDaEspecialidade 
+                  ? 'bg-gray-100 border-gray-200 cursor-not-allowed text-gray-700' 
+                  : 'bg-white border-gray-300'
+              }`}
             >
               <option value="">Sem médico (equipe médica)</option>
               {carregandoMedicosParaProcedimentos ? (
@@ -3835,9 +4108,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 ))
               )}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Selecione o médico que irá realizar este procedimento.
-            </p>
+            {medicoVemDaEspecialidade ? (
+              <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                Este médico foi definido na especialidade e não pode ser alterado aqui.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">
+                Selecione o médico que irá realizar este procedimento.
+              </p>
+            )}
           </div>
 
           {/* Botões de Ação */}
@@ -3847,7 +4129,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 setModalAlterarProcAberto(false);
                 setProcedimentoEmEdicao(null);
                 setNovoProcedimentoTexto('');
+                setNovaEspecificacaoTexto('');
                 setMedicoSelecionadoParaProc('');
+                setMedicoVemDaEspecialidade(false);
                 setModoCriacaoProc(false);
               }}
               variant="secondary"
@@ -3856,14 +4140,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             </Button>
             <Button
               onClick={handleSalvarAlteracaoProcedimento}
-              disabled={!novoProcedimentoTexto.trim() || salvandoPaciente}
+              disabled={modoCriacaoProc ? !novoProcedimentoTexto.trim() : false || salvandoPaciente}
               className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {salvandoPaciente 
                 ? '💾 Salvando...' 
                 : modoCriacaoProc
                   ? '💾 Criar Procedimento'
-                  : '✏️ Salvar Alteração'
+                  : '✏️ Salvar Especificação'
               }
             </Button>
           </div>

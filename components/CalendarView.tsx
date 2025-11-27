@@ -25,7 +25,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   metasEspecialidades = [], // Default para array vazio
   hospitalId
 }) => {
-  const { hospitalSelecionado } = useAuth();
+  const { hospitalSelecionado, usuario } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -432,6 +432,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             diaSemanaClicado={selectedDayOfWeek}
             hospitalId={hospitalId}
             especialidades={especialidades}
+            userEmail={usuario?.email}
         />
 
         {/* Modal de Relatório Semanal */}
