@@ -1272,18 +1272,20 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </div>
           )}
           
-          {/* Legenda */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-semibold text-gray-800 mb-2">📌 Informações sobre Faturamento:</h3>
-            <ul className="space-y-1 text-sm text-gray-700">
-              <li>• A tabela principal exibe <strong>apenas pacientes prontos</strong> (com exames E pré-op anexados)</li>
-              <li>• Clique no card "Pendências" para ver pacientes que ainda faltam documentos</li>
-              <li>• <strong>Liberação:</strong> Por padrão, nenhuma opção está selecionada. Você deve marcar:</li>
-              <li className="ml-6">◦ <strong>✅ LIBERADO:</strong> Pronto para faturamento (visual, não salva no banco)</li>
-              <li className="ml-6">◦ <strong>❌ NÃO LIBERADO:</strong> Com pendências (requer observação, salva no banco)</li>
-              <li>• Use o botão <strong>"Download G-SUS"</strong> para baixar todos os documentos em formato ZIP</li>
-              <li>• Expanda a linha (►) para ver detalhes completos e acessar documentos individuais</li>
-            </ul>
+          {/* Legenda - Compacta e Discreta */}
+          <div className="mt-6 p-3 bg-gray-50 rounded border border-gray-200">
+            <div className="text-xs text-gray-600 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span>• Tabela exibe pacientes com exames E pré-op anexados</span>
+                <span>• Clique em "Pendências" para ver documentos faltantes</span>
+                <span>• Expanda a linha (►) para detalhes completos</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span>• <strong>✅ LIBERADO:</strong> Pronto para faturamento (visual)</span>
+                <span>• <strong>❌ NÃO LIBERADO:</strong> Com pendências (requer observação)</span>
+                <span>• <strong>Download G-SUS:</strong> Baixa documentos em ZIP</span>
+              </div>
+            </div>
           </div>
         </>
       )}

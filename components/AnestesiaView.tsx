@@ -143,11 +143,14 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     return Array.from(pacientesMap.values());
   };
   
-  // Calcular contadores para os filtros
-  const totalTodos = agendamentos.length;
-  const totalPendentes = agendamentos.filter(ag => ag.ficha_pre_anestesica_ok !== true).length;
-  const totalConcluidos = agendamentos.filter(ag => 
-    ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true
+  // Calcular contadores para os filtros (PACIENTES ÚNICOS)
+  const pacientesUnicos = agruparPorPacienteUnico(agendamentos);
+  const totalTodos = pacientesUnicos.length;
+  const totalPendentes = agruparPorPacienteUnico(
+    agendamentos.filter(ag => ag.ficha_pre_anestesica_ok !== true)
+  ).length;
+  const totalConcluidos = agruparPorPacienteUnico(
+    agendamentos.filter(ag => ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true)
   ).length;
   
   // Filtrar agendamentos por status (substituindo a lógica de abas)
@@ -349,12 +352,21 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   };
 
   // Cancelar avaliação
-  const handleCancelarAvaliacao = () => {
+  const handleCancelarAvaliacao = (agendamentoId?: string) => {
     setAvaliacaoEmEdicao(null);
     setAvaliacaoTipo(null);
     setAvaliacaoObservacao('');
     setAvaliacaoMotivoReprovacao('');
     setAvaliacaoComplementares('');
+    
+    // Recolher a linha se um ID foi fornecido
+    if (agendamentoId) {
+      setLinhasExpandidas(prev => {
+        const novo = new Set(prev);
+        novo.delete(agendamentoId);
+        return novo;
+      });
+    }
   };
 
   // Salvar avaliação do anestesista
@@ -417,8 +429,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           : ag
       ));
 
-      // Limpar formulário
-      handleCancelarAvaliacao();
+      // Limpar formulário e recolher linha
+      handleCancelarAvaliacao(agendamentoId);
 
       mostrarToast('Avaliação salva com sucesso!', 'success');
     } catch (error: any) {
@@ -450,8 +462,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           : ag
       ));
 
-      // Limpar formulário
-      handleCancelarAvaliacao();
+      // Limpar formulário e recolher linha
+      handleCancelarAvaliacao(agendamentoId);
 
       mostrarToast('Avaliação removida com sucesso!', 'info');
     } catch (error: any) {
@@ -819,7 +831,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                           )}
                           
                           <button
-                            onClick={handleCancelarAvaliacao}
+                            onClick={() => handleCancelarAvaliacao(ag.id)}
                             disabled={salvandoAvaliacao}
                             className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors disabled:opacity-50"
                           >
