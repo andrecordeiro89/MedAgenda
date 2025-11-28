@@ -18,6 +18,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   // Estados para filtros de busca
   const [filtroStatus, setFiltroStatus] = useState<string>('');
+  const [filtroPreOp, setFiltroPreOp] = useState<string>(''); // Novo filtro para Pré-Operatório
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
@@ -159,12 +160,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
-  // Status do paciente - SIMPLIFICADO (2 status apenas)
+  // Status do paciente - NOVA LÓGICA (Exames e Pré-Op separados)
   const getStatusPaciente = (ag: Agendamento) => {
     const temExames = ag.documentos_ok === true;
     
+    // NOVA DEFINIÇÃO: "COM EXAMES" = tem documentos anexados (independente de pré-op)
     if (temExames) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800', grupo: 'com_exames' };
     return { texto: 'SEM EXAMES', cor: 'bg-red-100 text-red-800', grupo: 'sem_exames' };
+  };
+  
+  // Status do Pré-Operatório (função separada)
+  const getStatusPreOp = (ag: Agendamento) => {
+    const temPreOp = ag.ficha_pre_anestesica_ok === true;
+    
+    if (temPreOp) return { texto: 'COM PRE-OP', cor: 'bg-blue-100 text-blue-800' };
+    return { texto: 'SEM PRE-OP', cor: 'bg-orange-100 text-orange-800' };
   };
   
   // Função para obter status dos checkboxes (semáforo)
@@ -230,11 +240,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   // Filtrar agendamentos (ANTES de agrupar)
   const agendamentosFiltradosCompletos = agendamentos.filter(ag => {
-    // Filtro por status específico
+    // Filtro por status de EXAMES (documentos)
     if (filtroStatus) {
       const status = getStatusPaciente(ag);
       // Comparação exata (case-insensitive)
       if (status.texto.toUpperCase() !== filtroStatus.toUpperCase()) return false;
+    }
+    
+    // Filtro por status de PRÉ-OPERATÓRIO (novo)
+    if (filtroPreOp) {
+      const statusPreOp = getStatusPreOp(ag);
+      // Comparação exata (case-insensitive)
+      if (statusPreOp.texto.toUpperCase() !== filtroPreOp.toUpperCase()) return false;
     }
     
     // Filtro por paciente
@@ -322,7 +339,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMedico]);
+  }, [filtroStatus, filtroPreOp, filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMedico]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -342,6 +359,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Limpar todos os filtros
   const limparFiltros = () => {
     setFiltroStatus('');
+    setFiltroPreOp('');
     setFiltroPaciente('');
     setFiltroDataConsulta('');
     setFiltroDataCirurgia('');
@@ -349,7 +367,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMedico;
+  const temFiltrosAtivos = filtroStatus || filtroPreOp || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMedico;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -1224,11 +1242,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Filtro Status - DESTACADO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {/* Filtro Status EXAMES - DESTACADO */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              📊 Status da Documentação
+              📄 Status dos Exames
             </label>
             <select
               value={filtroStatus}
@@ -1239,46 +1257,29 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   : 'border-gray-300'
               }`}
             >
-              <option value="">
-                Todos ({(() => {
-                  const pacientes = new Set<string>();
-                  agendamentos.forEach(a => {
-                    const nomePaciente = (a.nome_paciente || a.nome || '').trim();
-                    if (nomePaciente && nomePaciente !== '') {
-                      pacientes.add(nomePaciente.toLowerCase());
-                    }
-                  });
-                  return pacientes.size;
-                })()})
-              </option>
-              <option value="SEM EXAMES">
-                Sem Exames ({(() => {
-                  const pacientes = new Set<string>();
-                  agendamentos
-                    .filter(a => !(a.documentos_ok === true))
-                    .forEach(a => {
-                      const nomePaciente = (a.nome_paciente || a.nome || '').trim();
-                      if (nomePaciente && nomePaciente !== '') {
-                        pacientes.add(nomePaciente.toLowerCase());
-                      }
-                    });
-                  return pacientes.size;
-                })()})
-              </option>
-              <option value="COM EXAMES">
-                Com Exames ({(() => {
-                  const pacientes = new Set<string>();
-                  agendamentos
-                    .filter(a => a.documentos_ok === true)
-                    .forEach(a => {
-                      const nomePaciente = (a.nome_paciente || a.nome || '').trim();
-                      if (nomePaciente && nomePaciente !== '') {
-                        pacientes.add(nomePaciente.toLowerCase());
-                      }
-                    });
-                  return pacientes.size;
-                })()})
-              </option>
+              <option value="">📊 Todos</option>
+              <option value="COM EXAMES">✅ Com Exames</option>
+              <option value="SEM EXAMES">⚠️ Sem Exames</option>
+            </select>
+          </div>
+          
+          {/* Filtro Status PRÉ-OPERATÓRIO - NOVO */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              🩺 Status do Pré-Op
+            </label>
+            <select
+              value={filtroPreOp}
+              onChange={(e) => setFiltroPreOp(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium ${
+                filtroPreOp 
+                  ? 'border-purple-500 bg-purple-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="COM PRE-OP">💙 Com Pré-Op</option>
+              <option value="SEM PRE-OP">🔶 Sem Pré-Op</option>
             </select>
           </div>
           

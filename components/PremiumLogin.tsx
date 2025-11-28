@@ -350,55 +350,12 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background com gradiente animado */}
+      {/* Background com gradiente azul claro (original) SEM bolinhas */}
       <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50">
         <div className="absolute inset-0 opacity-20">
           {/* Padrão de pontos decorativo */}
           <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
         </div>
-        
-        {/* Bolinhas de tinta guache espalhadas por todo o fundo */}
-        {/* Linha 1 - Top */}
-        <div className="absolute top-8 left-12 w-16 h-16 bg-sky-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-        <div className="absolute top-12 left-32 w-12 h-12 bg-yellow-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute top-16 left-52 w-20 h-20 bg-emerald-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        <div className="absolute top-6 right-16 w-14 h-14 bg-cyan-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute top-20 right-32 w-18 h-18 bg-blue-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        <div className="absolute top-10 right-52 w-16 h-16 bg-indigo-200 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
-        
-        {/* Linha 2 - Upper Middle */}
-        <div className="absolute top-24 left-8 w-22 h-22 bg-teal-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute top-32 left-28 w-14 h-14 bg-lime-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        <div className="absolute top-28 left-48 w-16 h-16 bg-rose-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute top-36 right-12 w-20 h-20 bg-amber-200 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-        <div className="absolute top-24 right-36 w-12 h-12 bg-violet-200 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
-        <div className="absolute top-40 right-56 w-18 h-18 bg-pink-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        
-        {/* Linha 3 - Center */}
-        <div className="absolute top-1/2 left-16 w-24 h-24 bg-sky-300 rounded-full mix-blend-multiply filter blur-sm opacity-45"></div>
-        <div className="absolute top-1/2 left-40 w-14 h-14 bg-yellow-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-        <div className="absolute top-1/2 right-20 w-16 h-16 bg-emerald-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute top-1/2 right-44 w-20 h-20 bg-cyan-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-        
-        {/* Linha 4 - Lower Middle */}
-        <div className="absolute bottom-32 left-12 w-18 h-18 bg-blue-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute bottom-28 left-36 w-16 h-16 bg-indigo-300 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        <div className="absolute bottom-36 left-56 w-14 h-14 bg-teal-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute bottom-40 right-8 w-22 h-22 bg-lime-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-        <div className="absolute bottom-32 right-32 w-12 h-12 bg-rose-300 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
-        <div className="absolute bottom-28 right-52 w-20 h-20 bg-amber-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        
-        {/* Linha 5 - Bottom */}
-        <div className="absolute bottom-16 left-20 w-16 h-16 bg-violet-300 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        <div className="absolute bottom-12 left-44 w-18 h-18 bg-pink-300 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute bottom-8 right-16 w-14 h-14 bg-sky-400 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-        <div className="absolute bottom-20 right-40 w-16 h-16 bg-yellow-400 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        
-        {/* Bolinhas extras para preenchimento */}
-        <div className="absolute top-1/4 left-1/4 w-12 h-12 bg-emerald-400 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
-        <div className="absolute top-1/3 right-1/3 w-16 h-16 bg-cyan-400 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-        <div className="absolute bottom-1/4 left-1/3 w-14 h-14 bg-blue-400 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-18 h-18 bg-indigo-400 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
       </div>
 
       {/* Container principal */}
@@ -544,7 +501,7 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
 }) => {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background similar ao login */}
+      {/* Background com gradiente azul claro (original) SEM bolinhas */}
       <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50">
         <div className="absolute inset-0 opacity-20">
           {/* Padrão de pontos decorativo */}
@@ -556,8 +513,8 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
       <div className="relative z-10 w-full max-w-lg px-6">
         {/* Título */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-white mb-2">Selecione o Hospital</h2>
-          <p className="text-blue-100">Escolha qual hospital deseja acessar</p>
+          <h2 className="text-2xl font-bold text-slate-700 mb-2">Selecione o Hospital</h2>
+          <p className="text-slate-600">Escolha qual hospital deseja acessar</p>
         </div>
 
         {/* Cards dos hospitais */}

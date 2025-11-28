@@ -39,7 +39,58 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
     }, [hospitalSelecionado?.id, agendamentosProps]);
     
     // Usar agendamentos com documentação se disponíveis, senão usar os props
-    const agendamentos = agendamentosComDocumentacao.length > 0 ? agendamentosComDocumentacao : agendamentosProps;
+    const agendamentosBrutos = agendamentosComDocumentacao.length > 0 ? agendamentosComDocumentacao : agendamentosProps;
+    
+    // ============================================================================
+    // FILTRAR REGISTROS VÁLIDOS (Mesma lógica que Documentação/Anestesia/Faturamento)
+    // ============================================================================
+    // Aplicar a mesma filtragem para garantir CONSISTÊNCIA entre todas as telas
+    const agendamentos = agendamentosBrutos.filter(ag => {
+        const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+        const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+        
+        // CASO 1: Tem paciente E procedimento → SEMPRE MOSTRAR (mesmo se is_grade_cirurgica = true)
+        if (temPaciente && temProcedimento) {
+            return true; // ✅ Mostrar
+        }
+        
+        // CASO 2: Registro estrutural de grade (sem paciente) → OCULTAR
+        if (ag.is_grade_cirurgica === true && !temPaciente) {
+            return false; // ❌ Ocultar (é apenas estrutura)
+        }
+        
+        // CASO 3: Registro vazio (compatibilidade) → OCULTAR
+        if (!temProcedimento && !temPaciente) {
+            return false;
+        }
+        
+        // CASO 4: Demais casos → MOSTRAR
+        return true;
+    });
+    
+    // DEBUG: Log para verificar consistência com outras telas
+    useEffect(() => {
+        if (agendamentosBrutos.length > 0) {
+            const totalOriginal = agendamentosBrutos.length;
+            const totalFiltrado = agendamentos.length;
+            const totalExcluidos = totalOriginal - totalFiltrado;
+            
+            // Contar pacientes únicos no total filtrado
+            const pacientesUnicos = new Set<string>();
+            agendamentos.forEach(ag => {
+                const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
+                if (nomePaciente && nomePaciente !== '') {
+                    pacientesUnicos.add(nomePaciente);
+                }
+            });
+            
+            console.log('📊 DASHBOARD - CONTAGEM:');
+            console.log(`  Total de REGISTROS no banco: ${totalOriginal}`);
+            console.log(`  Total de REGISTROS após filtro: ${totalFiltrado}`);
+            console.log(`  Total de REGISTROS excluídos: ${totalExcluidos}`);
+            console.log(`  🎯 PACIENTES ÚNICOS (final): ${pacientesUnicos.size}`);
+        }
+    }, [agendamentosBrutos, agendamentos]);
     
     // Obter data atual no fuso horário de Brasília (America/Sao_Paulo)
     const getDataAtualBrasilia = () => {
@@ -98,20 +149,22 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
     });
     const comExames = getPacientesUnicos(agendamentosComExames).size;
     
-    // Debug: log dos KPIs calculados
+    // Debug detalhado dos KPIs (para verificar consistência)
     useEffect(() => {
         if (agendamentos.length > 0) {
-            console.log('📊 Dashboard KPIs:', {
-                total: agendamentos.length,
-                semExames,
-                comExames,
-                amostra: agendamentos.slice(0, 3).map(a => ({
-                    id: a.id,
-                    nome: a.nome_paciente || a.nome,
+            console.log('📊 DASHBOARD - KPIs Detalhados:');
+            console.log(`  SEM EXAMES: ${semExames} pacientes únicos`);
+            console.log(`  COM EXAMES: ${comExames} pacientes únicos`);
+            console.log(`  TOTAL: ${semExames + comExames} pacientes únicos`);
+            
+            // Amostra dos primeiros 3 registros
+            console.log('  📋 Amostra (primeiros 3):');
+            agendamentos.slice(0, 3).forEach((a, idx) => {
+                console.log(`    ${idx + 1}. ${a.nome_paciente || a.nome}:`, {
                     documentos_ok: a.documentos_ok,
                     ficha_pre_anestesica_ok: a.ficha_pre_anestesica_ok,
                     complementares_ok: a.complementares_ok
-                }))
+                });
             });
         }
     }, [agendamentos, semExames, comExames]);
