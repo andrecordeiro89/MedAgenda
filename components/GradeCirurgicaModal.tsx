@@ -436,6 +436,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     dataAtual: string;
     gradeIndex: number;
     diaSemana?: string;
+    dataNascimento?: string | null;
+    cidadeNatal?: string | null;
+    telefone?: string | null;
+    dataConsulta?: string | null;
   } | null>(null);
   const [novaDataSelecionada, setNovaDataSelecionada] = useState('');
   const [datasDisponiveis, setDatasDisponiveis] = useState<Array<{ data: string; label: string }>>([]);
@@ -445,6 +449,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [procedimentoSelecionadoDestino, setProcedimentoSelecionadoDestino] = useState('');
   const [movendoPaciente, setMovendoPaciente] = useState(false);
   const [carregandoDestinos, setCarregandoDestinos] = useState(false);
+  const [mesCalendario, setMesCalendario] = useState<Date>(new Date());
+  const diasDisponiveisSet = useMemo(() => new Set(datasDisponiveis.map(d => d.data)), [datasDisponiveis]);
+  const formatISODate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
 
   // Função auxiliar para mostrar mensagens personalizadas (substitui alert nativo)
   const mostrarMensagem = (titulo: string, mensagem: string, tipo: 'info' | 'sucesso' | 'erro' | 'aviso' = 'info') => {
@@ -2076,25 +2088,24 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       // Descobrir o dia da semana da data atual (0=domingo, 1=segunda, ..., 6=sábado)
       const diaSemanaDaDataAtual = new Date(grade.data + 'T00:00:00').getDay();
       console.log(`📅 Dia da semana da data atual: ${diaSemanaDaDataAtual} (${DAY_NUMBER_NAMES[diaSemanaDaDataAtual]})`);
-      
+
       // Extrair datas únicas (exceto a data atual) que possuem especialidade e procedimento
-      // E que sejam do MESMO DIA DA SEMANA
-      const datasUnicas = new Set<string>();
+      // e pelo menos UM procedimento sem paciente associado (slot disponível)
+      const datasUnicas = new Map<string, number>(); // data -> count de slots disponíveis
       todosAgendamentos.forEach(ag => {
-        if (ag.data_agendamento && 
-            ag.data_agendamento !== grade.data && 
-            ag.especialidade && 
-            ag.procedimentos) {
-          // Verificar se é o mesmo dia da semana
-          const diaSemanaDestino = new Date(ag.data_agendamento + 'T00:00:00').getDay();
-          if (diaSemanaDestino === diaSemanaDaDataAtual) {
-            datasUnicas.add(ag.data_agendamento);
-          }
+        if (
+          ag.data_agendamento &&
+          ag.data_agendamento !== grade.data &&
+          ag.especialidade &&
+          ag.procedimentos &&
+          (!ag.nome_paciente || ag.nome_paciente.trim() === '')
+        ) {
+          datasUnicas.set(ag.data_agendamento, (datasUnicas.get(ag.data_agendamento) || 0) + 1);
         }
       });
       
       // Ordenar e formatar as datas
-      const datasComGrades = Array.from(datasUnicas)
+      const datasComGrades = Array.from(datasUnicas.keys())
         .sort() // Ordenar cronologicamente
         .map(data => ({
           data: data,
@@ -2106,12 +2117,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           })
         }));
       
-      console.log(`✅ Encontradas ${datasComGrades.length} ${DAY_NUMBER_NAMES[diaSemanaDaDataAtual]}s disponíveis`);
+      console.log(`✅ Encontradas ${datasComGrades.length} datas com slots disponíveis`);
       
       if (datasComGrades.length === 0) {
         setConfirmacaoData({
           titulo: '⚠️ Nenhuma Data Disponível',
-          mensagem: `Não há outras ${DAY_NUMBER_NAMES[diaSemanaDaDataAtual]}s com especialidades e procedimentos criados para mover este paciente.`,
+          mensagem: `Não há outras datas com especialidades e procedimentos disponíveis (sem paciente) para mover este paciente.`,
           onConfirm: () => setModalConfirmacao(false)
         });
         setModalConfirmacao(true);
@@ -2124,7 +2135,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         procedimento: item.texto || 'Procedimento',
         dataAtual: grade.data, // grade.data já é uma string no formato YYYY-MM-DD
         gradeIndex,
-        diaSemana: DAY_NUMBER_NAMES[diaSemanaDaDataAtual]
+        diaSemana: DAY_NUMBER_NAMES[diaSemanaDaDataAtual],
+        dataNascimento: paciente.dataNascimento || null,
+        cidadeNatal: paciente.cidade || null,
+        telefone: paciente.telefone || null,
+        dataConsulta: paciente.dataConsulta || null
       });
       setDatasDisponiveis(datasComGrades);
       setNovaDataSelecionada('');
@@ -2176,7 +2191,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         return;
       }
       
-      // Agrupar por especialidade + médico
+      // Agrupar por especialidade + médico, considerando apenas slots disponíveis (sem paciente)
       const especialidadesMap = new Map<string, { 
         id: string; 
         nome: string; 
@@ -2186,7 +2201,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }>();
       
       agendamentosDaData.forEach((agendamento) => {
-        if (agendamento.especialidade && agendamento.procedimentos) {
+        if (agendamento.especialidade && agendamento.procedimentos && (!agendamento.nome_paciente || agendamento.nome_paciente.trim() === '')) {
           const medico = agendamento.medico || '';
           const key = `${agendamento.especialidade}|||${medico}`;
           
@@ -2241,7 +2256,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     const procedimentosMap = new Map<string, { id: string; texto: string; agendamentoId: string }>();
     
     especialidadeSelecionada.agendamentos.forEach((agendamento) => {
-      if (agendamento.procedimentos && agendamento.id) {
+      // Considerar apenas procedimentos sem paciente associado
+      if (agendamento.procedimentos && agendamento.id && (!agendamento.nome_paciente || agendamento.nome_paciente.trim() === '')) {
         const key = agendamento.procedimentos;
         if (!procedimentosMap.has(key)) {
           procedimentosMap.set(key, {
@@ -2275,11 +2291,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     try {
       // Buscar dados da especialidade e procedimento de destino
       const especialidadeDestino = especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino);
-      const procedimentoDestino = procedimentosDisponiveis.find(p => p.id === procedimentoSelecionadoDestino);
-      
-      if (!especialidadeDestino || !procedimentoDestino) {
+      const agendamentoSelecionado = (especialidadeDestino?.agendamentos as any[] || []).find((a: any) => String(a.id) === String(procedimentoSelecionadoDestino));
+      if (!especialidadeDestino || !agendamentoSelecionado) {
         throw new Error('Especialidade ou procedimento de destino não encontrado.');
       }
+      const procedimentoDestino = { texto: String(agendamentoSelecionado.procedimentos || ''), agendamentoId: String(agendamentoSelecionado.id) };
       
       console.log('📅 Movendo paciente...', {
         agendamentoId: agendamentoParaMover.id,
@@ -2290,15 +2306,27 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         novoMedico: especialidadeDestino.medicoNome
       });
 
-      // Atualizar data, especialidade, médico e procedimento do agendamento no banco
-      const resultado = await agendamentoService.update(agendamentoParaMover.id, {
-        data_agendamento: novaDataSelecionada,
-        especialidade: especialidadeDestino.nome,
-        medico: especialidadeDestino.medicoNome || null,
-        procedimentos: procedimentoDestino.texto
+      // 1) Preencher o SLOT DE DESTINO (agendamentoId do procedimento selecionado) com os dados do paciente
+      const resultadoDestino = await agendamentoService.update(procedimentoDestino.agendamentoId, {
+        nome_paciente: agendamentoParaMover.nome,
+        data_nascimento: agendamentoParaMover.dataNascimento || null,
+        cidade_natal: agendamentoParaMover.cidadeNatal || null,
+        telefone: agendamentoParaMover.telefone || null,
+        data_consulta: agendamentoParaMover.dataConsulta || null
       });
 
-      console.log('✅ Paciente movido com sucesso no banco!', resultado);
+      console.log('✅ Paciente atribuído ao destino com sucesso!', resultadoDestino);
+
+      // 2) LIMPAR O SLOT DE ORIGEM
+      await agendamentoService.update(agendamentoParaMover.id, {
+        nome_paciente: '',
+        data_nascimento: '2000-01-01', // placeholder, seguindo a lógica de remoção existente
+        cidade_natal: null,
+        telefone: null,
+        data_consulta: null
+      });
+
+      console.log('✅ Slot de origem limpo com sucesso!');
       console.log('🔄 Datas atualmente visíveis no modal:', proximasDatas.map(d => d.toISOString().split('T')[0]));
 
       // Fechar modal de mover paciente
@@ -2387,6 +2415,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       data: string;
       especialidade: string;
       procedimento: string;
+      procedimentoEspecificacao: string | null;
       medico: string;
       paciente: string;
       idade: number | null;
@@ -2411,6 +2440,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             especialidadeNome = especialidadeNome.split(' - ')[0];
           }
           const procedimentoNome = proc.texto || 'Sem procedimento';
+          const procedimentoEspecificacao = proc.especificacao || null;
           const medicoNome = proc.medicoNome || 'Sem médico';
 
           if (proc.pacientes && proc.pacientes.length > 0) {
@@ -2423,6 +2453,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 data: data.toLocaleDateString('pt-BR'),
                 especialidade: especialidadeNome,
                 procedimento: procedimentoNome,
+                procedimentoEspecificacao,
                 medico: medicoNome,
                 paciente: paciente.nome || 'Sem nome',
                 idade,
@@ -2438,6 +2469,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               data: data.toLocaleDateString('pt-BR'),
               especialidade: especialidadeNome,
               procedimento: procedimentoNome,
+              procedimentoEspecificacao,
               medico: medicoNome,
               paciente: procedimentoNome, // Mostrar nome do procedimento ao invés de "Sem paciente"
               idade: null,
@@ -2526,9 +2558,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       linha.data,
       linha.especialidade,
       linha.procedimento,
+      linha.procedimentoEspecificacao || '-',
       linha.medico,
       linha.paciente,
-      linha.idade !== null ? `${linha.idade} anos` : '-',
+      linha.idade !== null ? String(linha.idade) : '-',
       linha.cidade || '-',
       linha.telefone || '-',
       linha.dataConsulta || '-',
@@ -2540,6 +2573,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       { header: 'Data', dataKey: 'data' },
       { header: 'Especialidade', dataKey: 'especialidade' },
       { header: 'Procedimento', dataKey: 'procedimento' },
+      { header: 'Especificação do Procedimento', dataKey: 'procedimentoEspecificacao' },
       { header: 'Médico', dataKey: 'medico' },
       { header: 'Paciente', dataKey: 'paciente' },
       { header: 'Idade', dataKey: 'idade' },
@@ -2551,12 +2585,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     // Adicionar tabela ao PDF usando autoTable como função
     autoTable(doc, {
-      head: [['Data', 'Especialidade', 'Procedimento', 'Médico', 'Paciente', 'Idade', 'Cidade', 'Telefone', 'Data Consulta', 'Data Nascimento']],
+      head: [['Data', 'Especialidade', 'Procedimento', 'Especificação do Procedimento', 'Médico', 'Paciente', 'Idade', 'Cidade', 'Telefone', 'Data Consulta', 'Data Nascimento']],
       body: tableData,
       startY: 28,
       styles: {
-        fontSize: 7,
-        cellPadding: 2,
+        fontSize: 6,
+        cellPadding: 1,
         overflow: 'linebreak',
         halign: 'left'
       },
@@ -2564,19 +2598,20 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         fillColor: [128, 128, 128],
         textColor: 255,
         fontStyle: 'bold',
-        fontSize: 7
+        fontSize: 6
       },
       columnStyles: {
-        0: { cellWidth: 20 }, // Data
-        1: { cellWidth: 30 }, // Especialidade
-        2: { cellWidth: 35 }, // Procedimento
-        3: { cellWidth: 30 }, // Médico
-        4: { cellWidth: 35 }, // Paciente
-        5: { cellWidth: 15 }, // Idade
-        6: { cellWidth: 25 }, // Cidade
-        7: { cellWidth: 25 }, // Telefone
-        8: { cellWidth: 25 }, // Data Consulta
-        9: { cellWidth: 25 }  // Data Nascimento
+        0: { cellWidth: 18 }, // Data
+        1: { cellWidth: 26 }, // Especialidade
+        2: { cellWidth: 30 }, // Procedimento
+        3: { cellWidth: 32 }, // Especificação do Procedimento
+        4: { cellWidth: 26 }, // Médico
+        5: { cellWidth: 32 }, // Paciente
+        6: { cellWidth: 14 }, // Idade
+        7: { cellWidth: 22 }, // Cidade
+        8: { cellWidth: 22 }, // Telefone
+        9: { cellWidth: 22 }, // Data Consulta
+        10: { cellWidth: 22 }  // Data Nascimento
       },
       margin: { left: 14, right: 14 },
       didDrawPage: function (data: any) {
@@ -3751,6 +3786,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Data</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Especialidade</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Procedimento</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Especificação do Procedimento</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Médico</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Paciente</th>
                   <th className="border border-gray-300 px-3 py-2 text-center text-xs font-semibold text-gray-700">Idade</th>
@@ -3763,7 +3799,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               <tbody>
                 {dadosRelatorio.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="border border-gray-300 px-3 py-4 text-center text-gray-500">
+                    <td colSpan={11} className="border border-gray-300 px-3 py-4 text-center text-gray-500">
                       Nenhum agendamento encontrado para o período selecionado.
                     </td>
                   </tr>
@@ -3773,6 +3809,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       <td className="border border-gray-300 px-3 py-2 text-sm">{linha.data}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm">{linha.especialidade}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm">{linha.procedimento}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.procedimentoEspecificacao || '-'}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm">{linha.medico}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm font-medium">{linha.paciente}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm text-center">
@@ -3844,94 +3881,104 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
           {/* Etapa 1: Selecionar Data */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              1️⃣ Selecione a Nova {agendamentoParaMover.diaSemana}:
-            </label>
-            <select
-              value={novaDataSelecionada}
-              onChange={(e) => handleSelecionarDataDestino(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Escolha uma data...</option>
-              {datasDisponiveis.map((dataOpt) => (
-                <option key={dataOpt.data} value={dataOpt.data}>
-                  {dataOpt.label}
-                </option>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium text-gray-700">1️⃣ Selecione a Nova Data</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setMesCalendario(new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() - 1, 1))} className="px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100">Anterior</button>
+                <div className="text-sm font-semibold text-gray-800">
+                  {mesCalendario.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                </div>
+                <button onClick={() => setMesCalendario(new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 1))} className="px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100">Próximo</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((w) => (
+                <div key={w} className="text-xs font-semibold text-gray-600 text-center">{w}</div>
               ))}
-            </select>
+              {Array.from({ length: new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1).getDay() }, (_, i) => (
+                <div key={`pad-${i}`} className="h-10" />
+              ))}
+              {Array.from({ length: new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 0).getDate() }, (_, i) => {
+                const day = i + 1;
+                const dateObj = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), day);
+                const iso = formatISODate(dateObj);
+                const disponivel = diasDisponiveisSet.has(iso);
+                const selecionado = novaDataSelecionada === iso;
+                return (
+                  <button
+                    key={iso}
+                    onClick={() => disponivel && handleSelecionarDataDestino(iso)}
+                    className={`h-10 rounded border text-sm ${disponivel ? (selecionado ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 hover:bg-gray-100 text-gray-800') : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'}`}
+                    title={disponivel ? dateObj.toLocaleDateString('pt-BR') : 'Sem slots disponíveis'}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Etapa 2: Selecionar Especialidade */}
           {novaDataSelecionada && (
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                2️⃣ Selecione a Especialidade de Destino:
-              </label>
+              <div className="text-sm font-medium text-gray-700 mb-2">2️⃣ Selecione o Procedimento na Grade</div>
               {carregandoDestinos ? (
-                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">
-                  Carregando especialidades...
-                </div>
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">Carregando grade...</div>
               ) : (
-                <select
-                  value={especialidadeSelecionadaDestino}
-                  onChange={(e) => handleSelecionarEspecialidadeDestino(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={especialidadesDisponiveis.length === 0}
-                >
-                  <option value="">Escolha uma especialidade...</option>
-                  {especialidadesDisponiveis.map((esp) => (
-                    <option key={esp.id} value={esp.id}>
-                      {esp.nome}{esp.medicoNome ? ` - ${esp.medicoNome}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-3">
+                  {especialidadesDisponiveis.length === 0 ? (
+                    <div className="text-sm text-gray-500">Nenhuma especialidade com slots disponíveis.</div>
+                  ) : (
+                    especialidadesDisponiveis.map((esp) => {
+                      const procsMap = new Map<string, { id: string; texto: string; agendamentoId: string }>();
+                      (esp.agendamentos as any[] || []).forEach((a: any) => {
+                        if (!a.nome_paciente || String(a.nome_paciente).trim() === '') {
+                          const key = String(a.procedimentos);
+                          if (!procsMap.has(key)) {
+                            procsMap.set(key, { id: String(a.id), texto: String(a.procedimentos), agendamentoId: String(a.id) });
+                          }
+                        }
+                      });
+                      const procs: Array<{ id: string; texto: string; agendamentoId: string }> = Array.from(procsMap.values());
+                      return (
+                        <div key={esp.id} className="border rounded-lg">
+                          <div className="px-3 py-2 bg-slate-100 text-sm font-semibold text-slate-800">{esp.nome}{esp.medicoNome ? ` - ${esp.medicoNome}` : ''}</div>
+                          <div className="p-3 flex flex-wrap gap-2">
+                            {procs.length === 0 ? (
+                              <span className="text-xs text-gray-500">Sem procedimentos disponíveis</span>
+                            ) : (
+                              procs.map((p) => {
+                                const selected = procedimentoSelecionadoDestino === p.id && especialidadeSelecionadaDestino === esp.id;
+                                return (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => { setEspecialidadeSelecionadaDestino(esp.id); setProcedimentoSelecionadoDestino(p.id); }}
+                                    className={`px-2 py-1 text-xs rounded border ${selected ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-300 hover:bg-gray-100 text-gray-800'}`}
+                                    title={p.texto}
+                                  >
+                                    {p.texto}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               )}
             </div>
           )}
 
-          {/* Etapa 3: Selecionar Procedimento */}
-          {especialidadeSelecionadaDestino && (
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                3️⃣ Selecione o Procedimento de Destino:
-              </label>
-              <select
-                value={procedimentoSelecionadoDestino}
-                onChange={(e) => setProcedimentoSelecionadoDestino(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={procedimentosDisponiveis.length === 0}
-              >
-                <option value="">Escolha um procedimento...</option>
-                {procedimentosDisponiveis.map((proc) => (
-                  <option key={proc.id} value={proc.id}>
-                    {proc.texto}
-                  </option>
-                ))}
-              </select>
-              {procedimentosDisponiveis.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Nenhum procedimento disponível para esta especialidade.
-                </p>
-              )}
-            </div>
-          )}
+          {/* Etapa 3 removida: seleção ocorre pela grade acima */}
 
           {/* Resumo da Seleção */}
           {novaDataSelecionada && especialidadeSelecionadaDestino && procedimentoSelecionadoDestino && (
             <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-green-800 mb-3">✅ Destino Selecionado</h3>
-              <p className="text-sm text-green-800 mb-1">
-                <strong>Data:</strong> {new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}
-              </p>
-              <p className="text-sm text-green-800 mb-1">
-                <strong>Especialidade:</strong> {especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.nome}
-                {especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.medicoNome && 
-                  ` - ${especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.medicoNome}`
-                }
-              </p>
-              <p className="text-sm text-green-800">
-                <strong>Procedimento:</strong> {procedimentosDisponiveis.find(p => p.id === procedimentoSelecionadoDestino)?.texto}
-              </p>
+              <p className="text-sm text-green-800 mb-1"><strong>Data:</strong> {new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+              <p className="text-sm text-green-800 mb-1"><strong>Especialidade:</strong> {especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.nome}{especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.medicoNome ? ` - ${especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino)?.medicoNome}` : ''}</p>
+              <p className="text-sm text-green-800"><strong>Procedimento:</strong> {(() => { const esp = especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino); const p = (esp?.agendamentos as any[] || []).find((a: any) => String(a.id) === String(procedimentoSelecionadoDestino))?.procedimentos; return p || '-'; })()}</p>
             </div>
           )}
 
