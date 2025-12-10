@@ -191,16 +191,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     if (!data || data === '2000-01-01') return '-';
     const dataStr = String(data).trim();
     if (dataStr === '' || dataStr === 'null' || dataStr === 'undefined') return '-';
-    try {
-      // Se já está no formato brasileiro, retornar como está
-      if (dataStr.includes('/')) return dataStr;
-      // Converter de YYYY-MM-DD para DD/MM/YYYY
-      const date = new Date(dataStr + 'T00:00:00');
-      if (isNaN(date.getTime())) return dataStr;
-      return date.toLocaleDateString('pt-BR');
-    } catch {
-      return dataStr || '-';
+    if (dataStr.includes('/')) return dataStr;
+    const parts = dataStr.split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      return `${d}/${m}/${y}`;
     }
+    return dataStr;
   };
 
   // AGRUPAR POR PACIENTES ÚNICOS

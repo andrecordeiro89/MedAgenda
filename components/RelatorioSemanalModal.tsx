@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Modal, Button } from './ui';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatDate } from '../utils';
 import { Agendamento, Medico } from '../types';
 import { agendamentoService, medicoService } from '../services/supabase';
 
@@ -23,7 +24,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
   const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth()); // 0-11
 
   // Estado para dias específicos selecionados (formato: YYYY-MM-DD)
-  const [diasSelecionados, setDiasSelecionados] = useState<Set<string>>(new Set());
+  const [diasSelecionados, setDiasSelecionados] = useState<Set<string>>(new Set<string>());
 
   // Estado para dias que têm grade cirúrgica
   const [diasComGrade, setDiasComGrade] = useState<Set<string>>(new Set());
@@ -267,7 +268,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       const agendamentos = await agendamentoService.getAll(hospitalId);
       
       // Converter Set para Array e ordenar por data
-      const diasArray = Array.from(diasSelecionados).sort();
+      const diasArray: string[] = Array.from(diasSelecionados.values()).sort();
 
       // Agrupar agendamentos por dia específico
       const agendamentosPorDia: { [key: string]: Agendamento[] } = {};
@@ -351,11 +352,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
 
         // Formatar data para exibição (ex: "05/01/2026 - Segunda-feira")
         const data = new Date(dataString + 'T00:00:00');
-        const dataFormatada = data.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
+        const dataFormatada = formatDate(dataString);
         const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'long' });
         const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
 
@@ -391,18 +388,20 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
         const tableData = agendamentos.map(ag => {
           const dataAgendamento = ag.data_agendamento || ag.dataAgendamento || '-';
           const dataFormatada = dataAgendamento !== '-' 
-            ? new Date(dataAgendamento + 'T00:00:00').toLocaleDateString('pt-BR')
+            ? formatDate(dataAgendamento)
             : '-';
 
           // Calcular idade
           let idade: string | null = null;
           if (ag.data_nascimento) {
-            const dataNasc = new Date(ag.data_nascimento + 'T00:00:00');
+            const [y, m, d] = ag.data_nascimento.split('-');
             const hoje = new Date();
-            let idadeCalculada = hoje.getFullYear() - dataNasc.getFullYear();
-            const mesAtual = hoje.getMonth();
-            const mesNasc = dataNasc.getMonth();
-            if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < dataNasc.getDate())) {
+            let idadeCalculada = hoje.getFullYear() - parseInt(y, 10);
+            const mesAtual = hoje.getMonth() + 1;
+            const diaAtual = hoje.getDate();
+            const mesNasc = parseInt(m, 10);
+            const diaNasc = parseInt(d, 10);
+            if (mesAtual < mesNasc || (mesAtual === mesNasc && diaAtual < diaNasc)) {
               idadeCalculada--;
             }
             idade = idadeCalculada >= 0 ? String(idadeCalculada) : null;
@@ -417,8 +416,8 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
             idade ? `${idade} anos` : '-',
             ag.cidade_natal || ag.cidadeNatal || '-',
             ag.telefone || '-',
-            ag.data_consulta ? new Date(ag.data_consulta + 'T00:00:00').toLocaleDateString('pt-BR') : '-',
-            ag.data_nascimento ? new Date(ag.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'
+            ag.data_consulta ? formatDate(ag.data_consulta) : '-',
+            ag.data_nascimento ? formatDate(ag.data_nascimento) : '-'
           ];
         });
 

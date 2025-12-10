@@ -21,7 +21,14 @@ export const calculateAge = (birthDate: string): number => {
 };
 
 export const formatDate = (dateString: string): string => {
-    const [year, month, day] = dateString.split('-');
+    if (!dateString) return '';
+    const s = String(dateString).trim();
+    if (s.includes('/')) return s;
+    // Normalizar: manter apenas a parte YYYY-MM-DD
+    const iso = s.includes('T') ? s.split('T')[0] : (s.includes(' ') ? s.split(' ')[0] : s);
+    const parts = iso.split('-');
+    if (parts.length !== 3) return s;
+    const [year, month, day] = parts;
     return `${day}/${month}/${year}`;
 };
 

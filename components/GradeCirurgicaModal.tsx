@@ -4,6 +4,7 @@ import { SelectCidade } from './SelectCidade';
 import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatDate, formatDateLocal } from '../utils';
 // MODO MOCK
 // import { simpleGradeCirurgicaService } from '../services/api-simple';
 import { mockServices } from '../services/mock-storage';
@@ -44,6 +45,20 @@ const DAY_NUMBER_NAMES: Record<number, string> = {
   4: 'Quinta-feira',
   5: 'Sexta-feira',
   6: 'Sábado'
+};
+
+const ageFromISO = (iso?: string): number | null => {
+  if (!iso) return null;
+  const parts = iso.split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const mDiff = (today.getMonth() + 1) - month;
+  if (mDiff < 0 || (mDiff === 0 && today.getDate() < day)) age--;
+  return age;
 };
 
 const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
@@ -2445,12 +2460,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
           if (proc.pacientes && proc.pacientes.length > 0) {
             proc.pacientes.forEach((paciente) => {
-              const idade = paciente.dataNascimento
-                ? new Date().getFullYear() - new Date(paciente.dataNascimento).getFullYear()
-                : null;
+              const idade = ageFromISO(paciente.dataNascimento || undefined);
 
               dados.push({
-                data: data.toLocaleDateString('pt-BR'),
+                data: formatDate(formatDateLocal(data)),
                 especialidade: especialidadeNome,
                 procedimento: procedimentoNome,
                 procedimentoEspecificacao,
@@ -2459,14 +2472,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 idade,
                 cidade: paciente.cidade || null,
                 telefone: paciente.telefone || null,
-                dataConsulta: paciente.dataConsulta ? new Date(paciente.dataConsulta).toLocaleDateString('pt-BR') : null,
-                dataNascimento: paciente.dataNascimento ? new Date(paciente.dataNascimento).toLocaleDateString('pt-BR') : null,
+                dataConsulta: paciente.dataConsulta ? formatDate(paciente.dataConsulta) : null,
+                dataNascimento: paciente.dataNascimento ? formatDate(paciente.dataNascimento) : null,
               });
             });
           } else {
             // Procedimento sem paciente - mostrar nome do procedimento
             dados.push({
-              data: data.toLocaleDateString('pt-BR'),
+              data: formatDate(formatDateLocal(data)),
               especialidade: especialidadeNome,
               procedimento: procedimentoNome,
               procedimentoEspecificacao,
@@ -3373,7 +3386,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                           </svg>
                                                           <div className="flex flex-col">
                                                             <span className="text-slate-500 font-medium">Nascimento</span>
-                                                            <span className="text-slate-700">{new Date(paciente.dataNascimento).toLocaleDateString('pt-BR')}</span>
+                                                            <span className="text-slate-700">{formatDate(paciente.dataNascimento)}</span>
                                                           </div>
                                                         </div>
                                                       )}
@@ -3386,7 +3399,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                           </svg>
                                                           <div className="flex flex-col">
                                                             <span className="text-slate-500 font-medium">Consulta</span>
-                                                            <span className="text-slate-700">{new Date(paciente.dataConsulta).toLocaleDateString('pt-BR')}</span>
+                                                            <span className="text-slate-700">{formatDate(paciente.dataConsulta)}</span>
                                                           </div>
                                                         </div>
                                                       )}
