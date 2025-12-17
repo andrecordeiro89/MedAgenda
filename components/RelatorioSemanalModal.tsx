@@ -268,7 +268,8 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       const agendamentos = await agendamentoService.getAll(hospitalId);
       
       // Converter Set para Array e ordenar por data
-      const diasArray: string[] = Array.from(diasSelecionados.values()).sort();
+      const diasArray: string[] = Array.from(diasSelecionados.values());
+      diasArray.sort((a, b) => a.localeCompare(b));
 
       // Agrupar agendamentos por dia específico
       const agendamentosPorDia: { [key: string]: Agendamento[] } = {};
@@ -407,10 +408,18 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
             idade = idadeCalculada >= 0 ? String(idadeCalculada) : null;
           }
 
+          const procedimentoTexto = (() => {
+            const base = ag.procedimentos || '';
+            const esp = ag.procedimento_especificacao || '';
+            if (!base) return '-';
+            if (esp && esp.trim() !== '') return `${base} - ${esp}`;
+            return base;
+          })();
+
           return [
             dataFormatada,
             ag.especialidade || '-',
-            ag.procedimentos || '-',
+            procedimentoTexto,
             ag.medico || '-',
             ag.nome_paciente || ag.nome || '-',
             idade ? `${idade} anos` : '-',

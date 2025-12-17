@@ -53,7 +53,7 @@ interface SupabaseAgendamento {
   telefone?: string
   whatsapp?: string
   data_agendamento: string
-  status_liberacao: 'pendente' | 'liberado'
+  status_liberacao: string
   medico_id: string
   procedimento_id: string
   hospital_id?: string
@@ -180,18 +180,22 @@ export const convertProcedimentoToSupabase = (procedimento: Omit<Procedimento, '
 
 export const convertAgendamentoFromSupabase = (agendamento: AgendamentoCompleto): Agendamento => ({
   id: agendamento.id,
-  nome: agendamento.nome_paciente,
-  dataNascimento: agendamento.data_nascimento,
+  nome_paciente: agendamento.nome_paciente,
+  data_nascimento: agendamento.data_nascimento,
   idade: agendamento.idade || 0,
   procedimentoId: agendamento.procedimento_id,
   medicoId: agendamento.medico_id,
   cidadeNatal: agendamento.cidade_natal || '',
-  statusLiberacao: agendamento.status_liberacao === 'liberado' ? 'v' : 'x',
+  status_liberacao: agendamento.status_liberacao === 'pendente' ? 'anestesista' : (agendamento.status_liberacao as any),
   telefone: agendamento.telefone || '',
   whatsapp: agendamento.whatsapp || '',
-  dataAgendamento: agendamento.data_agendamento,
+  data_agendamento: agendamento.data_agendamento,
   tipo: agendamento.procedimento_tipo || 'ambulatorial',
   hospitalId: agendamento.hospital_id,
+  // Compatibilidade antiga
+  nome: agendamento.nome_paciente,
+  dataNascimento: agendamento.data_nascimento,
+  dataAgendamento: agendamento.data_agendamento,
 })
 
 export const convertAgendamentoToSupabase = (agendamento: Omit<Agendamento, 'id' | 'idade' | 'tipo'>): Omit<SupabaseAgendamento, 'id' | 'created_at' | 'updated_at'> => ({
@@ -201,7 +205,7 @@ export const convertAgendamentoToSupabase = (agendamento: Omit<Agendamento, 'id'
   telefone: agendamento.telefone || null,
   whatsapp: agendamento.whatsapp || null,
   data_agendamento: agendamento.dataAgendamento,
-  status_liberacao: agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente',
+  status_liberacao: agendamento.status_liberacao || 'anestesista',
   medico_id: agendamento.medicoId,
   procedimento_id: agendamento.procedimentoId,
 })
@@ -437,6 +441,7 @@ export const agendamentoService = {
       nome_paciente: item.nome_paciente || '',
       especialidade: item.especialidade || null,
       procedimentos: item.procedimentos || null,
+      procedimento_especificacao: item.procedimento_especificacao || null,
       // Adicionar campos de compatibilidade
       dataAgendamento: item.data_agendamento,
       nome: item.nome_paciente || '',
@@ -520,7 +525,7 @@ export const agendamentoService = {
     if (agendamento.cidadeNatal !== undefined) updateData.cidade_natal = agendamento.cidadeNatal
     if (agendamento.whatsapp !== undefined) updateData.whatsapp = agendamento.whatsapp
     if (agendamento.dataAgendamento !== undefined) updateData.data_agendamento = agendamento.dataAgendamento
-    if (agendamento.statusLiberacao !== undefined) updateData.status_liberacao = agendamento.statusLiberacao === 'v' ? 'liberado' : 'pendente'
+    
     // REMOVIDO: medicoId e procedimentoId - essas colunas não existem no schema
     
     // Novos campos diretos
