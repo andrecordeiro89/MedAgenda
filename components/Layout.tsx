@@ -33,8 +33,8 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
 
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* Barra unificada colorida */}
-            <header className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg sticky top-0 z-30">
+            {/* Barra unificada neutra */}
+            <header className="bg-gradient-to-r from-gray-700 to-gray-900 shadow-lg sticky top-0 z-30">
                 <div className="w-full px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16 gap-6">
                         {/* Logo e nome - lado esquerdo (fixo) */}

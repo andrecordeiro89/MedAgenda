@@ -74,24 +74,30 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const isUsuarioTI = userEmail?.toLowerCase() === 'tifoz@medagenda.com';
   
   // Estado para controlar a navegação entre meses (offset)
-  const [offsetMes, setOffsetMes] = useState(1); // 1 = próximo mês (padrão)
+  const [offsetMes, setOffsetMes] = useState(0);
+  const [viewMode, setViewMode] = useState<'sameWeekday' | 'weeklySequence'>('sameWeekday');
+  const [reportSelectedIndexes, setReportSelectedIndexes] = useState<number[]>([]);
   
   // Calcular TODAS as ocorrências do dia da semana clicado no mês alvo
   const proximasDatas = useMemo(() => {
     const mesAlvo = new Date(mesAtual.getFullYear(), mesAtual.getMonth() + offsetMes, 1);
     const datas: Date[] = [];
-    
-    // Encontrar TODAS as ocorrências do dia da semana no mês alvo
-    for (let dia = 1; dia <= 31; dia++) {
-      const data = new Date(mesAlvo.getFullYear(), mesAlvo.getMonth(), dia);
-      // Verificar se ainda está no mês correto e se é o dia da semana desejado
-      if (data.getMonth() === mesAlvo.getMonth() && data.getDay() === diaSemanaClicado) {
+    if (viewMode === 'sameWeekday') {
+      for (let dia = 1; dia <= 31; dia++) {
+        const data = new Date(mesAlvo.getFullYear(), mesAlvo.getMonth(), dia);
+        if (data.getMonth() === mesAlvo.getMonth() && data.getDay() === diaSemanaClicado) {
+          datas.push(data);
+        }
+      }
+    } else {
+      const lastDay = new Date(mesAlvo.getFullYear(), mesAlvo.getMonth() + 1, 0).getDate();
+      for (let dia = 1; dia <= lastDay; dia++) {
+        const data = new Date(mesAlvo.getFullYear(), mesAlvo.getMonth(), dia);
         datas.push(data);
       }
     }
-    
     return datas;
-  }, [mesAtual, diaSemanaClicado, offsetMes]);
+  }, [mesAtual, diaSemanaClicado, offsetMes, viewMode]);
 
   // Mês de referência no formato YYYY-MM
   const mesReferencia = useMemo(() => {
@@ -170,14 +176,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         medicosCarregados = [];
       }
       
-      // 2. DEPOIS: Buscar agendamentos reais do banco para cada data
+      // 2. DEPOIS: Buscar agendamentos reais do banco UMA VEZ e filtrar por data
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      console.log('📚 Total de agendamentos carregados:', todosAgendamentos.length);
+
       const gradesCarregadas = await Promise.all(
         proximasDatas.map(async (data, index) => {
             const dataFormatada = data.toISOString().split('T')[0];
             
             try {
-              const agendamentos = await agendamentoService.getAll(hospitalId);
-              const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+              const agendamentosDoDia = todosAgendamentos.filter(a => a.data_agendamento === dataFormatada);
               
               console.log(`📅 Dia ${dataFormatada}: ${agendamentosDoDia.length} agendamentos`);
               
@@ -380,9 +388,20 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   // Resetar offset ao abrir o modal
   useEffect(() => {
     if (isOpen) {
-      setOffsetMes(1); // Sempre começa no próximo mês
+      setOffsetMes(0);
     }
   }, [isOpen]);
+
+  // Limpar seleção de relatório ao voltar para "Mesmos dias"
+  useEffect(() => {
+    if (viewMode === 'sameWeekday') {
+      setReportSelectedIndexes([]);
+    }
+  }, [viewMode]);
+
+  const toggleReportSelection = (index: number) => {
+    setReportSelectedIndexes(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
+  };
 
   // Estado para controlar expansão de procedimentos (gradeIndex_especialidadeId => boolean)
   const [expandedEspecialidades, setExpandedEspecialidades] = useState<Record<string, boolean>>({});
@@ -1641,6 +1660,126 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     );
   };
 
+  // Replicar SOMENTE para o dia selecionado (Sequencial)
+  const handleReplicarParaDia = async (gradeOrigemIndex: number, gradeDestinoIndex: number) => {
+    const gradeOrigem = grades[gradeOrigemIndex];
+    const gradeDestino = grades[gradeDestinoIndex];
+    if (!gradeOrigem || !gradeDestino) return;
+
+    // Preparar itens sem pacientes
+    const itensLimpos = gradeOrigem.itens.map(item => ({
+      ...item,
+      pacientes: [],
+      id: `temp-${Date.now()}-${Math.random()}`
+    }));
+
+    // Data destino
+    const dataSelecionada = proximasDatas[gradeDestinoIndex];
+    const dataFormatada = dataSelecionada.toISOString().split('T')[0];
+
+    // Persistir no banco apenas para o dia destino
+    try {
+      let especialidadeAtual = '';
+      let medicoAtual: string | null = null;
+
+      for (const item of itensLimpos) {
+        if (item.tipo === 'especialidade') {
+          if (item.texto.includes(' - ')) {
+            const [espNome, medNome] = item.texto.split(' - ');
+            especialidadeAtual = espNome || '';
+            medicoAtual = medNome || null;
+          } else {
+            especialidadeAtual = item.texto;
+            medicoAtual = null;
+          }
+          if (especialidadeAtual) {
+            await agendamentoService.create({
+              nome_paciente: '',
+              data_nascimento: '2000-01-01',
+              data_agendamento: dataFormatada,
+              especialidade: especialidadeAtual,
+              medico: medicoAtual || null,
+              hospital_id: hospitalId || null,
+              cidade_natal: null,
+              telefone: null,
+              is_grade_cirurgica: true
+            });
+          }
+        } else if (item.tipo === 'procedimento' && item.texto.trim() && especialidadeAtual) {
+          await agendamentoService.create({
+            nome_paciente: '',
+            data_nascimento: '2000-01-01',
+            data_agendamento: dataFormatada,
+            especialidade: especialidadeAtual,
+            medico: medicoAtual || null,
+            procedimentos: item.texto,
+            hospital_id: hospitalId || null,
+            cidade_natal: null,
+            telefone: null
+          });
+        }
+      }
+
+      // Recarregar apenas a grade destino a partir do banco
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      const agendamentosDoDia = todosAgendamentos.filter(a => a.data_agendamento === dataFormatada);
+
+      const itens: GradeCirurgicaItem[] = [];
+      const gruposPorEspecialidade = new Map<string, { especialidade: string; medico: string; procedimentos: string[] }>();
+      agendamentosDoDia.forEach(agendamento => {
+        if (agendamento.especialidade) {
+          const medicoKey = agendamento.medico || '(sem médico)';
+          const chave = `${agendamento.especialidade}|||${medicoKey}`;
+          if (!gruposPorEspecialidade.has(chave)) {
+            gruposPorEspecialidade.set(chave, { especialidade: agendamento.especialidade, medico: agendamento.medico || null, procedimentos: [] });
+          }
+          if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+            gruposPorEspecialidade.get(chave)!.procedimentos.push(agendamento.procedimentos);
+          }
+        }
+      });
+      gruposPorEspecialidade.forEach((grupo) => {
+        itens.push({ id: `esp-${Date.now()}-${Math.random()}`, tipo: 'especialidade', texto: grupo.medico ? `${grupo.especialidade} - ${grupo.medico}` : grupo.especialidade, ordem: itens.length, pacientes: [] });
+        grupo.procedimentos.forEach((proc, idx) => {
+          itens.push({ id: `proc-${Date.now()}-${Math.random()}-${idx}`, tipo: 'procedimento', texto: proc, ordem: itens.length, pacientes: [] });
+        });
+      });
+
+      setGrades(prev => prev.map((g, i) => (i === gradeDestinoIndex ? { ...g, itens } : g)));
+      mostrarMensagem('✅ Sucesso', 'Grade replicada para o dia selecionado.', 'sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao replicar para dia:', error);
+      mostrarMensagem('❌ Erro', 'Falha ao replicar para o dia selecionado.', 'erro');
+    }
+  };
+
+  const handleLimparTodasGrades = async () => {
+    const datas = proximasDatas.map(d => d.toISOString().split('T')[0]);
+    try {
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      const idsParaDeletar = todosAgendamentos.filter(a => datas.includes(a.data_agendamento)).map(a => a.id);
+      setConfirmacaoData({
+        titulo: '🗑️ Limpar Todas as Grades Visíveis',
+        mensagem: `Deseja limpar todas as grades visíveis? ${idsParaDeletar.length} registro(s) serão deletado(s).`,
+        onConfirm: async () => {
+          setModalConfirmacao(false);
+          try {
+            await Promise.all(idsParaDeletar.map(id => agendamentoService.delete(id)));
+            setGrades(prev => prev.map((g, i) => ({ ...g, itens: [] })));
+            mostrarMensagem('✅ Sucesso', 'Todas as grades visíveis foram limpas.', 'sucesso');
+          } catch (error) {
+            console.error('❌ Erro ao limpar todas as grades:', error);
+            mostrarMensagem('❌ Erro', 'Falha ao limpar todas as grades visíveis.', 'erro');
+          }
+        }
+      });
+      setModalConfirmacao(true);
+    } catch (error) {
+      console.error('❌ Erro ao preparar limpeza:', error);
+      mostrarMensagem('❌ Erro', 'Não foi possível preparar a limpeza das grades.', 'erro');
+    }
+  };
+
   // Replicar para todas (COM PERSISTÊNCIA NO BANCO)
   const handleReplicarParaTodas = async (gradeOrigemIndex: number) => {
     const gradeOrigem = grades[gradeOrigemIndex];
@@ -2441,6 +2580,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }> = [];
 
     grades.forEach((grade, gradeIndex) => {
+      if (viewMode === 'weeklySequence') {
+        if (reportSelectedIndexes.length === 0) return; // exigir seleção explícita
+        if (!reportSelectedIndexes.includes(gradeIndex)) return;
+      }
       const data = proximasDatas[gradeIndex];
       if (!data) return;
 
@@ -2497,7 +2640,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     });
 
     return dados;
-  }, [grades, proximasDatas]);
+  }, [grades, proximasDatas, viewMode, reportSelectedIndexes]);
 
   // Função para converter imagem em base64
   const imageToBase64 = (url: string): Promise<string> => {
@@ -2664,45 +2807,75 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       {/* Cabeçalho Customizado com Navegação */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         {/* Botão Voltar Mês */}
-        <button
-          onClick={() => setOffsetMes(prev => prev - 1)}
-          className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          title="Mês anterior"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          <span className="text-sm font-medium">Anterior</span>
-        </button>
+        <div className="flex items-center gap-2 flex-1">
+          <button
+            onClick={() => setOffsetMes(prev => prev - 1)}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Mês anterior"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="text-sm font-medium">Anterior</span>
+          </button>
+        </div>
 
         {/* Título Central */}
-        <h2 className="text-xl font-bold text-gray-800">
-          Grade Cirúrgica - {nomeDiaClicado}s de {mesExibidoNome}
+        <h2 className="flex-1 text-center text-xl font-bold text-gray-800">
+          {viewMode === 'sameWeekday' 
+            ? `Grade Cirúrgica - ${nomeDiaClicado}s de ${mesExibidoNome}` 
+            : `Grade Cirúrgica - ${mesExibidoNome} (Sequencial)`}
         </h2>
 
         {/* Botões à direita */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1 justify-end">
           {/* Botão Emitir Relatório - Download direto do PDF */}
           <button
             onClick={gerarPDFRelatorio}
-            disabled={gerandoPDF || dadosRelatorio.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
-            title={gerandoPDF ? "Gerando PDF..." : dadosRelatorio.length === 0 ? "Nenhum registro para gerar relatório" : "Emitir Relatório PDF"}
+            disabled={viewMode === 'weeklySequence' ? (gerandoPDF || reportSelectedIndexes.length === 0) : (gerandoPDF || dadosRelatorio.length === 0)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg border border-gray-300 transition-colors font-medium disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed text-[12px] whitespace-nowrap"
+            title={
+              gerandoPDF
+                ? "Gerando PDF..."
+                : viewMode === 'weeklySequence'
+                  ? (reportSelectedIndexes.length === 0 ? "Selecione os dias da sequência" : "Emitir Relatório dos dias selecionados")
+                  : (dadosRelatorio.length === 0 ? "Nenhum registro para gerar relatório" : "Emitir Relatório PDF")
+            }
           >
             {gerandoPDF ? (
               <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm font-medium">Gerando PDF...</span>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span className="font-medium">Gerando PDF...</span>
               </>
             ) : (
               <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span className="text-sm font-medium">Emitir Relatório</span>
+                <span className="font-medium">Emitir Relatório</span>
+                {viewMode === 'weeklySequence' && (
+                  <span className="ml-1 text-[11px] text-gray-600">({reportSelectedIndexes.length} selecionado{reportSelectedIndexes.length === 1 ? '' : 's'})</span>
+                )}
               </>
             )}
           </button>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setViewMode('sameWeekday')}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border whitespace-nowrap ${viewMode === 'sameWeekday' ? 'bg-gray-700 text-white border-gray-700' : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'}`}
+              title="Mostrar todos os mesmos dias do mês"
+            >
+              Mesmos dias
+            </button>
+            <button
+              onClick={() => setViewMode('weeklySequence')}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border whitespace-nowrap ${viewMode === 'weeklySequence' ? 'bg-gray-700 text-white border-gray-700' : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'}`}
+              title="Mostrar dias da semana sequencialmente"
+            >
+              Sequencial
+            </button>
+          </div>
 
           {/* Botão Avançar Mês */}
           <button
@@ -2740,16 +2913,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             return (
               <div
                 key={index}
-                className="border-4 border-blue-400 rounded-xl bg-white shadow-lg flex flex-col w-full overflow-hidden"
+                className="border-2 border-black rounded-xl bg-white shadow-lg flex flex-col w-full overflow-hidden"
               >
                 {/* Header do Card com Data e Dia da Semana Destacados */}
-                <div className="px-4 py-3 border-b-4 border-blue-300 bg-white">
+                <div className="px-4 py-3 border-b-2 border-black bg-white">
                   <div className="flex items-center justify-center relative min-h-[3rem]">
                     {/* Botões de ação do header - lado esquerdo */}
                     <div className="absolute left-0 flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={() => handleAddEspecialidadeClick(index)}
-                        className="flex items-center gap-0.5 px-2 py-0.5 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-medium transition-colors"
+                        className="flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded border border-gray-300 text-[10px] font-medium transition-colors"
                         title="Adicionar Especialidade"
                       >
                         <PlusIcon className="w-2.5 h-2.5" />
@@ -2769,15 +2942,30 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       )}
                       
                       {/* Botão Replicar: Só aparece no primeiro dia SE houver procedimentos E não houver pacientes */}
-                      {index === 0 && grade.itens.length > 0 && !gradeTemPacientes(grade) && (
-                        <button
-                          onClick={() => handleReplicarParaTodas(index)}
-                          className="flex items-center gap-0.5 px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-medium transition-colors"
-                          title="Replicar especialidades, médicos e procedimentos para todos os dias (sem pacientes)"
-                        >
-                          <CopyIcon className="w-2.5 h-2.5" />
-                          Replicar
-                        </button>
+                      {grade.itens.length > 0 && !gradeTemPacientes(grade) && (
+                        viewMode === 'sameWeekday' ? (
+                          index === 0 && (
+                            <button
+                              onClick={() => handleReplicarParaTodas(index)}
+                              className="flex items-center gap-0.5 px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-medium transition-colors"
+                              title="Replicar especialidades, médicos e procedimentos para todos os mesmos dias (sem pacientes)"
+                            >
+                              <CopyIcon className="w-2.5 h-2.5" />
+                              Replicar
+                            </button>
+                          )
+                        ) : (
+                          addingEspecialidade !== null && index !== addingEspecialidade && (
+                            <button
+                              onClick={() => handleReplicarParaDia(index, addingEspecialidade!)}
+                              className="flex items-center gap-0.5 px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-[10px] font-medium transition-colors"
+                              title="Replicar esta grade apenas para o dia que está sendo montado (Sequencial)"
+                            >
+                              <CopyIcon className="w-2.5 h-2.5" />
+                              Replicar para Dia Atual
+                            </button>
+                          )
+                        )
                       )}
                       
                       {/* Mensagem quando há pacientes */}
@@ -2811,6 +2999,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                         </span>
                       )}
                     </div>
+
+                    {viewMode === 'weeklySequence' && (
+                      <label className="absolute right-0 flex items-center gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={reportSelectedIndexes.includes(index)}
+                          onChange={() => toggleReportSelection(index)}
+                          className="w-4 h-4 accent-gray-700 border-gray-300"
+                        />
+                        Incluir no relatório
+                      </label>
+                    )}
                   </div>
                 </div>
 
@@ -3089,7 +3289,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                         <div key={grupoIndex} className="border border-slate-300 rounded overflow-hidden bg-white shadow-sm">
                           {/* Header da Especialidade */}
                           {grupo.especialidade && (
-                            <div className="group flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                            <div className="group flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-800 border-b border-black">
                               {/* Botões de ordem */}
                               <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
@@ -3118,11 +3318,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
                                 placeholder="Ex: Ortopedia - Joelho"
-                                className="flex-1 border-0 shadow-none bg-white/20 text-white placeholder-white/70 font-bold text-sm focus:bg-white/30 py-1 px-2"
+                                className="flex-1 border-0 shadow-none bg-transparent text-gray-800 placeholder-gray-500 font-bold text-sm py-1 px-2"
                               />
 
                               {/* Badge com contador */}
-                              <span className="bg-white/30 text-white px-2 py-1 rounded text-xs font-semibold">
+                              <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs font-semibold">
                                 {(() => {
                                   const totalPacientes = grupo.procedimentos.reduce((sum, proc) => 
                                     sum + (proc.pacientes?.length || 0), 0
@@ -3134,7 +3334,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               {/* Botão adicionar procedimento */}
                               <button
                                 onClick={() => handleAddProcedimento(index, grupo.especialidade!.id)}
-                                className="flex items-center gap-1 px-2 py-1 bg-white/20 hover:bg-white/30 text-white rounded text-xs font-medium transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-xs font-medium transition-colors"
                                 title="Adicionar Procedimento"
                               >
                                 <PlusIcon className="w-3 h-3" />
@@ -3144,7 +3344,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               {/* Botão remover */}
                               <button
                                 onClick={() => handleRemoveItem(index, grupo.especialidade!.id)}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-white hover:bg-white/20 rounded transition-all"
+                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-800 hover:bg-gray-200 rounded transition-all"
                                 title="✕"
                               >
                                 <TrashIcon className="w-4 h-4" />
@@ -3159,7 +3359,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                 {/* Cabeçalho da tabela */}
                                 <thead>
                                   <tr className="bg-slate-100 border-b-2 border-slate-300">
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-56">Procedimento</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-[26rem] min-w-[26rem]">Procedimento</th>
                                     <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-36">Médico</th>
                                     <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
                                     <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
@@ -3192,13 +3392,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               className="group hover:bg-slate-50 border-b border-slate-200"
                                             >
                                               {/* Coluna Procedimento */}
-                                              <td className="px-3 py-2 border-r border-slate-200 w-56 overflow-hidden">
+                                              <td className="px-3 py-2 border-r border-slate-200 w-[26rem] min-w-[26rem] overflow-hidden">
                                                 {isFirstPaciente ? (
                                                   <div className="flex items-center gap-1 group relative">
                                                     {/* Exibição com Marca d'Água + Especificação */}
                                                     <div className="flex-1 flex items-center gap-2 min-h-[1.5rem]">
                                                       {/* Marca d'Água (Procedimento Base) */}
-                                                      <span className="text-2xl font-bold text-slate-300 uppercase select-none tracking-wider flex-shrink-0">
+                                                      <span className="text-sm font-semibold text-slate-400 uppercase select-none tracking-wide flex-shrink-0">
                                                         {proc.texto}
                                                       </span>
                                                       
@@ -3420,12 +3620,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             className="group hover:bg-slate-50 border-b border-slate-200"
                                           >
                                             {/* Coluna Procedimento */}
-                                            <td className="px-3 py-2 border-r border-slate-200 w-56 overflow-hidden">
+                                            <td className="px-3 py-2 border-r border-slate-200 w-[26rem] min-w-[26rem] overflow-hidden">
                                               <div className="flex items-center gap-1 group relative">
                                                 {/* Exibição com Marca d'Água + Especificação */}
                                                 <div className="flex-1 flex items-center gap-2 min-h-[1.5rem]">
                                                   {/* Marca d'Água (Procedimento Base) */}
-                                                  <span className="text-2xl font-bold text-slate-300 uppercase select-none tracking-wider flex-shrink-0">
+                                                  <span className="text-sm font-semibold text-slate-400 uppercase select-none tracking-wide flex-shrink-0">
                                                     {proc.texto}
                                                   </span>
                                                   
@@ -3479,23 +3679,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             
                                             {/* Coluna Nome do Paciente */}
                                             <td className="px-3 py-2 border-r border-slate-200 w-72 overflow-hidden">
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-sm text-slate-400 italic opacity-60">{proc.texto || 'Procedimento'}</span>
-                                                <button
-                                                  onClick={() => toggleExpansaoProcedimento(index, proc.id)}
-                                                  className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-all"
-                                                  title={isProcExpanded ? "Recolher detalhes" : "Expandir detalhes"}
-                                                >
-                                                  {isProcExpanded ? (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                                    </svg>
-                                                  ) : (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                    </svg>
-                                                  )}
-                                                </button>
+                                              <div className="relative flex items-center justify-start min-h-[1.5rem]">
+                                                <span className="text-sm font-semibold text-slate-300 uppercase tracking-wide select-none">
+                                                  Registre o Paciente
+                                                </span>
                                               </div>
                                             </td>
                                             

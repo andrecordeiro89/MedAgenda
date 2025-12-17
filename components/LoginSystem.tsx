@@ -168,10 +168,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto p-6">
+    <Card className="w-full max-w-md mx-auto p-6 shadow-lg">
       <div className="text-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">MedAgenda</h1>
-        <p className="text-gray-600 mt-2">Sistema Multi-Hospitalar</p>
+        <p className="text-gray-600 mt-1">Sistema Multi‑Hospitalar</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -183,12 +183,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
             required
+            className="bg-gray-100 border border-gray-300 text-gray-900 placeholder-gray-400"
           />
         </FormField>
 
         <Button
           type="submit"
-          className="w-full"
+          className="w-full bg-gray-700 hover:bg-gray-800 text-white"
           disabled={loading}
         >
           {loading ? 'Entrando...' : 'Entrar'}
@@ -281,18 +282,18 @@ export const LoginSystem: React.FC = () => {
 
   if (showHospitalSelector) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <HospitalSelector
-          hospitais={hospitaisDisponiveis}
-          onSelect={handleHospitalSelect}
-          onBack={handleBack}
-        />
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 flex items-center justify-center p-4">
+      <HospitalSelector
+        hospitais={hospitaisDisponiveis}
+        onSelect={handleHospitalSelect}
+        onBack={handleBack}
+      />
+    </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 flex items-center justify-center p-4">
       <LoginForm onSuccess={handleLoginSuccess} />
     </div>
   );

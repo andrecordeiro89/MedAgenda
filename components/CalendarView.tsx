@@ -375,7 +375,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           <h2 className="text-3xl font-bold text-slate-800">Calendário de Agendamentos</h2>
           <button
             onClick={() => setIsRelatorioSemanalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg border border-gray-300 font-medium transition-colors shadow-sm"
             title="Gerar relatório semanal em PDF"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

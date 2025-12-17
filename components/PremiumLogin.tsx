@@ -350,8 +350,8 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background com gradiente azul claro (original) SEM bolinhas */}
-      <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50">
+      {/* Background neutro */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300">
         <div className="absolute inset-0 opacity-20">
           {/* Padrão de pontos decorativo */}
           <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
@@ -369,7 +369,7 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
           </div>
           <h1 className="text-3xl font-bold text-slate-700 mb-2">MedAgenda</h1>
           <p className="text-slate-600 text-lg">Sistema Multi-Hospitalar</p>
-          <div className="w-24 h-1 bg-gradient-to-r from-sky-300 to-cyan-300 rounded-full mx-auto mt-4"></div>
+          <div className="w-24 h-1 bg-gray-300 rounded-full mx-auto mt-4"></div>
         </div>
 
         {/* Card de login */}
@@ -385,8 +385,8 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
-                  className={`w-full px-4 py-4 bg-white border border-gray-300 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all duration-300 ${
-                    isTyping ? 'ring-2 ring-blue-400/50' : ''
+                  className={`w-full px-4 py-4 bg-white border border-gray-300 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-300 ${
+                    isTyping ? 'ring-2 ring-gray-400/50' : ''
                   } ${error ? 'ring-2 ring-red-400/50 border-red-400/50' : ''}`}
                   required
                 />
@@ -413,7 +413,7 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
               className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-300 transform ${
                 isLoading || !email.trim()
                   ? 'bg-gray-500/50 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
+                  : 'bg-gray-700 hover:bg-gray-800 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
               }`}
             >
               {isLoading ? (
@@ -501,8 +501,8 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
 }) => {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background com gradiente azul claro (original) SEM bolinhas */}
-      <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50">
+      {/* Background neutro */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300">
         <div className="absolute inset-0 opacity-20">
           {/* Padrão de pontos decorativo */}
           <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
@@ -605,7 +605,7 @@ export const PremiumHospitalHeader: React.FC = () => {
   }
 
   return (
-    <div className="bg-gradient-to-r from-sky-300 to-blue-400 shadow-lg">
+    <div className="bg-gradient-to-r from-gray-700 to-gray-900 shadow-lg">
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">

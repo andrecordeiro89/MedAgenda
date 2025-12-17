@@ -156,24 +156,18 @@ const AppContent: React.FC = () => {
     // Loading screen padrão
     if (loading || authLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-50 flex items-center justify-center relative overflow-hidden">
-                {/* Bolinhas de fundo para consistência */}
-                <div className="absolute top-8 left-12 w-16 h-16 bg-sky-300 rounded-full mix-blend-multiply filter blur-sm opacity-40"></div>
-                <div className="absolute top-1/4 right-16 w-20 h-20 bg-yellow-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-                <div className="absolute bottom-1/4 left-20 w-18 h-18 bg-emerald-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-                <div className="absolute bottom-16 right-20 w-16 h-16 bg-cyan-200 rounded-full mix-blend-multiply filter blur-sm opacity-35"></div>
-                <div className="absolute top-1/2 left-1/4 w-14 h-14 bg-blue-200 rounded-full mix-blend-multiply filter blur-sm opacity-30"></div>
-                <div className="absolute top-1/3 right-1/3 w-22 h-22 bg-indigo-200 rounded-full mix-blend-multiply filter blur-sm opacity-25"></div>
-                
+            <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300"></div>
+                <div className="absolute inset-0 opacity-20">
+                    <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
+                </div>
                 <div className="text-center relative z-10">
-                    {/* Loading spinner padrão com pontos */}
                     <div className="flex justify-center mb-6">
                         <div className="relative w-12 h-12">
-                            <div className="w-12 h-12 rounded-full border-4 border-slate-200"></div>
-                            <div className="absolute inset-0 w-12 h-12 rounded-full border-4 border-transparent border-t-sky-500 animate-spin"></div>
+                            <div className="w-12 h-12 rounded-full border-4 border-slate-300"></div>
+                            <div className="absolute inset-0 w-12 h-12 rounded-full border-4 border-transparent border-t-gray-700 animate-spin"></div>
                         </div>
                     </div>
-                    
                     <h3 className="text-lg font-semibold text-slate-700 mb-2">Carregando Sistema</h3>
                     <p className="text-slate-600 text-sm">
                         {hospitalSelecionado ? `Conectando ao ${hospitalSelecionado.nome}...` : 'Inicializando...'}
