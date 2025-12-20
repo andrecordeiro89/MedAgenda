@@ -3,10 +3,12 @@ import { agendamentoService, supabase } from '../services/supabase';
 import { Agendamento } from '../types';
 import { Modal } from './ui';
 import { ToastContainer, ToastType } from './Toast';
+import { useToast } from '../contexts/ToastContext';
 
 export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const { success, error: toastError } = useToast();
   
   // Sistema de toasts
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: ToastType }>>([]);
@@ -358,10 +360,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       setFichaAnexada(urlData.publicUrl);
       setModalUploadAberto(false);
       
-      alert('✅ Ficha pré-anestésica anexada com sucesso!');
+      success('Ficha pré-anestésica anexada com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
-      alert(`❌ Erro ao anexar ficha: ${error.message}`);
+      toastError(`Erro ao anexar ficha: ${error.message}`);
     } finally {
       setUploading(false);
     }

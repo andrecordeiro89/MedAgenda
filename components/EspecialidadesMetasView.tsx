@@ -29,6 +29,9 @@ const getDiaLabel = (dia: DiaSemana): string => {
   return DIAS_SEMANA.find(d => d.value === dia)?.label || dia;
 };
 
+import ConfirmDialog from './ConfirmDialog';
+import { useToast } from '../contexts/ToastContext';
+
 const EspecialidadesMetasView: React.FC<EspecialidadesMetasViewProps> = ({
   especialidades,
   metas,
@@ -37,6 +40,10 @@ const EspecialidadesMetasView: React.FC<EspecialidadesMetasViewProps> = ({
   procedimentos,
   onRefresh
 }) => {
+  const { error: toastError } = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMeta, setEditingMeta] = useState<MetaEspecialidade | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -158,17 +165,13 @@ const EspecialidadesMetasView: React.FC<EspecialidadesMetasViewProps> = ({
 
   // Excluir meta
   const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta meta?')) {
-      return;
-    }
-
     setDeletingId(id);
     try {
       await simpleMetaEspecialidadeService.delete(id);
       onRefresh();
     } catch (err) {
       console.error('Erro ao excluir meta:', err);
-      alert('Erro ao excluir meta: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      toastError('Erro ao excluir meta');
     } finally {
       setDeletingId(null);
     }
@@ -293,7 +296,11 @@ const EspecialidadesMetasView: React.FC<EspecialidadesMetasViewProps> = ({
                             <EditIcon className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(meta.id)}
+                            onClick={() => {
+                              setConfirmMessage('Tem certeza que deseja excluir esta meta?');
+                              setConfirmTargetId(meta.id);
+                              setConfirmOpen(true);
+                            }}
                             disabled={deletingId === meta.id}
                             className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
                             title="Excluir"
@@ -440,6 +447,21 @@ const EspecialidadesMetasView: React.FC<EspecialidadesMetasViewProps> = ({
           </div>
         </form>
       </Modal>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirmação"
+        message={confirmMessage}
+        onConfirm={() => {
+          const id = confirmTargetId;
+          setConfirmOpen(false);
+          setConfirmTargetId(null);
+          if (id) handleDelete(id);
+        }}
+        onCancel={() => {
+          setConfirmOpen(false);
+          setConfirmTargetId(null);
+        }}
+      />
     </div>
   );
 };

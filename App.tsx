@@ -12,6 +12,7 @@ import {
     PremiumLoginSystem,
     useHospitalFilter 
 } from './components/PremiumLogin';
+import { ToastProvider } from './contexts/ToastContext';
 // ============================================================================
 // MODO MOCK - Usando localStorage ao invés de Supabase
 // Descomente as linhas abaixo quando o banco estiver pronto
@@ -308,7 +309,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <AppContent />
+            <ToastProvider>
+                <AppContent />
+            </ToastProvider>
         </AuthProvider>
     );
 };

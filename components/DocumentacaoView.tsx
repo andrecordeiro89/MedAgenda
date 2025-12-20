@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { agendamentoService, supabase } from '../services/supabase';
 import { Agendamento, StatusLiberacao } from '../types';
 import { Button, Modal } from './ui';
+import ConfirmDialog from './ConfirmDialog';
+import { useToast } from '../contexts/ToastContext';
 
 export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -46,6 +48,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const fileInputComplementaresRef = useRef<HTMLInputElement>(null);
   
   const [uploading, setUploading] = useState(false);
+  const { success, error: toastError, warning } = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const confirmActionRef = useRef<(() => void) | null>(null);
   
   // Estados de Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -566,10 +572,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setArquivosDocumentosSelecionados([]);
       setDocumentosAnexados(todasUrls);
       
-      alert('✅ Exames anexados com sucesso!');
+      success('Exames anexados com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
-      alert(`❌ Erro ao anexar documentos: ${error.message}`);
+      toastError(`Erro ao anexar documentos: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -583,7 +589,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
     // Verificar se exames estão OK
     if (!agendamentoSelecionado.documentos_ok) {
-      alert('⚠️ É necessário anexar os exames primeiro!');
+      warning('É necessário anexar os exames primeiro');
       setAbaAtiva('documentos');
       return;
     }
@@ -638,10 +644,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setArquivoFichaSelecionado(null);
       setFichaAnexada(urlData.publicUrl);
       
-      alert('✅ Ficha pré-anestésica anexada com sucesso! Paciente liberado para cirurgia!');
+      success('Ficha pré-anestésica anexada com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
-      alert(`❌ Erro ao anexar ficha: ${error.message}`);
+      toastError(`Erro ao anexar ficha: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -651,7 +657,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const handleRemoverDocumentoAnexado = async (url: string) => {
     if (!agendamentoSelecionado || !agendamentoSelecionado.id) return;
 
-    if (!confirm('Tem certeza que deseja remover este documento?')) return;
+    
 
     try {
       // Remover do array de URLs
@@ -688,10 +694,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           : ag
       ));
 
-      alert('✅ Documento removido com sucesso!');
+      success('Documento removido com sucesso');
     } catch (error: any) {
       console.error('Erro ao remover documento:', error);
-      alert(`❌ Erro ao remover documento: ${error.message}`);
+      toastError(`Erro ao remover documento: ${error.message}`);
     }
   };
 
@@ -1004,7 +1010,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       ));
     } catch (error: any) {
       console.error('Erro ao atualizar status de liberação:', error);
-      alert(`❌ Erro ao atualizar status: ${error.message}`);
+      toastError(`Erro ao atualizar status: ${error.message}`);
     }
   };
 
@@ -1025,7 +1031,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       ));
     } catch (error: any) {
       console.error('Erro ao atualizar confirmação:', error);
-      alert(`❌ Erro ao atualizar confirmação: ${error.message}`);
+      toastError(`Erro ao atualizar confirmação: ${error.message}`);
     }
   };
 
@@ -1092,10 +1098,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setArquivosComplementaresSelecionados([]);
       setComplementaresAnexados(todasUrls);
       
-      alert('✅ Complementares anexados com sucesso!');
+      success('Complementares anexados com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
-      alert(`❌ Erro ao anexar complementares: ${error.message}`);
+      toastError(`Erro ao anexar complementares: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -1105,7 +1111,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const handleRemoverComplementarAnexado = async (url: string) => {
     if (!agendamentoSelecionado || !agendamentoSelecionado.id) return;
 
-    if (!confirm('Tem certeza que deseja remover este documento complementar?')) return;
+    
 
     try {
       // Remover do array de URLs
@@ -1142,10 +1148,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           : ag
       ));
 
-      alert('✅ Documento complementar removido com sucesso!');
+      success('Documento complementar removido com sucesso');
     } catch (error: any) {
       console.error('Erro ao remover complementar:', error);
-      alert(`❌ Erro ao remover complementar: ${error.message}`);
+      toastError(`Erro ao remover complementar: ${error.message}`);
     }
   };
   
@@ -1153,7 +1159,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const handleRemoverFicha = async () => {
     if (!agendamentoSelecionado || !agendamentoSelecionado.id || !fichaAnexada) return;
 
-    if (!confirm('Tem certeza que deseja remover a ficha pré-operatória?')) return;
+    
 
     try {
       // Extrair caminho do arquivo da URL para deletar do storage
@@ -1187,10 +1193,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           : ag
       ));
 
-      alert('✅ Ficha pré-operatória removida com sucesso!');
+      success('Ficha pré-operatória removida com sucesso');
     } catch (error: any) {
       console.error('Erro ao remover ficha:', error);
-      alert(`❌ Erro ao remover ficha: ${error.message}`);
+      toastError(`Erro ao remover ficha: ${error.message}`);
     }
   };
 
@@ -1848,11 +1854,15 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                             </svg>
                             {fileName}
                           </a>
-                          <button
-                            onClick={() => handleRemoverDocumentoAnexado(url)}
-                            className="text-red-600 hover:text-red-800 p-1"
-                            title="Remover documento"
-                          >
+              <button
+                onClick={() => {
+                  setConfirmMessage('Tem certeza que deseja remover este documento?');
+                  confirmActionRef.current = () => handleRemoverDocumentoAnexado(url);
+                  setConfirmOpen(true);
+                }}
+                className="text-red-600 hover:text-red-800 p-1"
+                title="Remover documento"
+              >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -1967,11 +1977,15 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </svg>
                       {fichaAnexada.split('/').pop() || 'Ficha Pré-Anestésica'}
                     </a>
-                    <button
-                      onClick={handleRemoverFicha}
-                      className="text-red-600 hover:text-red-800 p-1"
-                      title="Remover ficha"
-                    >
+            <button
+              onClick={() => {
+                setConfirmMessage('Tem certeza que deseja remover a ficha pré-operatória?');
+                confirmActionRef.current = () => handleRemoverFicha();
+                setConfirmOpen(true);
+              }}
+              className="text-red-600 hover:text-red-800 p-1"
+              title="Remover ficha"
+            >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -2086,7 +2100,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                             {fileName}
                           </a>
                           <button
-                            onClick={() => handleRemoverComplementarAnexado(url)}
+                            onClick={() => {
+                              setConfirmMessage('Tem certeza que deseja remover este documento complementar?');
+                              confirmActionRef.current = () => handleRemoverComplementarAnexado(url);
+                              setConfirmOpen(true);
+                            }}
                             className="text-red-600 hover:text-red-800 p-1"
                             title="Remover documento"
                           >
@@ -2326,6 +2344,22 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirmação"
+        message={confirmMessage}
+        onConfirm={() => {
+          const fn = confirmActionRef.current;
+          setConfirmOpen(false);
+          confirmActionRef.current = null;
+          if (fn) fn();
+        }}
+        onCancel={() => {
+          setConfirmOpen(false);
+          confirmActionRef.current = null;
+        }}
+      />
     </div>
   );
 };

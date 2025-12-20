@@ -13,6 +13,7 @@ const simpleGradeCirurgicaService = mockServices.gradeCirurgica;
 // Importar service real de agendamentos e médicos do Supabase
 import { agendamentoService, medicoService } from '../services/supabase';
 import { Medico } from '../types';
+import { useToast } from '../contexts/ToastContext';
 
 
 interface GradeCirurgicaModalProps {
@@ -70,6 +71,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   especialidades, // Receber especialidades
   userEmail // Email do usuário logado
 }) => {
+  const { error: toastError } = useToast();
   // Verificar se é usuário TI (permissão especial para alterar procedimentos base)
   const isUsuarioTI = userEmail?.toLowerCase() === 'tifoz@medagenda.com';
   
@@ -2789,7 +2791,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     doc.save(nomeArquivo);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
-      alert('Erro ao gerar o PDF. Por favor, tente novamente.');
+      toastError('Erro ao gerar o PDF. Por favor, tente novamente');
     } finally {
       setGerandoPDF(false);
     }

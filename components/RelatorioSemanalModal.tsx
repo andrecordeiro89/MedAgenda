@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import { formatDate } from '../utils';
 import { Agendamento, Medico } from '../types';
 import { agendamentoService, medicoService } from '../services/supabase';
+import { useToast } from '../contexts/ToastContext';
 
 interface RelatorioSemanalModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
   hospitalId,
   hospitalNome = 'Hospital'
 }) => {
+  const { warning, error: toastError } = useToast();
   // Estado para mês e ano separados
   const [anoSelecionado, setAnoSelecionado] = useState(new Date().getFullYear());
   const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth()); // 0-11
@@ -257,7 +259,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
   const gerarRelatorio = async () => {
     // Validar seleção
     if (diasSelecionados.size === 0) {
-      alert('Por favor, selecione pelo menos um dia no calendário');
+      warning('Selecione pelo menos um dia no calendário');
       return;
     }
 
@@ -308,7 +310,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       );
 
       if (totalAgendamentos === 0) {
-        alert('Não há agendamentos para os dias selecionados');
+        warning('Não há agendamentos para os dias selecionados');
         return;
       }
 
@@ -319,7 +321,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       onClose();
     } catch (error) {
       console.error('❌ Erro ao gerar relatório:', error);
-      alert('Erro ao gerar relatório. Por favor, tente novamente.');
+      toastError('Erro ao gerar relatório. Por favor, tente novamente');
     } finally {
       setGerando(false);
     }
@@ -480,8 +482,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
 
     } catch (error) {
       console.error('❌ Erro ao gerar PDF:', error);
-      // Tentar gerar sem logo
-      alert('Erro ao gerar PDF. Por favor, tente novamente.');
+      toastError('Erro ao gerar PDF. Por favor, tente novamente');
       throw error;
     }
   };

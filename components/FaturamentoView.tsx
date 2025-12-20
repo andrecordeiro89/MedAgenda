@@ -3,6 +3,8 @@ import { agendamentoService } from '../services/supabase';
 import { Agendamento } from '../types';
 import { Modal } from './ui';
 import JSZip from 'jszip';
+import ConfirmDialog from './ConfirmDialog';
+import { useToast } from '../contexts/ToastContext';
 
 export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -31,6 +33,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   
   // Estado para controlar visualização de pendências
   const [mostrarPendencias, setMostrarPendencias] = useState(false);
+  const { success, error: toastError, warning } = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const confirmActionRef = useRef<(() => void) | null>(null);
 
   // Carregar agendamentos
   useEffect(() => {
@@ -327,7 +333,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     
     // Validar observação obrigatória
     if (!observacaoNaoLiberado.trim()) {
-      alert('⚠️ A observação é obrigatória para marcar como NÃO LIBERADO');
+      warning('A observação é obrigatória para marcar como NÃO LIBERADO');
       return;
     }
     
@@ -349,10 +355,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       ));
       
       handleFecharModalNaoLiberado();
-      alert('✅ Marcado como NÃO LIBERADO com sucesso!');
+      success('Marcado como NÃO LIBERADO');
     } catch (error) {
       console.error('Erro ao salvar NÃO LIBERADO:', error);
-      alert('❌ Erro ao salvar. Tente novamente.');
+      toastError('Erro ao salvar. Tente novamente');
     } finally {
       setSalvandoNaoLiberado(false);
     }
@@ -364,28 +370,27 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     
     // Se já está marcado como NÃO LIBERADO, limpar a marcação
     if (ag.faturamento_liberado === false) {
-      const confirmar = confirm('Este paciente está marcado como NÃO LIBERADO. Deseja limpar esta marcação e marcar como LIBERADO?');
-      if (!confirmar) return;
-      
-      try {
-        const updateData: Partial<Agendamento> = {
-          faturamento_liberado: true,
-          faturamento_observacao: null,
-          faturamento_data: new Date().toISOString()
-        };
-        
-        await agendamentoService.update(ag.id, updateData);
-        
-        // Atualizar lista local
-        setAgendamentos(prev => prev.map(agItem => 
-          agItem.id === ag.id 
-            ? { ...agItem, ...updateData }
-            : agItem
-        ));
-      } catch (error) {
-        console.error('Erro ao marcar como liberado:', error);
-        alert('❌ Erro ao salvar. Tente novamente.');
-      }
+      setConfirmMessage('Este paciente está marcado como NÃO LIBERADO. Deseja limpar esta marcação e marcar como LIBERADO?');
+      confirmActionRef.current = async () => {
+        try {
+          const updateData: Partial<Agendamento> = {
+            faturamento_liberado: true,
+            faturamento_observacao: null,
+            faturamento_data: new Date().toISOString()
+          };
+          await agendamentoService.update(ag.id!, updateData);
+          setAgendamentos(prev => prev.map(agItem => 
+            agItem.id === ag.id 
+              ? { ...agItem, ...updateData }
+              : agItem
+          ));
+        } catch (error) {
+          console.error('Erro ao marcar como liberado:', error);
+          toastError('Erro ao salvar. Tente novamente');
+        }
+      };
+      setConfirmOpen(true);
+      return;
     } else if (ag.faturamento_liberado === true) {
       // Se já está LIBERADO, desmarcar (voltar para null)
       try {
@@ -405,7 +410,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         ));
       } catch (error) {
         console.error('Erro ao desmarcar:', error);
-        alert('❌ Erro ao desmarcar. Tente novamente.');
+        toastError('Erro ao desmarcar. Tente novamente');
       }
     } else {
       // Se está null (sem seleção), marcar como LIBERADO
@@ -425,7 +430,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         ));
       } catch (error) {
         console.error('Erro ao marcar como liberado:', error);
-        alert('❌ Erro ao salvar. Tente novamente.');
+        toastError('Erro ao salvar. Tente novamente');
       }
     }
   };
@@ -480,18 +485,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       const temFicha = ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '';
 
       if (!temDocumentos) {
-        alert('⚠️ Nenhum documento disponível para download');
+        warning('Nenhum documento disponível para download');
         setDownloading(null);
         return;
       }
       
       // Se não tem ficha, avisar mas permitir download dos documentos
       if (!temFicha) {
-        const continuar = confirm('⚠️ Ficha pré-anestésica ainda não foi anexada. Deseja baixar apenas os documentos disponíveis?');
-        if (!continuar) {
-          setDownloading(null);
-          return;
-        }
+        setConfirmMessage('Ficha pré-anestésica ainda não foi anexada. Deseja baixar apenas os documentos disponíveis?');
+        confirmActionRef.current = () => {};
+        setConfirmOpen(true);
       }
 
       // Criar instância do JSZip
@@ -549,7 +552,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       console.log('✅ ZIP criado e baixado com sucesso:', nomeArquivoZip);
     } catch (error) {
       console.error('Erro ao criar ZIP:', error);
-      alert('❌ Erro ao criar arquivo ZIP. Por favor, tente novamente.');
+      toastError('Erro ao criar arquivo ZIP. Por favor, tente novamente');
     } finally {
       setDownloading(null);
     }
@@ -1432,6 +1435,21 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           </div>
         </div>
       </Modal>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirmação"
+        message={confirmMessage}
+        onConfirm={() => {
+          const fn = confirmActionRef.current;
+          setConfirmOpen(false);
+          confirmActionRef.current = null;
+          if (fn) fn();
+        }}
+        onCancel={() => {
+          setConfirmOpen(false);
+          confirmActionRef.current = null;
+        }}
+      />
     </div>
   );
 };

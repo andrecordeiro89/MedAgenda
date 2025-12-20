@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Button, Modal } from './ui';
+import { useToast } from '../contexts/ToastContext';
 
 interface MedicoExcelRow {
   nome: string;
@@ -26,6 +27,7 @@ const ExcelImportMedicos: React.FC<ExcelImportMedicosProps> = ({
   onClose,
   onImportComplete
 }) => {
+  const { warning, error: toastError } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<MedicoImportData[]>([]);
   const [importing, setImporting] = useState(false);
@@ -118,13 +120,13 @@ const ExcelImportMedicos: React.FC<ExcelImportMedicosProps> = ({
         );
         
         if (!hasData) {
-          alert('⚠️ Não foi possível identificar as colunas do Excel.\n\nColunas esperadas: nome, cns, especialidade, id\n\nVerifique o console (F12) para mais detalhes.');
+          warning('Não foi possível identificar as colunas do Excel. Verifique o console (F12) para mais detalhes');
         }
         
         setPreviewData(mappedData);
       } catch (error) {
         console.error('❌ Erro ao ler arquivo Excel:', error);
-        alert('Erro ao ler arquivo Excel. Verifique o formato.');
+        toastError('Erro ao ler arquivo Excel. Verifique o formato');
       }
     };
     reader.readAsBinaryString(file);

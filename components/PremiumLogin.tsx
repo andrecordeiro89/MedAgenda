@@ -169,6 +169,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cnpj: '14.736.446/0009-40',
           role: 'admin' // 🔧 Usuário TI - Acesso total + permissão especial para editar procedimentos base
         },
+        'foz.ana.carolina@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem'
+        },
+        'foz.marcia@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem'
+        },
+        'foz.roger@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem'
+        },
+        'foz.mateus@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem'
+        },
+        'foz.tamiris@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem'
+        },
+        'foz.carla@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'triagem'
+        },
         'agendamento.frg@medagenda.com': {
           id: '933de4fb-ebfd-4838-bb43-153a7354d333',
           nome: 'Hospital Maternidade Nossa Senhora Aparecida',
