@@ -24,6 +24,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
+  const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>(''); // Filtro por mês da cirurgia
   const [filtroMedico, setFiltroMedico] = useState<string>('');
   
   // Estados para ordenação por data
@@ -279,6 +280,14 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
     }
     
+    // Filtro por mês da cirurgia (formato: "YYYY-MM")
+    if (filtroMesCirurgia) {
+      const dataCirurgiaRaw = ag.data_agendamento || ag.dataAgendamento;
+      if (!dataCirurgiaRaw) return false;
+      const mesCirurgia = dataCirurgiaRaw.substring(0, 7); // "YYYY-MM"
+      if (mesCirurgia !== filtroMesCirurgia) return false;
+    }
+    
     // Filtro por médico
     if (filtroMedico) {
       const medico = (ag.medico || '').toLowerCase();
@@ -368,7 +377,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroPreOp, filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMedico]);
+  }, [filtroStatus, filtroPreOp, filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedico]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -392,11 +401,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setFiltroPaciente('');
     setFiltroDataConsulta('');
     setFiltroDataCirurgia('');
+    setFiltroMesCirurgia('');
     setFiltroMedico('');
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPreOp || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMedico;
+  const temFiltrosAtivos = filtroStatus || filtroPreOp || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedico;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -1271,7 +1281,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           {/* Filtro Status EXAMES - DESTACADO */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1352,6 +1362,39 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               placeholder="DD/MM/AAAA"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
+          </div>
+          
+          {/* Filtro Mês da Cirurgia */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              📅 Mês Cirurgia
+            </label>
+            <select
+              value={filtroMesCirurgia}
+              onChange={(e) => setFiltroMesCirurgia(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${
+                filtroMesCirurgia 
+                  ? 'border-teal-500 bg-teal-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">Todos os meses</option>
+              <option value="2025-10">Outubro/2025</option>
+              <option value="2025-11">Novembro/2025</option>
+              <option value="2025-12">Dezembro/2025</option>
+              <option value="2026-01">Janeiro/2026</option>
+              <option value="2026-02">Fevereiro/2026</option>
+              <option value="2026-03">Março/2026</option>
+              <option value="2026-04">Abril/2026</option>
+              <option value="2026-05">Maio/2026</option>
+              <option value="2026-06">Junho/2026</option>
+              <option value="2026-07">Julho/2026</option>
+              <option value="2026-08">Agosto/2026</option>
+              <option value="2026-09">Setembro/2026</option>
+              <option value="2026-10">Outubro/2026</option>
+              <option value="2026-11">Novembro/2026</option>
+              <option value="2026-12">Dezembro/2026</option>
+            </select>
           </div>
           
           {/* Filtro Médico */}
