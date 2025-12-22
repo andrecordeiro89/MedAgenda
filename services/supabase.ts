@@ -565,6 +565,13 @@ export const agendamentoService = {
     
     // Campo de grade cirúrgica
     if (agendamento.is_grade_cirurgica !== undefined) updateData.is_grade_cirurgica = agendamento.is_grade_cirurgica
+    
+    // Campos de faturamento G-SUS
+    if (agendamento.faturamento_liberado !== undefined) updateData.faturamento_liberado = agendamento.faturamento_liberado
+    if (agendamento.faturamento_observacao !== undefined) updateData.faturamento_observacao = agendamento.faturamento_observacao
+    if (agendamento.faturamento_data !== undefined) updateData.faturamento_data = agendamento.faturamento_data
+    if (agendamento.faturamento_status !== undefined) updateData.faturamento_status = agendamento.faturamento_status
+    if (agendamento.observacao_faturamento !== undefined) updateData.observacao_faturamento = agendamento.observacao_faturamento
 
     try {
       console.log('📝 Dados que serão enviados ao banco:', updateData);

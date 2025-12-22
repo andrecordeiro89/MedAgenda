@@ -45,6 +45,8 @@ export interface Agendamento {
   faturamento_liberado?: boolean | null; // NULL=não avaliado, TRUE=liberado (visual), FALSE=não liberado (salvo)
   faturamento_observacao?: string | null; // Observação obrigatória quando faturamento_liberado = FALSE
   faturamento_data?: string | null; // Data/hora da marcação
+  faturamento_status?: 'pendente' | 'auditor' | 'autorizado' | null; // Status do processo: pendente, auditor, autorizado
+  observacao_faturamento?: string | null; // Observação livre do faturamento
   
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;

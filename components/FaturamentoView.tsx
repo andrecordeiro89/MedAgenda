@@ -19,6 +19,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMedico, setFiltroMedico] = useState<string>('');
+  const [filtroStatus, setFiltroStatus] = useState<string>('');
+  const [filtroObservacao, setFiltroObservacao] = useState<string>('');
+  
+  // Estados para ordenação
+  const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
+  const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
   
   // Estados para modal de NÃO LIBERADO
   const [modalNaoLiberadoAberto, setModalNaoLiberadoAberto] = useState(false);
@@ -48,6 +54,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     try {
       const dados = await agendamentoService.getAll(hospitalId);
       console.log('💰 Agendamentos carregados para faturamento:', dados);
+      console.log('💰 Campos de faturamento do primeiro registro:', dados[0] ? {
+        faturamento_status: dados[0].faturamento_status,
+        faturamento_liberado: dados[0].faturamento_liberado,
+        faturamento_observacao: dados[0].faturamento_observacao
+      } : 'Nenhum registro');
       
       // Filtrar registros de grade cirúrgica (MESMA LÓGICA que Documentação e Anestesia)
       const semGradeCirurgica = dados.filter(ag => {
@@ -231,6 +242,24 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         if (!medico.includes(filtroMedico.toLowerCase())) return false;
       }
       
+      // Filtro por status
+      if (filtroStatus) {
+        if (filtroStatus === 'sem_status') {
+          // Filtrar apenas os que NÃO têm status definido
+          if (ag.faturamento_status) return false;
+        } else {
+          // Filtrar pelo status específico
+          if (ag.faturamento_status !== filtroStatus) return false;
+        }
+      }
+      
+      // Filtro por observação
+      if (filtroObservacao) {
+        const temObservacao = ag.observacao_faturamento && ag.observacao_faturamento.trim() !== '';
+        if (filtroObservacao === 'com_observacao' && !temObservacao) return false;
+        if (filtroObservacao === 'sem_observacao' && temObservacao) return false;
+      }
+      
       return true;
     });
   };
@@ -244,20 +273,44 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setFiltroDataConsulta('');
     setFiltroDataCirurgia('');
     setFiltroMedico('');
+    setFiltroStatus('');
+    setFiltroObservacao('');
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMedico;
+  const temFiltrosAtivos = filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMedico || filtroStatus || filtroObservacao;
+  
+  // Alternar ordenação ao clicar no cabeçalho
+  const handleOrdenacao = (coluna: 'data_consulta' | 'data_cirurgia') => {
+    if (colunaOrdenacao === coluna) {
+      // Se já está ordenando por essa coluna, alterna a direção
+      setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Se é uma nova coluna, define ela como ordenação com direção ascendente
+      setColunaOrdenacao(coluna);
+      setDirecaoOrdenacao('asc');
+    }
+  };
   
   // Ordenar por data e médico
   const ordenarPorDataEMedico = (lista: Agendamento[]) => {
     return [...lista].sort((a, b) => {
-      // PRIORIDADE 1: Data de cirurgia
-      const dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
-      const dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+      // PRIORIDADE 1: Coluna selecionada para ordenação
+      let dataA: string;
+      let dataB: string;
+      
+      if (colunaOrdenacao === 'data_consulta') {
+        dataA = a.data_consulta || '9999-12-31';
+        dataB = b.data_consulta || '9999-12-31';
+      } else {
+        // Default: data_cirurgia
+        dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
+        dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+      }
       
       if (dataA !== dataB) {
-        return dataA.localeCompare(dataB);
+        const comparacao = dataA.localeCompare(dataB);
+        return direcaoOrdenacao === 'asc' ? comparacao : -comparacao;
       }
       
       // PRIORIDADE 2: Nome do médico (alfabético)
@@ -285,7 +338,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMedico]);
+  }, [filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMedico, filtroStatus, filtroObservacao]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -458,6 +511,97 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     // null = sem seleção
     return 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-red-400';
   };
+  
+  // Atualizar status do faturamento
+  const handleAtualizarStatus = async (ag: Agendamento, novoStatus: 'pendente' | 'auditor' | 'autorizado' | null) => {
+    if (!ag.id) return;
+    
+    try {
+      const updateData: Partial<Agendamento> = {
+        faturamento_status: novoStatus
+      };
+      
+      await agendamentoService.update(ag.id, updateData);
+      
+      // Atualizar lista local
+      setAgendamentos(prev => prev.map(agItem => 
+        agItem.id === ag.id 
+          ? { ...agItem, ...updateData }
+          : agItem
+      ));
+      
+      if (novoStatus) {
+        success(`Status atualizado para "${novoStatus.charAt(0).toUpperCase() + novoStatus.slice(1)}"`);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      toastError('Erro ao atualizar status. Tente novamente');
+    }
+  };
+  
+  // Obter estilo do select de status
+  const getStatusSelectStyle = (status: string | null | undefined) => {
+    switch (status) {
+      case 'pendente':
+        return 'bg-yellow-50 border-yellow-400 text-yellow-800';
+      case 'auditor':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'autorizado':
+        return 'bg-green-50 border-green-400 text-green-800';
+      default:
+        return 'bg-gray-50 border-gray-300 text-gray-600';
+    }
+  };
+  
+  // Estado para controlar observação em edição
+  const [observacaoEmEdicao, setObservacaoEmEdicao] = useState<{ [id: string]: string }>({});
+  const [salvandoObservacao, setSalvandoObservacao] = useState<string | null>(null);
+  
+  // Salvar observação do faturamento
+  const handleSalvarObservacao = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    
+    const novaObservacao = observacaoEmEdicao[ag.id] ?? ag.observacao_faturamento ?? '';
+    
+    setSalvandoObservacao(ag.id);
+    try {
+      const updateData: Partial<Agendamento> = {
+        observacao_faturamento: novaObservacao.trim() || null
+      };
+      
+      await agendamentoService.update(ag.id, updateData);
+      
+      // Atualizar lista local
+      setAgendamentos(prev => prev.map(agItem => 
+        agItem.id === ag.id 
+          ? { ...agItem, ...updateData }
+          : agItem
+      ));
+      
+      // Limpar estado de edição
+      setObservacaoEmEdicao(prev => {
+        const novo = { ...prev };
+        delete novo[ag.id!];
+        return novo;
+      });
+      
+      success('Observação salva com sucesso');
+    } catch (error) {
+      console.error('Erro ao salvar observação:', error);
+      toastError('Erro ao salvar observação. Tente novamente');
+    } finally {
+      setSalvandoObservacao(null);
+    }
+  };
+  
+  // Verificar se a observação foi modificada
+  const observacaoModificada = (ag: Agendamento) => {
+    if (!ag.id) return false;
+    const original = ag.observacao_faturamento || '';
+    const editada = observacaoEmEdicao[ag.id];
+    if (editada === undefined) return false;
+    return editada !== original;
+  };
 
   // Verificar se linha está expandida
   const isLinhaExpandida = (agendamentoId: string | undefined) => {
@@ -569,11 +713,21 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         <tr className="hover:bg-gray-50">
           {/* Paciente */}
           <td className="px-4 py-3 w-48">
-            <div 
-              className="text-sm font-medium text-gray-900 truncate"
-              title={ag.nome_paciente || ag.nome || '-'}
-            >
-              {ag.nome_paciente || ag.nome || '-'}
+            <div className="flex items-center gap-1">
+              <div 
+                className="text-sm font-medium text-gray-900 truncate"
+                title={ag.nome_paciente || ag.nome || '-'}
+              >
+                {ag.nome_paciente || ag.nome || '-'}
+              </div>
+              {ag.observacao_faturamento && (
+                <span 
+                  className="flex-shrink-0 text-amber-500" 
+                  title={`Observação: ${ag.observacao_faturamento}`}
+                >
+                  📝
+                </span>
+              )}
             </div>
           </td>
           
@@ -611,29 +765,19 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </div>
           </td>
           
-          {/* Liberação - Checkboxes */}
-          <td className="px-4 py-4 w-56">
-            <div className="flex items-center gap-2">
-              {/* Checkbox LIBERADO */}
-              <button
-                onClick={() => handleMarcarLiberado(ag)}
-                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${getCorLiberado(ag)}`}
-                title="Liberado para faturamento - Clique para marcar/desmarcar"
-                type="button"
-              >
-                ✅ LIBERADO
-              </button>
-
-              {/* Checkbox NÃO LIBERADO */}
-              <button
-                onClick={() => handleAbrirModalNaoLiberado(ag)}
-                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${getCorNaoLiberado(ag)}`}
-                title="Não liberado - requer observação (salva no banco)"
-                type="button"
-              >
-                ❌ NÃO LIBERADO
-              </button>
-            </div>
+          {/* Status */}
+          <td className="px-4 py-3 w-32">
+            <select
+              value={ag.faturamento_status || ''}
+              onChange={(e) => handleAtualizarStatus(ag, e.target.value as 'pendente' | 'auditor' | 'autorizado' | null || null)}
+              className={`w-full px-2 py-1 text-xs font-medium rounded border cursor-pointer transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none ${getStatusSelectStyle(ag.faturamento_status)}`}
+              title="Selecione o status do faturamento"
+            >
+              <option value="">Selecione...</option>
+              <option value="pendente">Pendente</option>
+              <option value="auditor">Auditor</option>
+              <option value="autorizado">Autorizado</option>
+            </select>
           </td>
           
           {/* Ações - Download */}
@@ -714,6 +858,52 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <div className="text-sm text-gray-900">
                     {ag.telefone || '-'}
                   </div>
+                </div>
+              </div>
+              
+              {/* Campo de Observação do Faturamento */}
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-600">📝</span>
+                  <label className="text-sm font-semibold text-gray-700">
+                    Observação do Faturamento
+                  </label>
+                </div>
+                <textarea
+                  value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ''}
+                  onChange={(e) => setObservacaoEmEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                  placeholder="Digite uma observação sobre este paciente..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
+                  rows={2}
+                  disabled={salvandoObservacao === ag.id}
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs text-gray-500">
+                    {ag.observacao_faturamento ? 'Observação salva' : 'Nenhuma observação salva'}
+                  </span>
+                  <button
+                    onClick={() => handleSalvarObservacao(ag)}
+                    disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
+                      observacaoModificada(ag)
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {salvandoObservacao === ag.id ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Salvar Observação
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
               
@@ -831,7 +1021,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {/* Filtro Paciente */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -887,6 +1077,40 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
+          
+          {/* Filtro Status */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Status
+            </label>
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white"
+            >
+              <option value="">Todos</option>
+              <option value="sem_status">Sem status</option>
+              <option value="pendente">Pendente</option>
+              <option value="auditor">Auditor</option>
+              <option value="autorizado">Autorizado</option>
+            </select>
+          </div>
+          
+          {/* Filtro Observação */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Observação
+            </label>
+            <select
+              value={filtroObservacao}
+              onChange={(e) => setFiltroObservacao(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white"
+            >
+              <option value="">Todos</option>
+              <option value="com_observacao">📝 Com observação</option>
+              <option value="sem_observacao">Sem observação</option>
+            </select>
+          </div>
         </div>
         
         {/* Indicador de resultados filtrados */}
@@ -900,31 +1124,31 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         )}
       </div>
       
-      {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {/* Cards de Resumo - Compactos */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
         {/* Card: Prontos */}
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+        <div className="bg-white rounded-lg shadow px-3 py-2 border-l-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Prontos para Faturamento</p>
-              <p className="text-2xl font-bold text-gray-900">{agendamentosProntosOrdenados.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Exames + Pré-Op anexados</p>
+              <p className="text-xs text-gray-600">Prontos para Faturamento</p>
+              <p className="text-xl font-bold text-gray-900">{agendamentosProntosOrdenados.length}</p>
+              <p className="text-[10px] text-gray-500">Exames + Pré-Op anexados</p>
             </div>
-            <div className="text-4xl">✅</div>
+            <div className="text-2xl">✅</div>
           </div>
         </div>
         
         {/* Card: Pendentes */}
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+        <div className="bg-white rounded-lg shadow px-3 py-2 border-l-4 border-yellow-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Pendências</p>
-              <p className="text-2xl font-bold text-gray-900">{totalPendentesUnicos}</p>
-              <p className="text-xs text-gray-500 mt-1">Falta exames ou pré-op</p>
+              <p className="text-xs text-gray-600">Pendências</p>
+              <p className="text-xl font-bold text-gray-900">{totalPendentesUnicos}</p>
+              <p className="text-[10px] text-gray-500">Falta exames ou pré-op</p>
             </div>
             <button
               onClick={() => setMostrarPendencias(!mostrarPendencias)}
-              className="text-4xl hover:scale-110 transition-transform cursor-pointer"
+              className="text-2xl hover:scale-110 transition-transform cursor-pointer"
               title={mostrarPendencias ? 'Ocultar pendências' : 'Ver pendências'}
             >
               ⚠️
@@ -933,14 +1157,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         </div>
         
         {/* Card: Total */}
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+        <div className="bg-white rounded-lg shadow px-3 py-2 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total de Pacientes</p>
-              <p className="text-2xl font-bold text-gray-900">{totalPacientesUnicos}</p>
-              <p className="text-xs text-gray-500 mt-1">Com procedimento associado</p>
+              <p className="text-xs text-gray-600">Total de Pacientes</p>
+              <p className="text-xl font-bold text-gray-900">{totalPacientesUnicos}</p>
+              <p className="text-[10px] text-gray-500">Com procedimento associado</p>
             </div>
-            <div className="text-4xl">📊</div>
+            <div className="text-2xl">📊</div>
           </div>
         </div>
       </div>
@@ -1097,14 +1321,36 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
                       Médico
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                      Data Consulta
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      onClick={() => handleOrdenacao('data_consulta')}
+                      title="Clique para ordenar por Data Consulta"
+                    >
+                      <div className="flex items-center gap-1">
+                        Data Consulta
+                        <span className="text-gray-400">
+                          {colunaOrdenacao === 'data_consulta' ? (
+                            direcaoOrdenacao === 'asc' ? '↑' : '↓'
+                          ) : '↕'}
+                        </span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      onClick={() => handleOrdenacao('data_cirurgia')}
+                      title="Clique para ordenar por Data Cirurgia"
+                    >
+                      <div className="flex items-center gap-1">
+                        Data Cirurgia
+                        <span className="text-gray-400">
+                          {colunaOrdenacao === 'data_cirurgia' ? (
+                            direcaoOrdenacao === 'asc' ? '↑' : '↓'
+                          ) : '↕'}
+                        </span>
+                      </div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                      Data Cirurgia
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
-                      Liberação
+                      Status
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
                       Ações

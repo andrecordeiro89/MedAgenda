@@ -26,6 +26,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMedico, setFiltroMedico] = useState<string>('');
   
+  // Estados para ordenação por data
+  const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
+  const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
+  
   // Estados do modal
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
   const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
@@ -287,15 +291,37 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // SEMPRE MOSTRAR TODOS OS REGISTROS (sem agrupamento por paciente)
   let agendamentosFiltrados = agendamentosFiltradosCompletos;
   
-  // ORDENAR: 1º por DATA DE CIRURGIA, 2º por MÉDICO (alfabético dentro de cada dia)
+  // Alternar ordenação ao clicar no cabeçalho
+  const handleOrdenacao = (coluna: 'data_consulta' | 'data_cirurgia') => {
+    if (colunaOrdenacao === coluna) {
+      // Se já está ordenando por essa coluna, alterna a direção
+      setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Se é uma nova coluna, define ela como ordenação com direção ascendente
+      setColunaOrdenacao(coluna);
+      setDirecaoOrdenacao('asc');
+    }
+  };
+  
+  // ORDENAR: 1º por DATA selecionada, 2º por MÉDICO (alfabético dentro de cada dia)
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
-    // PRIORIDADE 1: Ordenar por data (mais próxima primeiro)
-    const dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
-    const dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+    // PRIORIDADE 1: Ordenar pela coluna selecionada
+    let dataA: string;
+    let dataB: string;
+    
+    if (colunaOrdenacao === 'data_consulta') {
+      dataA = a.data_consulta || '9999-12-31';
+      dataB = b.data_consulta || '9999-12-31';
+    } else {
+      // Default: data_cirurgia
+      dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
+      dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+    }
     
     // Se datas diferentes, ordenar por data
     if (dataA !== dataB) {
-      return dataA.localeCompare(dataB);
+      const comparacao = dataA.localeCompare(dataB);
+      return direcaoOrdenacao === 'asc' ? comparacao : -comparacao;
     }
     
     // PRIORIDADE 2: Se mesma data, ordenar por nome do médico (alfabético)
@@ -1506,11 +1532,33 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
                       Médico
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                      Data Consulta
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      onClick={() => handleOrdenacao('data_consulta')}
+                      title="Clique para ordenar por Data Consulta"
+                    >
+                      <div className="flex items-center gap-1">
+                        Data Consulta
+                        <span className="text-gray-400">
+                          {colunaOrdenacao === 'data_consulta' ? (
+                            direcaoOrdenacao === 'asc' ? '↑' : '↓'
+                          ) : '↕'}
+                        </span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                      Data Cirurgia
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      onClick={() => handleOrdenacao('data_cirurgia')}
+                      title="Clique para ordenar por Data Cirurgia"
+                    >
+                      <div className="flex items-center gap-1">
+                        Data Cirurgia
+                        <span className="text-gray-400">
+                          {colunaOrdenacao === 'data_cirurgia' ? (
+                            direcaoOrdenacao === 'asc' ? '↑' : '↓'
+                          ) : '↕'}
+                        </span>
+                      </div>
                     </th>
                     <th 
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-36"
