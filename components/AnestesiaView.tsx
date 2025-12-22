@@ -35,6 +35,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMedico, setFiltroMedico] = useState<string>('');
   
+  // Estados para ordenação por data
+  const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
+  
   // Estados do modal
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
   const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
@@ -227,11 +230,17 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   
   let agendamentosFiltrados = agruparPorPacienteUnico(agendamentosFiltradosCompletos);
   
+  // Alternar ordenação ao clicar no cabeçalho
+  const handleOrdenacao = () => {
+    setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+  
   // Ordenar por data de cirurgia
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
     const dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
     const dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
-    return dataA.localeCompare(dataB);
+    const comparacao = dataA.localeCompare(dataB);
+    return direcaoOrdenacao === 'asc' ? comparacao : -comparacao;
   });
   
   // Total e paginação
@@ -1151,8 +1160,17 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
                       Procedimento
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                      Data Cirurgia
+                    <th 
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      onClick={handleOrdenacao}
+                      title="Clique para ordenar por Data Cirurgia"
+                    >
+                      <div className="flex items-center gap-1">
+                        Data Cirurgia
+                        <span className="text-gray-400">
+                          {direcaoOrdenacao === 'asc' ? '↑' : '↓'}
+                        </span>
+                      </div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
                       Médico
