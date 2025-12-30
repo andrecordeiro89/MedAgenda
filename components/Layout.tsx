@@ -185,7 +185,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                 {alertasAberto && (
                                     <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
                                         {/* Cabeçalho */}
-                                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3">
+                                        <div className="bg-gradient-to-r from-gray-700 to-gray-900 px-4 py-3">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xl">🔔</span>
