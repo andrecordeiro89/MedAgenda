@@ -1,4 +1,5 @@
 import React, { useState, createContext, useContext, ReactNode, useEffect } from 'react';
+import ImageWithFallback from './ImageWithFallback';
 import { Button, Input, Card } from './ui';
 
 // ============================================================================
@@ -395,8 +396,8 @@ const PremiumLoginForm = ({ onSuccess }: PremiumLoginFormProps) => {
       <div className="w-full max-w-6xl px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="flex justify-center">
-            <img
-              src="/imagem_de_login_2.jpg"
+            <ImageWithFallback
+              baseName="imagem_de_login_2"
               alt="Ilustração de login"
               className="max-w-[620px] w-full object-contain select-none"
             />
@@ -497,8 +498,8 @@ const PremiumHospitalSelector = ({ hospitais, onSelect, onBack }: PremiumHospita
       <div className="w-full max-w-6xl px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="flex justify-center">
-            <img
-              src="/imagem_de_login_2.jpg"
+            <ImageWithFallback
+              baseName="imagem_de_login_2"
               alt="Ilustração de login"
               className="max-w-[620px] w-full object-contain select-none"
             />

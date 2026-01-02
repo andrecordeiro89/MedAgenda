@@ -3,24 +3,16 @@ import React, { useState, useEffect } from 'react';
 import { Agendamento, Medico, Procedimento } from '../types';
  
 import { useAuth } from './PremiumLogin';
+import ImageWithFallback from './ImageWithFallback';
 import { agendamentoService } from '../services/supabase';
 
-const DashboardImage: React.FC = () => {
-    const [src, setSrc] = useState('/imagem_de_login.jpg');
-    const [attempt, setAttempt] = useState(0);
-    const handleError = () => {
-        if (attempt === 0) { setSrc('/imagem_de_login.png'); setAttempt(1); return; }
-        if (attempt === 1) { setSrc('/imagem_de_login.webp'); setAttempt(2); return; }
-    };
-    return (
-        <img
-            src={src}
-            alt="Painel de boas‑vindas"
-            onError={handleError}
-            className="max-w-[680px] w-full object-contain select-none"
-        />
-    );
-};
+const DashboardImage: React.FC = () => (
+    <ImageWithFallback
+        baseName="imagem_de_login"
+        alt="Painel de boas‑vindas"
+        className="max-w-[680px] w-full object-contain select-none"
+    />
+);
 
 interface DashboardProps {
     agendamentos: Agendamento[];
