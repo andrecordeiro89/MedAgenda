@@ -1,11 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Agendamento, Medico, Procedimento, Especialidade, MetaEspecialidade } from '../types';
+import { Agendamento, Medico, Procedimento, Especialidade, MetaEspecialidade, ExternalProcedureRecord } from '../types';
 import { Button, Modal, PlusIcon, EditIcon, TrashIcon, Badge, Input, Select } from './ui';
 import { AppointmentForm, DoctorForm, ProcedureForm } from './forms';
 import EspecialidadesMetasView from './EspecialidadesMetasView';
 import { VirtualizedTable } from './VirtualizedTable';
 import { useDebounce } from '../hooks/useDebounce';
+import { useDataCache } from '../contexts/DataCacheContext';
+import { externalDataService } from '../services/external-supabase';
+import { exportAllProceduresToExcel } from '../utils/excelExport';
 import { formatDate } from '../utils';
 // ============================================================================
 // MODO MOCK - Usando localStorage
@@ -38,6 +41,16 @@ interface ManagementViewProps {
 
 const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, procedimentos, especialidades, metasEspecialidades, hospitalId, onRefresh }) => {
   const { hospitalSelecionado } = useAuth();
+  const {
+    mostUsedProcedures,
+    setMostUsedProcedures,
+    setMostUsedLoading,
+    setMostUsedError,
+    setMostUsedProgress,
+    isCacheValid
+  } = useDataCache();
+  const [filterCodigo, setFilterCodigo] = useState('');
+  const debouncedFilterCodigo = useDebounce(filterCodigo, 300);
   
   // Debug: verificar se especialidades estão chegando no ManagementView
   console.log('🏥 ManagementView - Especialidades recebidas:', especialidades?.length || 0, especialidades);
@@ -94,8 +107,8 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
       
       // Filtro de status
       const matchesStatus = filtroStatus === 'todos' || 
-        (filtroStatus === 'liberado' && a.statusLiberacao === 'v') ||
-        (filtroStatus === 'pendente' && a.statusLiberacao === 'x');
+        (filtroStatus === 'liberado' && a.status_liberacao === 'liberado') ||
+        (filtroStatus === 'pendente' && a.status_liberacao !== 'liberado');
       
       // Filtro de tipo (baseado no procedimento)
       const procedimento = procedimentos.find(p => p.id === a.procedimentoId);
@@ -462,8 +475,8 @@ const ManagementView: React.FC<ManagementViewProps> = ({ agendamentos, medicos, 
                         </td>
                         <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">{getProcedimentoName(item.procedimentoId)}</td>
                         <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4">
-                            <Badge color={item.statusLiberacao === 'v' ? 'green' : 'red'}>
-                                {item.statusLiberacao === 'v' ? 'Liberado' : 'Pendente'}
+                            <Badge color={item.status_liberacao === 'liberado' ? 'green' : 'red'}>
+                                {item.status_liberacao === 'liberado' ? 'Liberado' : 'Pendente'}
                             </Badge>
                         </td>
                         <td className="px-3 md:px-4 lg:px-6 py-2 md:py-3 lg:py-4 flex gap-1 md:gap-2">

@@ -5,6 +5,23 @@ import { Agendamento, Medico, Procedimento } from '../types';
 import { useAuth } from './PremiumLogin';
 import { agendamentoService } from '../services/supabase';
 
+const DashboardImage: React.FC = () => {
+    const [src, setSrc] = useState('/imagem_de_login.jpg');
+    const [attempt, setAttempt] = useState(0);
+    const handleError = () => {
+        if (attempt === 0) { setSrc('/imagem_de_login.png'); setAttempt(1); return; }
+        if (attempt === 1) { setSrc('/imagem_de_login.webp'); setAttempt(2); return; }
+    };
+    return (
+        <img
+            src={src}
+            alt="Painel de boas‑vindas"
+            onError={handleError}
+            className="max-w-[680px] w-full object-contain select-none"
+        />
+    );
+};
+
 interface DashboardProps {
     agendamentos: Agendamento[];
     medicos: Medico[];
@@ -174,67 +191,52 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
     const getMedicoEspecialidade = (id: string) => medicos.find(m => m.id === id)?.especialidade || 'N/A';
 
     return (
-        <div className="h-[calc(100vh-4rem)] overflow-hidden px-4">
-            <style>{`
-                @keyframes blink {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.5; }
-                }
-                .blink-animation {
-                    animation: blink 1.5s ease-in-out infinite;
-                }
-            `}</style>
-            <div className="mb-3">
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900">
-                    Bem-vindo ao {hospitalSelecionado?.nome || 'Sistema MedAgenda'}
-                </h2>
-                <p className="text-slate-600 text-sm md:text-base">
-                    {formatarDataCompleta(dataHoje)} • Horário de Brasília • {new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
-                </p>
-            </div>
+        <div className="min-h-screen bg-white">
+            <div className="max-w-7xl mx-auto px-6 pt-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mt-6">
+                    <div className="flex justify-center">
+                        <DashboardImage />
+                    </div>
+                    <div>
+                        <div className="mb-4 text-center md:text-left">
+                            <h2 className="text-3xl font-bold text-slate-900">
+                                Bem-vindo ao {hospitalSelecionado?.nome || 'Sistema MedAgenda'}
+                            </h2>
+                            <p className="text-slate-600 text-sm md:text-base mt-1">
+                                {formatarDataCompleta(dataHoje)} • Horário de Brasília • {new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-slate-700 text-sm md:text-base mt-2">
+                                Seu centro de comando para organizar o ciclo cirúrgico com eficiência, visibilidade e segurança.
+                            </p>
+                        </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="border border-slate-200 rounded-lg p-4 hover:shadow-sm">
-                    <h4 className="text-base md:text-lg font-bold text-slate-900 mb-2">Agenda</h4>
-                    <ul className="list-disc list-inside text-slate-800 text-base md:text-lg leading-relaxed">
-                        <li>Montar Grade Cirúrgica rapidamente</li>
-                        <li>Replicar por especialidade e dias</li>
-                    </ul>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 hover:shadow-sm">
-                    <h4 className="text-base md:text-lg font-bold text-slate-900 mb-2">Documentação</h4>
-                    <ul className="list-disc list-inside text-slate-800 text-base md:text-lg leading-relaxed">
-                        <li>Indicadores de completude</li>
-                        <li>Padronização dos pré‑operatórios</li>
-                    </ul>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 hover:shadow-sm">
-                    <h4 className="text-base md:text-lg font-bold text-slate-900 mb-2">Assistência/Anestesia</h4>
-                    <ul className="list-disc list-inside text-slate-800 text-base md:text-lg leading-relaxed">
-                        <li>Liberação e observações</li>
-                        <li>Acompanhamento do status</li>
-                    </ul>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 hover:shadow-sm">
-                    <h4 className="text-base md:text-lg font-bold text-slate-900 mb-2">Faturamento</h4>
-                    <ul className="list-disc list-inside text-slate-800 text-base md:text-lg leading-relaxed">
-                        <li>Consolidação de procedimentos</li>
-                        <li>Rotinas de cobrança integradas</li>
-                    </ul>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 hover:shadow-sm">
-                    <h4 className="text-base md:text-lg font-bold text-slate-900 mb-2">Relatórios</h4>
-                    <ul className="list-disc list-inside text-slate-800 text-base md:text-lg leading-relaxed">
-                        <li>PDF e visualizações agregadas</li>
-                        <li>Compartilhamento rápido</li>
-                    </ul>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 hover:shadow-sm">
-                    <h4 className="text-base md:text-lg font-bold text-slate-900 mb-2">Operação</h4>
-                    <ul className="list-disc list-inside text-slate-800 text-base md:text-lg leading-relaxed">
-                        <li>Filtros por hospital e perfis</li>
-                        <li>Integração Supabase e API</li>
-                    </ul>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Agenda</h4>
+                                <p className="text-slate-700 text-sm">Monte e replique grades por especialidade e dia.</p>
+                            </div>
+                            <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Documentação</h4>
+                                <p className="text-slate-700 text-sm">Indicadores de completude e padronização pré‑operatória.</p>
+                            </div>
+                            <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Assistência/Anestesia</h4>
+                                <p className="text-slate-700 text-sm">Liberação clínica, observações e status em tempo real.</p>
+                            </div>
+                            <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Faturamento</h4>
+                                <p className="text-slate-700 text-sm">Consolidação de procedimentos e rotinas de cobrança.</p>
+                            </div>
+                            <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Relatórios</h4>
+                                <p className="text-slate-700 text-sm">PDF e visualizações agregadas para decisão rápida.</p>
+                            </div>
+                            <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Operação</h4>
+                                <p className="text-slate-700 text-sm">Filtros por hospital e perfil, integração Supabase/API.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

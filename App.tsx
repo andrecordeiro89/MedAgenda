@@ -140,6 +140,13 @@ const AppContent: React.FC = () => {
         }
     }, [isAuthenticated, hospitalSelecionado]);
     
+    // Sempre iniciar no Dashboard após login
+    useEffect(() => {
+        if (isAuthenticated) {
+            changeView('dashboard');
+        }
+    }, [isAuthenticated]);
+    
     // Verificar se usuário tem acesso à view atual após o login
     useEffect(() => {
         if (isAuthenticated && !hasAccessToView(currentView)) {
@@ -157,19 +164,15 @@ const AppContent: React.FC = () => {
     // Loading screen padrão
     if (loading || authLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300"></div>
-                <div className="absolute inset-0 opacity-20">
-                    <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
-                </div>
-                <div className="text-center relative z-10">
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <div className="text-center">
                     <div className="flex justify-center mb-6">
                         <div className="relative w-12 h-12">
-                            <div className="w-12 h-12 rounded-full border-4 border-slate-300"></div>
+                            <div className="w-12 h-12 rounded-full border-4 border-slate-200"></div>
                             <div className="absolute inset-0 w-12 h-12 rounded-full border-4 border-transparent border-t-gray-700 animate-spin"></div>
                         </div>
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-700 mb-2">Carregando Sistema</h3>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-2">Carregando Sistema</h3>
                     <p className="text-slate-600 text-sm">
                         {hospitalSelecionado ? `Conectando ao ${hospitalSelecionado.nome}...` : 'Inicializando...'}
                     </p>

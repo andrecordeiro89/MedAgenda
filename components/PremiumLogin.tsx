@@ -350,7 +350,7 @@ interface PremiumLoginFormProps {
   onSuccess: (hospitais: Hospital[]) => void;
 }
 
-const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
+const PremiumLoginForm = ({ onSuccess }: PremiumLoginFormProps) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -391,31 +391,24 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background neutro */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300">
-        <div className="absolute inset-0 opacity-20">
-          {/* Padrão de pontos decorativo */}
-          <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
-        </div>
-      </div>
-
-      {/* Container principal */}
-      <div className="relative z-10 w-full max-w-md px-6">
-        {/* Logo e título */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl mb-4 shadow-2xl">
-            <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="w-full max-w-6xl px-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div className="flex justify-center">
+            <img
+              src="/imagem_de_login_2.jpg"
+              alt="Ilustração de login"
+              className="max-w-[620px] w-full object-contain select-none"
+            />
           </div>
-          <h1 className="text-3xl font-bold text-slate-700 mb-2">MedAgenda</h1>
-          <p className="text-slate-600 text-lg">Sistema Multi-Hospitalar</p>
-          <div className="w-24 h-1 bg-gray-300 rounded-full mx-auto mt-4"></div>
-        </div>
-
-        {/* Card de login */}
-        <div className="bg-white/90 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-gray-200">
+          <div className="w-full">
+            <div className="text-center mb-6">
+              <h1 className="text-3xl font-bold text-slate-900">MedAgenda</h1>
+              <p className="text-slate-600 text-sm mt-1">
+                Seu dia cirúrgico organizado com eficiência e precisão
+              </p>
+            </div>
+        <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-200">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Campo de email */}
             <div className="space-y-2">
@@ -448,14 +441,13 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
               )}
             </div>
 
-            {/* Botão de login */}
             <button
               type="submit"
               disabled={isLoading || !email.trim()}
               className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-300 transform ${
                 isLoading || !email.trim()
-                  ? 'bg-gray-500/50 cursor-not-allowed'
-                  : 'bg-gray-700 hover:bg-gray-800 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gray-800 hover:bg-black hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
               }`}
             >
               {isLoading ? (
@@ -477,52 +469,15 @@ const PremiumLoginForm: React.FC<PremiumLoginFormProps> = ({ onSuccess }) => {
           </form>
 
 
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-slate-600 text-sm mb-2">
-              Sistema seguro e confiável para gestão hospitalar
+          <div className="mt-6 text-left">
+            <p className="text-slate-600 text-sm">
+              Acesse com seu email corporativo para gerenciar agendas e documentos com segurança.
             </p>
-            <div className="flex items-center justify-center space-x-4 mt-4">
-              <div className="flex items-center space-x-1">
-                <svg className="w-3 h-3 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-slate-600 text-sm">Seguro</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <svg className="w-3 h-3 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
-                </svg>
-                <span className="text-slate-600 text-sm">Multi-Hospital</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <svg className="w-3 h-3 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                </svg>
-                <span className="text-slate-600 text-sm">Rápido</span>
-              </div>
-            </div>
           </div>
         </div>
-      </div>
-
-      {/* Estilos CSS customizados */}
-      <style jsx="true">{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
-          20%, 40%, 60%, 80% { transform: translateX(2px); }
-        }
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
+        </div>
+          </div>
+        </div>
     </div>
   );
 };
@@ -536,36 +491,29 @@ interface PremiumHospitalSelectorProps {
   onBack: () => void;
 }
 
-const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({ 
-  hospitais, 
-  onSelect, 
-  onBack 
-}) => {
+const PremiumHospitalSelector = ({ hospitais, onSelect, onBack }: PremiumHospitalSelectorProps) => {
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background neutro */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300">
-        <div className="absolute inset-0 opacity-20">
-          {/* Padrão de pontos decorativo */}
-          <div className="w-full h-full bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="w-full max-w-6xl px-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div className="flex justify-center">
+            <img
+              src="/imagem_de_login_2.jpg"
+              alt="Ilustração de login"
+              className="max-w-[620px] w-full object-contain select-none"
+            />
+          </div>
+        <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-200">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 text-center">Selecione o Hospital</h2>
+          <p className="text-slate-700 text-center">Escolha qual hospital deseja acessar</p>
         </div>
-      </div>
-
-      {/* Container principal */}
-      <div className="relative z-10 w-full max-w-lg px-6">
-        {/* Título */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-700 mb-2">Selecione o Hospital</h2>
-          <p className="text-slate-600">Escolha qual hospital deseja acessar</p>
-        </div>
-
-        {/* Cards dos hospitais */}
         <div className="space-y-4">
           {hospitais.map((hospital, index) => (
             <button
               key={hospital.id}
               onClick={() => onSelect(hospital)}
-              className="w-full p-6 text-left bg-white/90 backdrop-blur-md hover:bg-white/95 rounded-2xl border border-gray-200 hover:border-gray-300 transition-all duration-300 transform hover:scale-[1.02] group"
+              className="w-full p-6 text-left bg-white hover:bg-gray-50 rounded-2xl border border-gray-200 hover:border-gray-300 transition-all duration-300 transform hover:scale-[1.02] group"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <div className="flex items-center justify-between">
@@ -592,7 +540,9 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
         >
           ← Voltar ao Login
         </button>
-      </div>
+        </div>
+        </div>
+        </div>
     </div>
   );
 };
@@ -600,7 +550,7 @@ const PremiumHospitalSelector: React.FC<PremiumHospitalSelectorProps> = ({
 // ============================================================================
 // COMPONENTE PRINCIPAL DE LOGIN PREMIUM
 // ============================================================================
-export const PremiumLoginSystem: React.FC = () => {
+export const PremiumLoginSystem = () => {
   const [hospitaisDisponiveis, setHospitaisDisponiveis] = useState<Hospital[]>([]);
   const [showHospitalSelector, setShowHospitalSelector] = useState(false);
   const { selecionarHospital } = useAuth();
@@ -639,7 +589,7 @@ export const PremiumLoginSystem: React.FC = () => {
 // ============================================================================
 // COMPONENTE DE CABEÇALHO PREMIUM
 // ============================================================================
-export const PremiumHospitalHeader: React.FC = () => {
+export const PremiumHospitalHeader = () => {
   const { usuario, hospitalSelecionado, logout } = useAuth();
 
   if (!hospitalSelecionado || !usuario) {

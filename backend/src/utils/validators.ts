@@ -118,7 +118,7 @@ export const validateCreateAgendamento = [
   body('data_nascimento')
     .isISO8601()
     .toDate()
-    .custom((value) => {
+    .custom((value: string) => {
       const today = new Date();
       const birthDate = new Date(value);
       if (birthDate >= today) {
@@ -152,7 +152,7 @@ export const validateCreateAgendamento = [
   body('data_agendamento')
     .isISO8601()
     .toDate()
-    .custom((value) => {
+    .custom((value: string) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const appointmentDate = new Date(value);
@@ -189,7 +189,7 @@ export const validateUpdateAgendamento = [
     .optional()
     .isISO8601()
     .toDate()
-    .custom((value) => {
+    .custom((value: string) => {
       const today = new Date();
       const birthDate = new Date(value);
       if (birthDate >= today) {
@@ -224,7 +224,7 @@ export const validateUpdateAgendamento = [
     .optional()
     .isISO8601()
     .toDate()
-    .custom((value) => {
+    .custom((value: string) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const appointmentDate = new Date(value);
@@ -363,7 +363,7 @@ export const validateDateRange = [
     .optional()
     .isISO8601()
     .withMessage('Data final deve estar no formato YYYY-MM-DD')
-    .custom((value, { req }) => {
+    .custom((value: string, { req }: { req: any }) => {
       if (req.query.startDate && value) {
         const startDate = new Date(req.query.startDate as string);
         const endDate = new Date(value);

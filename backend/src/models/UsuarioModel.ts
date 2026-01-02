@@ -15,7 +15,7 @@ export class UsuarioModel {
       ORDER BY u.email ASC
     `);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       email: row.email,
       hospital_id: row.hospital_id,
@@ -44,7 +44,7 @@ export class UsuarioModel {
       return null;
     }
 
-    const row = result.rows[0];
+    const row: any = result.rows[0];
     return {
       id: row.id,
       email: row.email,
@@ -74,7 +74,7 @@ export class UsuarioModel {
       return null;
     }
 
-    const row = result.rows[0];
+    const row: any = result.rows[0];
     return {
       id: row.id,
       email: row.email,
@@ -101,7 +101,7 @@ export class UsuarioModel {
       ORDER BY u.email ASC
     `, [hospitalId]);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       email: row.email,
       hospital_id: row.hospital_id,
@@ -127,7 +127,7 @@ export class UsuarioModel {
       ORDER BY u.email ASC
     `, [`%${term}%`]);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       email: row.email,
       hospital_id: row.hospital_id,

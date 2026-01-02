@@ -131,16 +131,13 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
     const navLinks = allNavLinks.filter(link => hasAccessToView(link.view));
 
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-white overflow-y-hidden">
             {/* Barra unificada neutra */}
             <header className="bg-gradient-to-r from-gray-700 to-gray-900 shadow-lg sticky top-0 z-30">
                 <div className="w-full px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16 gap-6">
                         {/* Logo e nome - lado esquerdo (fixo) */}
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center">
-                                <CalendarIcon className="w-5 h-5 text-white"/>
-                            </div>
+                        <div className="flex items-center flex-shrink-0">
                             <h1 className="text-xl font-bold text-white whitespace-nowrap">MedAgenda</h1>
                         </div>
 

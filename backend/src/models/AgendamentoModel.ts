@@ -18,7 +18,7 @@ export class AgendamentoModel {
       ORDER BY a.data_agendamento ASC
     `);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       nome_paciente: row.nome_paciente,
       data_nascimento: row.data_nascimento,
@@ -29,20 +29,23 @@ export class AgendamentoModel {
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
+      hospital_id: row.hospital_id,
       medico: {
         id: row.medico_id,
         nome: row.medico_nome,
         especialidade: row.medico_especialidade,
         crm: '', // Não necessário para o frontend
         telefone: '',
-        email: ''
+        email: '',
+        hospital_id: row.hospital_id
       },
       procedimento: {
         id: row.procedimento_id,
         nome: row.procedimento_nome,
         tipo: row.procedimento_tipo,
         duracao_estimada_min: 0,
-        descricao: ''
+        descricao: '',
+        hospital_id: row.hospital_id
       },
       idade: parseInt(row.idade)
     }));
@@ -65,7 +68,7 @@ export class AgendamentoModel {
 
     if (result.rows.length === 0) return null;
 
-    const row = result.rows[0];
+    const row: any = result.rows[0];
     return {
       id: row.id,
       nome_paciente: row.nome_paciente,
@@ -77,20 +80,23 @@ export class AgendamentoModel {
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
+      hospital_id: row.hospital_id,
       medico: {
         id: row.medico_id,
         nome: row.medico_nome,
         especialidade: row.medico_especialidade,
         crm: '',
         telefone: '',
-        email: ''
+        email: '',
+        hospital_id: row.hospital_id
       },
       procedimento: {
         id: row.procedimento_id,
         nome: row.procedimento_nome,
         tipo: row.procedimento_tipo,
         duracao_estimada_min: 0,
-        descricao: ''
+        descricao: '',
+        hospital_id: row.hospital_id
       },
       idade: parseInt(row.idade)
     };
@@ -112,7 +118,7 @@ export class AgendamentoModel {
       ORDER BY a.data_agendamento ASC
     `, [date]);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       nome_paciente: row.nome_paciente,
       data_nascimento: row.data_nascimento,
@@ -123,20 +129,23 @@ export class AgendamentoModel {
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
+      hospital_id: row.hospital_id,
       medico: {
         id: row.medico_id,
         nome: row.medico_nome,
         especialidade: row.medico_especialidade,
         crm: '',
         telefone: '',
-        email: ''
+        email: '',
+        hospital_id: row.hospital_id
       },
       procedimento: {
         id: row.procedimento_id,
         nome: row.procedimento_nome,
         tipo: row.procedimento_tipo,
         duracao_estimada_min: 0,
-        descricao: ''
+        descricao: '',
+        hospital_id: row.hospital_id
       },
       idade: parseInt(row.idade)
     }));
@@ -158,7 +167,7 @@ export class AgendamentoModel {
       ORDER BY a.data_agendamento ASC
     `, [medicoId]);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       nome_paciente: row.nome_paciente,
       data_nascimento: row.data_nascimento,
@@ -169,20 +178,23 @@ export class AgendamentoModel {
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
+      hospital_id: row.hospital_id,
       medico: {
         id: row.medico_id,
         nome: row.medico_nome,
         especialidade: row.medico_especialidade,
         crm: '',
         telefone: '',
-        email: ''
+        email: '',
+        hospital_id: row.hospital_id
       },
       procedimento: {
         id: row.procedimento_id,
         nome: row.procedimento_nome,
         tipo: row.procedimento_tipo,
         duracao_estimada_min: 0,
-        descricao: ''
+        descricao: '',
+        hospital_id: row.hospital_id
       },
       idade: parseInt(row.idade)
     }));
@@ -286,7 +298,7 @@ export class AgendamentoModel {
       ORDER BY a.data_agendamento ASC
     `, [`%${term}%`]);
     
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       nome_paciente: row.nome_paciente,
       data_nascimento: row.data_nascimento,
@@ -371,7 +383,7 @@ export class AgendamentoModel {
     `);
 
     const stats = statsResult.rows[0];
-    const proximos = proximosResult.rows.map(row => ({
+    const proximos = proximosResult.rows.map((row: any) => ({
       id: row.id,
       nome_paciente: row.nome_paciente,
       data_nascimento: row.data_nascimento,
@@ -382,20 +394,23 @@ export class AgendamentoModel {
       status_liberacao: row.status_liberacao,
       medico_id: row.medico_id,
       procedimento_id: row.procedimento_id,
+      hospital_id: row.hospital_id,
       medico: {
         id: row.medico_id,
         nome: row.medico_nome,
         especialidade: row.medico_especialidade,
         crm: '',
         telefone: '',
-        email: ''
+        email: '',
+        hospital_id: row.hospital_id
       },
       procedimento: {
         id: row.procedimento_id,
         nome: row.procedimento_nome,
         tipo: row.procedimento_tipo,
         duracao_estimada_min: 0,
-        descricao: ''
+        descricao: '',
+        hospital_id: row.hospital_id
       },
       idade: parseInt(row.idade)
     }));
