@@ -10,13 +10,7 @@ interface Props {
 export const ImageWithFallback: React.FC<Props> = ({ baseName, alt, className, maxWidth }) => {
   const [srcIndex, setSrcIndex] = useState(0)
   const baseUrl = (import.meta as any).env?.BASE_URL || '/'
-  // Buscar assets empacotados pelo Vite (se existirem em /assets)
-  const assetModules: Record<string, any> = import.meta.glob('../assets/*.{jpg,png,webp}', { eager: true })
-  const assetUrls = Object.entries(assetModules)
-    .filter(([path]) => path.includes(`/${baseName}.`))
-    .map(([,mod]) => (mod as any)?.default || (mod as any))
   const candidates = [
-    ...assetUrls,
     `${baseUrl}images/${baseName}.jpg`,
     `${baseUrl}images/${baseName}.png`,
     `${baseUrl}images/${baseName}.webp`,
