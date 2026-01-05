@@ -56,6 +56,15 @@
 <style>
   html, body { height: 100%; }
   body { overflow-y: auto; }
+  html { zoom: 0.8; }
+  @-moz-document url-prefix() {
+    html { zoom: 1; }
+    body {
+      transform: scale(0.8);
+      transform-origin: top left;
+      width: 125%;
+    }
+  }
 </style>
 </head>
 <body class="bg-white text-slate-800">
