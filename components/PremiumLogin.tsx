@@ -5,7 +5,7 @@ import { Button, Input, Card } from './ui';
 // ============================================================================
 // TIPOS E INTERFACES
 // ============================================================================
-export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento';
+export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'coordenacao';
 
 interface Hospital {
   id: string;
@@ -28,6 +28,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   userRole: UserRole | null; // Novo campo para facilitar acesso
+  hospitaisDisponiveis: Hospital[];
   login: (email: string) => Promise<void>;
   selecionarHospital: (hospital: Hospital) => void;
   logout: () => void;
@@ -68,6 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [hospitalSelecionado, setHospitalSelecionado] = useState<Hospital | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hospitaisDisponiveis, setHospitaisDisponiveis] = useState<Hospital[]>([]);
 
   // PERSISTÊNCIA: Carregar dados do localStorage ao inicializar
   useEffect(() => {
@@ -77,6 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const authData = JSON.parse(savedAuth);
         setUsuario(authData.usuario);
         setHospitalSelecionado(authData.hospital);
+        setHospitaisDisponiveis(authData.hospitais || []);
         setIsAuthenticated(true);
         console.log('🔄 Login restaurado do localStorage:', authData.hospital.nome);
       } catch (error) {
@@ -291,6 +294,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       };
 
+      // Login de coordenação única com acesso a múltiplos hospitais
+      if (email === 'coordenacao@medagenda.com') {
+        const hospitais: Hospital[] = [
+          { id: '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba', nome: 'Hospital Municipal Santa Alice', cidade: 'Santa Mariana', cnpj: '14.736.446/0001-93' },
+          { id: '4111b99d-8b4a-4b51-9561-a2fbd14e776e', nome: 'Hospital Municipal Juarez Barreto de Macedo', cidade: 'Faxinal', cnpj: '14.736.446/0006-06' },
+          { id: '4a2527c1-df09-4a36-a08f-adc63f555123', nome: 'Hospital Maternidade Rio Branco do Sul', cidade: 'Rio Branco do Sul', cnpj: '14.736.446/0012-46' },
+          { id: '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7', nome: 'Hospital Torao Tokuda', cidade: 'Apucarana', cnpj: '08325231001400' },
+          { id: '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a', nome: 'Hospital Municipal 18 de Dezembro', cidade: 'Arapoti', cnpj: '14.736.446/0008-60' },
+          { id: '933de4fb-ebfd-4838-bb43-153a7354d333', nome: 'Hospital Maternidade Nossa Senhora Aparecida', cidade: 'Fazenda Rio Grande', cnpj: '14.736.446/0010-84' },
+          { id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da', nome: 'Hospital Municipal São José', cidade: 'Carlópolis', cnpj: '14.736.446/0007-89' },
+          { id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f', nome: 'Hospital Nossa Senhora Aparecida', cidade: 'Foz do Iguaçu', cnpj: '14.736.446/0009-40' }
+        ];
+
+        const usuarioCoord: Usuario = {
+          id: `user-${Date.now()}`,
+          email,
+          hospital_id: hospitais[0].id,
+          hospital: hospitais[0],
+          role: 'coordenacao'
+        };
+
+        setUsuario(usuarioCoord);
+        setHospitalSelecionado(hospitais[0]);
+        setHospitaisDisponiveis(hospitais);
+        setIsAuthenticated(true);
+
+        localStorage.setItem('medagenda-auth', JSON.stringify({
+          usuario: usuarioCoord,
+          hospital: hospitais[0],
+          hospitais
+        }));
+        console.log('💾 Login coordenação com múltiplos hospitais:', hospitais.length);
+        setIsLoading(false);
+        return;
+      }
+
       const hospitalData = emailHospitalMap[email];
       
       if (!hospitalData) {
@@ -308,12 +347,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setUsuario(usuario);
       setHospitalSelecionado(hospitalData);
+      setHospitaisDisponiveis([hospitalData]);
       setIsAuthenticated(true);
 
       // PERSISTÊNCIA: Salvar no localStorage
       localStorage.setItem('medagenda-auth', JSON.stringify({
         usuario: usuario,
-        hospital: hospitalData
+        hospital: hospitalData,
+        hospitais: [hospitalData]
       }));
       console.log('💾 Login salvo no localStorage:', hospitalData.nome, `(${hospitalData.role})`);
       
@@ -348,6 +389,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isAuthenticated,
         isLoading,
         userRole: usuario?.role || null,
+        hospitaisDisponiveis,
         login,
         selecionarHospital,
         logout,
@@ -378,6 +420,7 @@ export const useHospitalFilter = () => {
     
     // Admin tem acesso a tudo
     if (userRole === 'admin') return true;
+    if (userRole === 'coordenacao') return true;
     
     // Recepcao e Triagem têm acesso apenas a Dashboard e Documentação
     if (userRole === 'recepcao' || userRole === 'triagem') {
@@ -647,7 +690,7 @@ export const PremiumLoginSystem = () => {
 // COMPONENTE DE CABEÇALHO PREMIUM
 // ============================================================================
 export const PremiumHospitalHeader = () => {
-  const { usuario, hospitalSelecionado, logout } = useAuth();
+  const { usuario, hospitalSelecionado, hospitaisDisponiveis, selecionarHospital, logout } = useAuth();
 
   if (!hospitalSelecionado || !usuario) {
     return null;
@@ -673,6 +716,26 @@ export const PremiumHospitalHeader = () => {
             </div>
           </div>
           
+          {usuario.role === 'coordenacao' && hospitaisDisponiveis.length > 0 && (
+            <div className="hidden md:flex items-center gap-3">
+              <select
+                value={hospitalSelecionado.id}
+                onChange={(e) => {
+                  const h = hospitaisDisponiveis.find(x => x.id === e.target.value);
+                  if (h) selecionarHospital(h);
+                }}
+                className="px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
+                title="Trocar hospital"
+              >
+                {hospitaisDisponiveis.map(h => (
+                  <option key={h.id} value={h.id} className="bg-gray-800 text-white">
+                    {h.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             onClick={logout}
             className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg text-white transition-all duration-200 border border-white/20 hover:border-white/30"

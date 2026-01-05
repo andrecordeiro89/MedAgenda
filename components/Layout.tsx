@@ -11,7 +11,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) => {
-    const { usuario, hospitalSelecionado, logout } = useAuth();
+    const { usuario, hospitalSelecionado, hospitaisDisponiveis, selecionarHospital, logout } = useAuth();
     const { hasAccessToView } = useHospitalFilter();
     const [isMenuOpen, setMenuOpen] = useState(false);
     
@@ -293,6 +293,23 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     {hospitalSelecionado?.nome || 'Hospital não selecionado'}{hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
+                            {usuario?.role === 'coordenacao' && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                                <select
+                                    value={hospitalSelecionado?.id || ''}
+                                    onChange={(e) => {
+                                        const h = hospitaisDisponiveis.find(x => x.id === e.target.value);
+                                        if (h) selecionarHospital(h);
+                                    }}
+                                    className="px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
+                                    title="Trocar hospital"
+                                >
+                                    {hospitaisDisponiveis.map(h => (
+                                        <option key={h.id} value={h.id} className="bg-gray-800 text-white">
+                                            {h.nome}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                             <button
                                 onClick={logout}
                                 className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg text-white transition-all duration-200 border border-white/20 hover:border-white/30 text-sm font-medium whitespace-nowrap"
@@ -343,6 +360,25 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     {hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
+                            {usuario?.role === 'coordenacao' && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                                <div className="px-3 py-2">
+                                    <select
+                                        value={hospitalSelecionado?.id || ''}
+                                        onChange={(e) => {
+                                            const h = hospitaisDisponiveis.find(x => x.id === e.target.value);
+                                            if (h) selecionarHospital(h);
+                                        }}
+                                        className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
+                                        title="Trocar hospital"
+                                    >
+                                        {hospitaisDisponiveis.map(h => (
+                                            <option key={h.id} value={h.id} className="bg-gray-800 text-white">
+                                                {h.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <button
                                 onClick={logout}
                                 className="w-full mt-2 px-3 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all duration-200 border border-white/20 text-base font-medium"
