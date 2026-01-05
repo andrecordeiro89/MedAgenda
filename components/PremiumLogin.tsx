@@ -232,6 +232,62 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cidade: 'Apucarana',
           cnpj: '08325231001400',
           role: 'admin'
+        },
+        'coordenacao.sm@medagenda.com': {
+          id: '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba',
+          nome: 'Hospital Municipal Santa Alice',
+          cidade: 'Santa Mariana',
+          cnpj: '14.736.446/0001-93',
+          role: 'admin'
+        },
+        'coordenacao.fax@medagenda.com': {
+          id: '4111b99d-8b4a-4b51-9561-a2fbd14e776e',
+          nome: 'Hospital Municipal Juarez Barreto de Macedo',
+          cidade: 'Faxinal',
+          cnpj: '14.736.446/0006-06',
+          role: 'admin'
+        },
+        'coordenacao.rbs@medagenda.com': {
+          id: '4a2527c1-df09-4a36-a08f-adc63f555123',
+          nome: 'Hospital Maternidade Rio Branco do Sul',
+          cidade: 'Rio Branco do Sul',
+          cnpj: '14.736.446/0012-46',
+          role: 'admin'
+        },
+        'coordenacao.apu@medagenda.com': {
+          id: '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7',
+          nome: 'Hospital Torao Tokuda',
+          cidade: 'Apucarana',
+          cnpj: '08325231001400',
+          role: 'admin'
+        },
+        'coordenacao.ara@medagenda.com': {
+          id: '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a',
+          nome: 'Hospital Municipal 18 de Dezembro',
+          cidade: 'Arapoti',
+          cnpj: '14.736.446/0008-60',
+          role: 'admin'
+        },
+        'coordenacao.frg@medagenda.com': {
+          id: '933de4fb-ebfd-4838-bb43-153a7354d333',
+          nome: 'Hospital Maternidade Nossa Senhora Aparecida',
+          cidade: 'Fazenda Rio Grande',
+          cnpj: '14.736.446/0010-84',
+          role: 'admin'
+        },
+        'coordenacao.car@medagenda.com': {
+          id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da',
+          nome: 'Hospital Municipal São José',
+          cidade: 'Carlópolis',
+          cnpj: '14.736.446/0007-89',
+          role: 'admin'
+        },
+        'coordenacao.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'admin'
         }
       };
 
