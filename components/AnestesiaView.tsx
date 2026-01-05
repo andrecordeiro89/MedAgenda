@@ -341,9 +341,24 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setUploading(true);
 
     try {
-      const fileExt = arquivoFichaSelecionado.name.split('.').pop();
-      const fileName = `ficha-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `fichas/${agendamentoSelecionado.id}/${fileName}`;
+      const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
+        const existing = new Set((data || []).map(f => f.name));
+        if (!existing.has(originalName)) return originalName;
+        const dot = originalName.lastIndexOf('.');
+        const ext = dot >= 0 ? originalName.slice(dot) : '';
+        const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        let i = 1;
+        let candidate = `${base} (${i})${ext}`;
+        while (existing.has(candidate)) {
+          i++;
+          candidate = `${base} (${i})${ext}`;
+        }
+        return candidate;
+      };
+      const folder = `fichas/${agendamentoSelecionado.id}`;
+      const uniqueName = await getUniqueFileName(folder, arquivoFichaSelecionado.name);
+      const filePath = `${folder}/${uniqueName}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('Documentos')
