@@ -131,7 +131,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
     const navLinks = allNavLinks.filter(link => hasAccessToView(link.view));
 
     return (
-        <div className="min-h-screen bg-white overflow-y-hidden">
+        <div className="min-h-screen bg-white overflow-y-auto">
             {/* Barra unificada neutra */}
             <header className="bg-gradient-to-r from-gray-700 to-gray-900 shadow-lg sticky top-0 z-30">
                 <div className="w-full px-6 lg:px-8">
