@@ -291,6 +291,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cidade: 'Foz do Iguaçu',
           cnpj: '14.736.446/0009-40',
           role: 'admin'
+        },
+        // Novo hospital: Hospital Regional Centro Oeste (Guarapuava)
+        'agendamento.gua@medagenda.com': {
+          id: '09ab26a8-8c2c-4a67-94f7-d450a1be328e',
+          nome: 'Hospital Regional Centro Oeste',
+          cidade: 'Guarapuava',
+          cnpj: '76416866000140',
+          role: 'admin'
+        },
+        'coordenacao.gua@medagenda.com': {
+          id: '09ab26a8-8c2c-4a67-94f7-d450a1be328e',
+          nome: 'Hospital Regional Centro Oeste',
+          cidade: 'Guarapuava',
+          cnpj: '76416866000140',
+          role: 'admin'
         }
       };
 
@@ -304,7 +319,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           { id: '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a', nome: 'Hospital Municipal 18 de Dezembro', cidade: 'Arapoti', cnpj: '14.736.446/0008-60' },
           { id: '933de4fb-ebfd-4838-bb43-153a7354d333', nome: 'Hospital Maternidade Nossa Senhora Aparecida', cidade: 'Fazenda Rio Grande', cnpj: '14.736.446/0010-84' },
           { id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da', nome: 'Hospital Municipal São José', cidade: 'Carlópolis', cnpj: '14.736.446/0007-89' },
-          { id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f', nome: 'Hospital Nossa Senhora Aparecida', cidade: 'Foz do Iguaçu', cnpj: '14.736.446/0009-40' }
+          { id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f', nome: 'Hospital Nossa Senhora Aparecida', cidade: 'Foz do Iguaçu', cnpj: '14.736.446/0009-40' },
+          { id: '09ab26a8-8c2c-4a67-94f7-d450a1be328e', nome: 'Hospital Regional Centro Oeste', cidade: 'Guarapuava', cnpj: '76416866000140' }
         ];
 
         const usuarioCoord: Usuario = {
