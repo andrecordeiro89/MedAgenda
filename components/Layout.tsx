@@ -135,32 +135,32 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
             {/* Barra unificada neutra */}
             <header className="bg-gradient-to-r from-gray-700 to-gray-900 shadow-lg sticky top-0 z-30">
                 <div className="w-full px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16 gap-6">
+                    <div className="flex justify-between items-center h-16 gap-3 md:gap-6">
                         {/* Logo e nome - lado esquerdo (fixo) */}
                         <div className="flex items-center flex-shrink-0">
                             <h1 className="text-xl font-bold text-white whitespace-nowrap">MedAgenda</h1>
                         </div>
 
                         {/* Navegação central - Desktop (flexível) */}
-                        <nav className="hidden md:flex items-center gap-2 flex-1 justify-center max-w-3xl">
+                        <nav className="hidden md:flex items-center gap-1 md:gap-2 flex-1 min-w-0 justify-center md:ml-6 lg:ml-16 xl:ml-24">
                             {navLinks.map(link => (
                                 <button 
                                     key={link.view}
                                     onClick={() => handleNavClick(link.view)}
-                                    className={`flex items-center px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 text-sm font-medium whitespace-nowrap ${
+                                    className={`flex items-center px-2 md:px-2 lg:px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 text-xs md:text-sm font-medium ${
                                         currentView === link.view
                                         ? 'bg-white/20 text-white shadow-sm backdrop-blur-md border border-white/30'
                                         : 'text-white/80 hover:bg-white/10 hover:text-white'
                                     }`}
                                 >
                                     {link.icon}
-                                    <span className="ml-2">{link.label}</span>
+                                    <span className="ml-2 truncate">{link.label}</span>
                                 </button>
                             ))}
                         </nav>
 
                         {/* Usuário, Hospital e botão sair - lado direito (fixo) */}
-                        <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+                        <div className="hidden md:flex items-center gap-3 flex-shrink-0 min-w-0">
                             {/* Sininho de Alertas */}
                             <div className="relative" ref={alertasRef}>
                                 <button
@@ -285,22 +285,22 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                 )}
                             </div>
                             
-                            <div className="text-right">
-                                <div className="text-white font-medium text-sm whitespace-nowrap">
+                            <div className="text-right min-w-0">
+                                <div className="text-white font-medium text-sm whitespace-nowrap truncate max-w-[180px] md:max-w-[220px]">
                                     {usuario?.email || 'Usuário não logado'}
                                 </div>
-                                <div className="text-white/70 text-xs whitespace-nowrap">
+                                <div className="text-white/70 text-xs whitespace-nowrap truncate max-w-[200px] md:max-w-[240px]">
                                     {hospitalSelecionado?.nome || 'Hospital não selecionado'}{hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
-                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento' || usuario?.role === 'diretoria') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
                                 <select
                                     value={hospitalSelecionado?.id || ''}
                                     onChange={(e) => {
                                         const h = hospitaisDisponiveis.find(x => x.id === e.target.value);
                                         if (h) selecionarHospital(h);
                                     }}
-                                    className="px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
+                                    className="px-2 py-1.5 text-xs md:text-sm bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
                                     title="Trocar hospital"
                                 >
                                     {hospitaisDisponiveis.map(h => (
@@ -360,7 +360,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     {hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
-                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento' || usuario?.role === 'diretoria') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
                                 <div className="px-3 py-2">
                                     <select
                                         value={hospitalSelecionado?.id || ''}
@@ -368,7 +368,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                             const h = hospitaisDisponiveis.find(x => x.id === e.target.value);
                                             if (h) selecionarHospital(h);
                                         }}
-                                        className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
+                                        className="w-full px-2 py-2 text-xs md:text-sm bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none"
                                         title="Trocar hospital"
                                     >
                                         {hospitaisDisponiveis.map(h => (

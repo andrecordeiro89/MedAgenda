@@ -57,6 +57,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
   const confirmActionRef = useRef<(() => void) | null>(null);
+  const [tipoDeExame, setTipoDeExame] = useState<string>('');
+  const [examesMeta, setExamesMeta] = useState<Array<{ url: string; tipo: string }>>([]);
+  const [obsAgendamentoEdicao, setObsAgendamentoEdicao] = useState<{ [id: string]: string }>({});
+  const [salvandoObsAgendamento, setSalvandoObsAgendamento] = useState<string | null>(null);
+  
+  const [salvandoAIH, setSalvandoAIH] = useState<Set<string>>(new Set());
+  const [salvandoLiberacao, setSalvandoLiberacao] = useState<Set<string>>(new Set());
   
   // Estados de Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -163,7 +170,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         console.log('👥 Pacientes com múltiplos registros:', Object.fromEntries(comDuplicatas));
       }
       
-      setAgendamentos(agendamentosFiltrados);
+      setAgendamentos(agendamentosFiltrados.map(ag => ({ ...ag, confirmacao: 'Aguardando' })));
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
@@ -347,14 +354,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     
     // PRIORIDADE 3: Se ordenar por anestesista está ativo, usar essa ordenação
     if (ordenarPorAnestesista) {
-      const statusA = a.status_liberacao || 'anestesista';
-      const statusB = b.status_liberacao || 'anestesista';
+      const statusA = (a.status_de_liberacao || a.status_liberacao || '').toString().toLowerCase();
+      const statusB = (b.status_de_liberacao || b.status_liberacao || '').toString().toLowerCase();
       
       const prioridade: Record<string, number> = {
         'liberado': 1,
         'exames': 2,
         'cardio': 3,
-        'anestesista': 4
+        'anestesista': 4,
+        'não liberado': 5,
+        'nao liberado': 5
       };
       
       const prioridadeA = prioridade[statusA] || 999;
@@ -435,6 +444,63 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     // Recolher todas as linhas ao alternar agrupamento
     setLinhasExpandidas(new Set());
   };
+
+  const obsAgendamentoModificada = (ag: Agendamento) => {
+    if (!ag.id) return false;
+    const original = ag.observacao_agendamento || '';
+    const editada = obsAgendamentoEdicao[ag.id];
+    if (editada === undefined) return false;
+    return editada !== original;
+  };
+
+  const handleSalvarObservacaoAgendamento = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    const nova = (obsAgendamentoEdicao[ag.id] ?? ag.observacao_agendamento ?? '').trim();
+    setSalvandoObsAgendamento(ag.id);
+    try {
+      const updateData: Partial<Agendamento> = {
+        observacao_agendamento: nova || null
+      };
+      await agendamentoService.update(ag.id, updateData);
+      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      setObsAgendamentoEdicao(prev => {
+        const next = { ...prev };
+        delete next[ag.id!];
+        return next;
+      });
+      success('Observação do agendamento salva');
+    } catch (error: any) {
+      console.error('Erro ao salvar observação do agendamento:', error);
+      toastError('Erro ao salvar observação. Tente novamente');
+    } finally {
+      setSalvandoObsAgendamento(null);
+    }
+  };
+
+  const handleApagarObservacaoAgendamento = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    setSalvandoObsAgendamento(ag.id);
+    try {
+      const updateData: Partial<Agendamento> = {
+        observacao_agendamento: null
+      };
+      await agendamentoService.update(ag.id, updateData);
+      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      setObsAgendamentoEdicao(prev => {
+        const next = { ...prev };
+        delete next[ag.id!];
+        return next;
+      });
+      success('Observação do agendamento apagada');
+    } catch (error: any) {
+      console.error('Erro ao apagar observação do agendamento:', error);
+      toastError('Erro ao apagar observação. Tente novamente');
+    } finally {
+      setSalvandoObsAgendamento(null);
+      setConfirmOpen(false);
+      confirmActionRef.current = null;
+    }
+  };
   
   // Toggle ordenação por anestesista
   const toggleOrdenarPorAnestesista = () => {
@@ -449,6 +515,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setArquivosComplementaresSelecionados([]);
     setAbaAtiva('documentos');
     setModalUploadAberto(true);
+    setTipoDeExame('');
+    setExamesMeta([]);
     
     // Carregar exames já anexados
     if (ag.documentos_urls) {
@@ -460,6 +528,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
     } else {
       setDocumentosAnexados([]);
+    }
+    
+    // Carregar tipos por anexo
+    const rawMeta: any = (ag as any).documentos_meta;
+    if (typeof rawMeta === 'string') {
+      try {
+        const parsed = JSON.parse(rawMeta);
+        setExamesMeta(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setExamesMeta([]);
+      }
+    } else if (Array.isArray(rawMeta)) {
+      setExamesMeta(rawMeta);
+    } else {
+      setExamesMeta([]);
     }
     
     // Carregar ficha pré-operatória já anexada
@@ -494,6 +577,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setDocumentosAnexados([]);
     }
     
+    // Carregar tipos por anexo
+    const rawMeta2: any = (ag as any).documentos_meta;
+    if (typeof rawMeta2 === 'string') {
+      try {
+        const parsed = JSON.parse(rawMeta2);
+        setExamesMeta(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setExamesMeta([]);
+      }
+    } else if (Array.isArray(rawMeta2)) {
+      setExamesMeta(rawMeta2);
+    } else {
+      setExamesMeta([]);
+    }
+    
     // Carregar ficha pré-operatória
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
     
@@ -523,6 +621,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Remover documento da lista de seleção
   const handleRemoverDocumento = (index: number) => {
     setArquivosDocumentosSelecionados(prev => prev.filter((_, i) => i !== index));
+    setTipoDeExame('');
   };
 
   // Selecionar ficha pré-anestésica (Anestesista)
@@ -548,6 +647,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Upload de Documentos (Recepção)
   const handleUploadDocumentos = async () => {
     if (!agendamentoSelecionado || !agendamentoSelecionado.id || arquivosDocumentosSelecionados.length === 0) {
+      return;
+    }
+    if (!tipoDeExame || tipoDeExame.trim() === '') {
+      toastError('Selecione o tipo do exame antes de anexar');
       return;
     }
 
@@ -601,12 +704,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
       // Combinar URLs antigas com novas
       const todasUrls = [...documentosAnexados, ...urlsUploaded];
+      const novasMetas = [
+        ...examesMeta,
+        ...urlsUploaded.map(u => ({ url: u, tipo: tipoDeExame }))
+      ];
 
       // Atualizar banco de dados
       const updateData: Partial<Agendamento> = {
         documentos_urls: JSON.stringify(todasUrls),
         documentos_ok: todasUrls.length > 0,
-        documentos_data: new Date().toISOString()
+        documentos_data: new Date().toISOString(),
+        tipo_de_exame: tipoDeExame,
+        documentos_meta: novasMetas
       };
 
       await agendamentoService.update(agendamentoSelecionado.id, updateData);
@@ -621,6 +730,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       // Limpar e atualizar estado
       setArquivosDocumentosSelecionados([]);
       setDocumentosAnexados(todasUrls);
+      setTipoDeExame('');
+      setExamesMeta(novasMetas);
       
       success('Exames anexados com sucesso');
     } catch (error: any) {
@@ -742,21 +853,30 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
 
       // Atualizar banco
+      const metaFiltrada = examesMeta.filter(m => m.url !== url);
       const updateData: Partial<Agendamento> = {
         documentos_urls: novasUrls.length > 0 ? JSON.stringify(novasUrls) : null,
         documentos_ok: novasUrls.length > 0,
-        documentos_data: novasUrls.length > 0 ? new Date().toISOString() : null
+        documentos_data: novasUrls.length > 0 ? new Date().toISOString() : null,
+        tipo_de_exame: novasUrls.length > 0 ? (agendamentoSelecionado.tipo_de_exame || tipoDeExame || null) : null,
+        documentos_meta: metaFiltrada.length > 0 ? metaFiltrada : null
       };
 
       await agendamentoService.update(agendamentoSelecionado.id, updateData);
 
       // Atualizar estado
       setDocumentosAnexados(novasUrls);
+      setExamesMeta(metaFiltrada);
+      setTipoDeExame('');
+      setAgendamentoSelecionado(prev => prev ? { ...prev, ...updateData } : prev);
       setAgendamentos(prev => prev.map(ag => 
         ag.id === agendamentoSelecionado.id
           ? { ...ag, ...updateData }
           : ag
       ));
+      if (fileInputDocumentosRef.current) {
+        fileInputDocumentosRef.current.value = '';
+      }
 
       success('Documento removido com sucesso');
     } catch (error: any) {
@@ -800,10 +920,44 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             ? 'bg-green-50/50 hover:bg-green-100/50 border-l-4 border-green-500' 
             : 'hover:bg-gray-50'
         }`}>
+          {/* Status AIH */}
+          <td className="px-3 py-3 w-36">
+            <select
+              value={ag.status_aih || ''}
+              onChange={async (e) => {
+                const novo = e.target.value || null;
+                try {
+                  if (!ag.id) return;
+                  setSalvandoAIH(prev => new Set(prev).add(ag.id!));
+                  await agendamentoService.update(ag.id, { status_aih: novo });
+                  setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
+                  success('Status AIH atualizado');
+                } catch (err) {}
+                finally {
+                  setSalvandoAIH(prev => {
+                    const next = new Set(prev);
+                    if (ag.id) next.delete(ag.id);
+                    return next;
+                  });
+                }
+              }}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+              title="Atualizar Status AIH"
+              disabled={ag.id ? salvandoAIH.has(ag.id) : false}
+            >
+              <option value="">Selecione</option>
+              <option value="Agendado">Agendado</option>
+              <option value="AG Regulação">AG Regulação</option>
+              <option value="Solicitar">Solicitar</option>
+              <option value="Emitida">Emitida</option>
+              <option value="AIH Represada">AIH Represada</option>
+              <option value="AG Ciência SMS">AG Ciência SMS</option>
+            </select>
+          </td>
           {/* Paciente */}
-          <td className="px-4 py-3 w-48">
+          <td className="px-3 py-3 w-64">
             <div 
-              className="text-sm font-medium text-gray-900 truncate"
+              className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-snug"
               title={ag.nome_paciente || ag.nome || '-'}
             >
               {ag.nome_paciente || ag.nome || '-'}
@@ -811,9 +965,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </td>
           
           {/* Procedimento */}
-          <td className="px-4 py-3 w-56">
+          <td className="px-3 py-3 w-72">
             <div 
-              className="text-sm text-gray-700 truncate"
+              className="text-sm text-gray-700 whitespace-normal break-words leading-snug"
               title={ag.procedimentos || '-'}
             >
               {ag.procedimentos || '-'}
@@ -821,9 +975,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </td>
           
           {/* Médico */}
-          <td className="px-4 py-3 w-40">
+          <td className="px-3 py-3 w-48">
             <div 
-              className="text-sm text-gray-700 truncate"
+              className="text-sm text-gray-700 whitespace-normal break-words leading-snug"
               title={ag.medico || '-'}
             >
               {ag.medico || '-'}
@@ -831,25 +985,44 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </td>
           
           {/* Data Consulta */}
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
             {formatarData(ag.data_consulta)}
           </td>
           
           {/* Data Cirurgia */}
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
           
           {/* Status */}
-          <td className="px-6 py-3 whitespace-nowrap w-36">
+          <td className="px-4 py-3 whitespace-nowrap w-32">
             <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>
               {status.texto}
             </span>
           </td>
           
+          {/* Status Liberação */}
+          <td className="px-3 py-3 w-36">
+            <select
+              value={ag.status_de_liberacao || ''}
+              onChange={(e) => handleAtualizarStatusLiberacao(ag.id, (e.target.value || null) as any)}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+              title="Atualizar Status Liberação"
+              disabled={ag.id ? salvandoLiberacao.has(ag.id) : false}
+            >
+              <option value="">Selecione</option>
+              <option value="Liberado">Liberado</option>
+              <option value="Anestesista">Anestesista</option>
+              <option value="Cardio">Cardio</option>
+              <option value="Exames">Exames</option>
+              <option value="Não Liberado">Não Liberado</option>
+            </select>
+          </td>
+          
+          
           {/* Documentação - SEMÁFORO COM CHECKBOXES */}
-          <td className="px-6 py-3 w-64">
-            <div className="flex items-center gap-2 justify-start flex-nowrap overflow-hidden">
+          <td className="px-4 py-3 w-48">
+            <div className="flex items-center gap-1 justify-start flex-nowrap overflow-hidden">
               {/* Checkbox 1: EXAMES */}
               <div className="flex items-center gap-1">
                 <div 
@@ -873,9 +1046,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
                     ag.documentos_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
                   }`}
-                  title="Clique para anexar/ver exames"
+                  title="Clique para anexar/ver anexos"
                 >
-                  🩺 Exames
+                  📎 Anexos
                 </button>
               </div>
               
@@ -911,69 +1084,42 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 </button>
               </div>
               
-              {/* Separador */}
+              {/* Separador removido do bloco de complementares */}
               <div className="h-3 w-px bg-gray-300"></div>
               
-              {/* Checkbox 3: COMPLEMENTARES */}
-              <div className="flex items-center gap-1">
-                <div 
-                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
-                    ag.complementares_ok === true 
-                      ? 'bg-green-500 border-green-600' 
-                      : 'bg-white border-gray-300'
-                  }`}
-                >
-                  {ag.complementares_ok === true && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setAbaAtiva('complementares');
-                    handleAbrirModalUpload(ag);
-                  }}
-                  className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
-                    ag.complementares_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
-                  }`}
-                  title="Clique para anexar/ver complementares"
-                >
-                  📁 Comp.
-                </button>
-              </div>
               
-              {/* Separador */}
-              <div className="h-3 w-px bg-gray-300"></div>
-              
-              {/* Botão Ver Documentos */}
-              {(() => {
-                // Verificar se há algum documento anexado
-                const temExames = ag.documentos_ok === true;
-                const temFicha = ag.ficha_pre_anestesica_ok === true;
-                const temComplementares = ag.complementares_ok === true;
-                const temAlgumDocumento = temExames || temFicha || temComplementares;
-                
-                return (
-                  <button
-                    onClick={() => temAlgumDocumento && handleAbrirModalVisualizacao(ag)}
-                    disabled={!temAlgumDocumento}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold transition-colors ${
-                      temAlgumDocumento
-                        ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 cursor-pointer'
-                        : 'bg-transparent text-gray-300 cursor-default opacity-50 italic'
-                    }`}
-                    title={temAlgumDocumento ? 'Ver todos os documentos' : 'Nenhum documento anexado'}
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    Ver
-                  </button>
-                );
-              })()}
             </div>
+          </td>
+          
+          {/* Confirmado */}
+          <td className="px-3 py-3 w-24">
+            {(() => {
+              const confirmado = (ag.confirmacao || '').toLowerCase() === 'confirmado';
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                    confirmado ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    {confirmado ? 'Confirmado' : 'Aguardando'}
+                  </span>
+                  <button
+                    onClick={() => handleAtualizarConfirmacao(ag.id, confirmado ? 'Aguardando' : 'Confirmado')}
+                    className={`p-1 rounded ${confirmado ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                    title={confirmado ? 'Desconfirmar' : 'Confirmar'}
+                  >
+                    {confirmado ? (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
           </td>
           
           {/* Botão Expandir/Recolher */}
@@ -998,7 +1144,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
          {/* Linha expandida com detalhes */}
          {expandida && (
            <tr className={temExamesEPreOp ? 'bg-green-50/50' : 'bg-gray-50'}>
-             <td colSpan={8} className="px-4 py-4">
+            <td colSpan={11} className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Nascimento */}
                 <div>
@@ -1049,6 +1195,72 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     {ag.procedimentos || '-'}
                   </div>
                 </div>
+                </div>
+              
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-blue-600">📝</span>
+                  <label className="text-sm font-semibold text-gray-700">
+                    Observação do Agendamento
+                  </label>
+                </div>
+                <textarea
+                  value={obsAgendamentoEdicao[ag.id!] ?? ag.observacao_agendamento ?? ''}
+                  onChange={(e) => setObsAgendamentoEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                  placeholder="Digite uma observação sobre este agendamento..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none transition-colors"
+                  rows={2}
+                  disabled={salvandoObsAgendamento === ag.id}
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs text-gray-500">
+                    {ag.observacao_agendamento ? 'Observação salva' : 'Nenhuma observação salva'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleSalvarObservacaoAgendamento(ag)}
+                      disabled={salvandoObsAgendamento === ag.id || !obsAgendamentoModificada(ag)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
+                        obsAgendamentoModificada(ag)
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {salvandoObsAgendamento === ag.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Salvar
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmMessage('Tem certeza que deseja apagar a observação do agendamento?');
+                        confirmActionRef.current = () => handleApagarObservacaoAgendamento(ag);
+                        setConfirmOpen(true);
+                      }}
+                      disabled={salvandoObsAgendamento === ag.id || !(ag.observacao_agendamento?.trim())}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
+                        ag.observacao_agendamento?.trim()
+                          ? 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                      title="Apagar observação"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Apagar
+                    </button>
+                  </div>
+                </div>
               </div>
             </td>
           </tr>
@@ -1058,23 +1270,29 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   };
 
   // Atualizar status de liberação
-  const handleAtualizarStatusLiberacao = async (agendamentoId: string | undefined, novoStatus: StatusLiberacao) => {
+  const handleAtualizarStatusLiberacao = async (agendamentoId: string | undefined, novoStatus: string | null) => {
     if (!agendamentoId) return;
     
     try {
-      await agendamentoService.update(agendamentoId, {
-        status_liberacao: novoStatus
-      });
+      setSalvandoLiberacao(prev => new Set(prev).add(agendamentoId));
+      await agendamentoService.update(agendamentoId, { status_de_liberacao: novoStatus });
       
       // Atualizar estado local
       setAgendamentos(prev => prev.map(ag => 
         ag.id === agendamentoId
-          ? { ...ag, status_liberacao: novoStatus }
+          ? { ...ag, status_de_liberacao: novoStatus }
           : ag
       ));
+      success('Status de liberação atualizado');
     } catch (error: any) {
       console.error('Erro ao atualizar status de liberação:', error);
       toastError(`Erro ao atualizar status: ${error.message}`);
+    } finally {
+      setSalvandoLiberacao(prev => {
+        const next = new Set(prev);
+        next.delete(agendamentoId);
+        return next;
+      });
     }
   };
 
@@ -1608,17 +1826,20 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                      Status AIH
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
                       Paciente
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-72">
                       Procedimento
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
                       Médico
                     </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_consulta')}
                       title="Clique para ordenar por Data Consulta"
                     >
@@ -1632,7 +1853,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </div>
                     </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
                     >
@@ -1646,12 +1867,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </div>
                     </th>
                     <th 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-36"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-28"
                       onClick={toggleAgruparPorStatus}
-                      title={agruparPorStatus ? 'Clique para desagrupar' : 'Clique para agrupar por status'}
+                      title={agruparPorStatus ? 'Clique para desagrupar' : 'Clique para agrupar por exames'}
                     >
                       <div className="flex items-center gap-2">
-                        Status
+                        Exames
                         {agruparPorStatus && (
                           <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
@@ -1659,13 +1880,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         )}
                       </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                      Status Liberação
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-bold text-xs">📋 DOCUMENTAÇÃO</span>
                         <span className="text-[9px] text-gray-500 font-normal normal-case">(Clique nos itens)</span>
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                      Confirmado
+                    </th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
                       {/* Botão expandir */}
                     </th>
                   </tr>
@@ -1680,7 +1907,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       if (lista.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={8} className="px-4 py-8 text-center">
+                            <td colSpan={10} className="px-4 py-8 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1688,7 +1915,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                                 <p className="text-gray-500 font-medium">Nenhum agendamento encontrado</p>
                                 <p className="text-sm text-gray-400">
                                   {filtroStatus 
-                                    ? `Não há pacientes com status "${filtroStatus}".` 
+                                    ? `Não há pacientes com exames "${filtroStatus}".` 
                                     : temFiltrosAtivos
                                     ? 'Nenhum paciente corresponde aos filtros aplicados.'
                                     : 'Não há pacientes agendados no sistema.'}
@@ -1910,6 +2137,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           setArquivosDocumentosSelecionados([]);
           setArquivoFichaSelecionado(null);
           setAgendamentoSelecionado(null);
+          setTipoDeExame('');
         }}
         title={`📎 Documentação - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
         size="large"
@@ -1939,7 +2167,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                🩺 Exames {agendamentoSelecionado?.documentos_ok && '✓'}
+                📎 Anexos {agendamentoSelecionado?.documentos_ok && '✓'}
               </button>
               <button
                 onClick={() => setAbaAtiva('ficha')}
@@ -1951,29 +2179,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               >
                 📋 Pré-Operatório {agendamentoSelecionado?.ficha_pre_anestesica_ok && '✓'}
               </button>
-              <button
-                onClick={() => setAbaAtiva('complementares')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  abaAtiva === 'complementares'
-                    ? 'border-orange-600 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                📎 Complementares {agendamentoSelecionado?.complementares_ok && '✓'}
-              </button>
+              {/* Complementares removidos */}
             </nav>
           </div>
 
           {/* Conteúdo da Aba: Exames */}
           {abaAtiva === 'documentos' && (
             <div className="space-y-4">
-              {/* Exames já anexados */}
+              {/* Anexos já anexados */}
               {documentosAnexados.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">🩺 Exames já anexados:</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Documentos já anexados:</h3>
                   <div className="space-y-2">
                     {documentosAnexados.map((url, index) => {
                       const fileName = url.split('/').pop() || `Documento ${index + 1}`;
+                      const meta = examesMeta.find(m => m.url === url);
                       return (
                         <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                           <a
@@ -1987,15 +2207,20 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                             </svg>
                             {fileName}
                           </a>
-              <button
-                onClick={() => {
-                  setConfirmMessage('Tem certeza que deseja remover este documento?');
-                  confirmActionRef.current = () => handleRemoverDocumentoAnexado(url);
-                  setConfirmOpen(true);
-                }}
-                className="text-red-600 hover:text-red-800 p-1"
-                title="Remover documento"
-              >
+                          {meta?.tipo && (
+                            <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded border border-blue-200 mr-2">
+                              {meta.tipo}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => {
+                              setConfirmMessage('Tem certeza que deseja remover este documento?');
+                              confirmActionRef.current = () => handleRemoverDocumentoAnexado(url);
+                              setConfirmOpen(true);
+                            }}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Remover documento"
+                          >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -2007,9 +2232,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 </div>
               )}
 
-              {/* Área de Upload de Exames */}
+              {/* Área de Upload de Anexos */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar novos exames:</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar novos anexos:</h3>
                 
                 <input
                   ref={fileInputDocumentosRef}
@@ -2021,7 +2246,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 />
 
                 <button
-                  onClick={() => fileInputDocumentosRef.current?.click()}
+                  onClick={() => {
+                    if (fileInputDocumentosRef.current) {
+                      fileInputDocumentosRef.current.value = '';
+                    }
+                    setTipoDeExame('');
+                    fileInputDocumentosRef.current?.click();
+                  }}
                   className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors text-center"
                 >
                   <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2031,33 +2262,54 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX</p>
                 </button>
 
-                {/* Lista de arquivos selecionados */}
-                {arquivosDocumentosSelecionados.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm font-medium text-gray-700">Arquivos selecionados:</p>
-                    {arquivosDocumentosSelecionados.map((arquivo, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm text-gray-700 flex-1">{arquivo.name}</span>
-                        <span className="text-xs text-gray-500 mr-2">
-                          {(arquivo.size / 1024 / 1024).toFixed(2)} MB
-                        </span>
-                        <button
-                          onClick={() => handleRemoverDocumento(index)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
+              {/* Lista de arquivos selecionados */}
+              {arquivosDocumentosSelecionados.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Arquivos selecionados:</p>
+                  {arquivosDocumentosSelecionados.map((arquivo, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span className="text-sm text-gray-700 flex-1">{arquivo.name}</span>
+                      <span className="text-xs text-gray-500 mr-2">
+                        {(arquivo.size / 1024 / 1024).toFixed(2)} MB
+                      </span>
+                      <button
+                        onClick={() => handleRemoverDocumento(index)}
+                        className="text-red-600 hover:text-red-800 p-1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  {/* Tipo do anexo - obrigatório */}
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Tipo do anexo</label>
+                    <select
+                      value={tipoDeExame}
+                      onChange={(e) => setTipoDeExame(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                      <option value="">Selecione</option>
+                      <option value="Tomografia computadorizada">Tomografia computadorizada</option>
+                      <option value="Ultrassonografia">Ultrassonografia</option>
+                      <option value="Radiografia">Radiografia</option>
+                      <option value="Ressonância magnética">Ressonância magnética</option>
+                      <option value="Exames de laboratório">Exames de laboratório</option>
+                      <option value="Termo de planejamento familiar">Termo de planejamento familiar</option>
+                      <option value="Outros">Outros</option>
+                    </select>
+                    {!tipoDeExame && (
+                      <p className="text-xs text-red-600 mt-1">Selecione o tipo do anexo para enviar</p>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
 
-              {/* Botões de ação - Documentos */}
-              <div className="flex gap-3 pt-4 border-t">
-                <button
+            {/* Botões de ação - Anexos */}
+            <div className="flex gap-3 pt-4 border-t">
+              <button
                   onClick={() => {
                     setModalUploadAberto(false);
                     setArquivosDocumentosSelecionados([]);
@@ -2068,25 +2320,25 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={handleUploadDocumentos}
-                  disabled={uploading || arquivosDocumentosSelecionados.length === 0}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      Anexar Exames
-                    </>
-                  )}
-                </button>
+              <button
+                onClick={handleUploadDocumentos}
+                disabled={uploading || arquivosDocumentosSelecionados.length === 0 || !tipoDeExame}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {uploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    Anexar Arquivos
+                  </>
+                )}
+              </button>
               </div>
             </div>
           )}
@@ -2209,132 +2461,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </div>
           )}
           
-          {/* Conteúdo da Aba: Complementares (NOVO) */}
-          {abaAtiva === 'complementares' && (
-            <div className="space-y-4">
-              {/* Complementares já anexados */}
-              {complementaresAnexados.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">📎 Complementares já anexados:</h3>
-                  <div className="space-y-2">
-                    {complementaresAnexados.map((url, index) => {
-                      const fileName = url.split('/').pop() || `Documento ${index + 1}`;
-                      return (
-                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            {fileName}
-                          </a>
-                          <button
-                            onClick={() => {
-                              setConfirmMessage('Tem certeza que deseja remover este documento complementar?');
-                              confirmActionRef.current = () => handleRemoverComplementarAnexado(url);
-                              setConfirmOpen(true);
-                            }}
-                            className="text-red-600 hover:text-red-800 p-1"
-                            title="Remover documento"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Área de Upload de Complementares */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar documentos complementares:</h3>
-                
-                <input
-                  ref={fileInputComplementaresRef}
-                  type="file"
-                  multiple
-                  onChange={handleSelecionarComplementares}
-                  className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                />
-
-                <button
-                  onClick={() => fileInputComplementaresRef.current?.click()}
-                  className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-orange-500 transition-colors text-center"
-                >
-                  <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-sm text-gray-600">Clique para selecionar arquivos complementares</p>
-                  <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX</p>
-                </button>
-
-                {/* Lista de arquivos selecionados */}
-                {arquivosComplementaresSelecionados.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm font-medium text-gray-700">Arquivos selecionados:</p>
-                    {arquivosComplementaresSelecionados.map((arquivo, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm text-gray-700 flex-1">{arquivo.name}</span>
-                        <span className="text-xs text-gray-500 mr-2">
-                          {(arquivo.size / 1024 / 1024).toFixed(2)} MB
-                        </span>
-                        <button
-                          onClick={() => handleRemoverComplementar(index)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Botões de ação - Complementares */}
-              <div className="flex gap-3 pt-4 border-t">
-                <button
-                  onClick={() => {
-                    setModalUploadAberto(false);
-                    setArquivosComplementaresSelecionados([]);
-                    setAgendamentoSelecionado(null);
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                  disabled={uploading}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleUploadComplementares}
-                  disabled={uploading || arquivosComplementaresSelecionados.length === 0}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      Anexar Complementares
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Conteúdo da aba de complementares removido */}
         </div>
       </Modal>
 
@@ -2365,18 +2492,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </p>
           </div>
 
-          {/* Seção de Exames */}
+          {/* Seção de Anexos */}
           <div className="border-t pt-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
-              🩺 Exames
+              📎 Anexos
             </h3>
             {documentosAnexados.length > 0 ? (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {documentosAnexados.map((url, index) => {
-                  const fileName = url.split('/').pop() || `Exame ${index + 1}`;
+                  const fileName = url.split('/').pop() || `Anexo ${index + 1}`;
                   return (
                     <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded hover:bg-green-100 transition-colors">
                       <a
@@ -2395,7 +2522,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 italic">Nenhum exame anexado</p>
+              <p className="text-sm text-gray-500 italic">Nenhum anexo enviado</p>
             )}
           </div>
 

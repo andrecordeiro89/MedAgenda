@@ -439,6 +439,12 @@ export const agendamentoService = {
       // Manter campos originais do banco
       data_agendamento: item.data_agendamento,
       nome_paciente: item.nome_paciente || '',
+      status_aih: item.status_aih ?? null,
+      status_de_liberacao: item.status_de_liberacao ?? null,
+      confirmacao: item.confirmacao || 'Aguardando',
+      tipo_de_exame: item.tipo_de_exame ?? null,
+      documentos_meta: item.documentos_meta ?? null,
+      observacao_agendamento: item.observacao_agendamento ?? null,
       n_prontuario: item.n_prontuario ?? null,
       especialidade: item.especialidade || null,
       procedimentos: item.procedimentos || null,
@@ -538,6 +544,11 @@ export const agendamentoService = {
     if (agendamento.cidade_natal !== undefined) updateData.cidade_natal = agendamento.cidade_natal
     if (agendamento.data_consulta !== undefined) updateData.data_consulta = agendamento.data_consulta
     if (agendamento.n_prontuario !== undefined) updateData.n_prontuario = agendamento.n_prontuario
+    if (agendamento.status_aih !== undefined) updateData.status_aih = agendamento.status_aih
+    if (agendamento.status_de_liberacao !== undefined) updateData.status_de_liberacao = agendamento.status_de_liberacao
+    if (agendamento.tipo_de_exame !== undefined) updateData.tipo_de_exame = agendamento.tipo_de_exame
+    if (agendamento.documentos_meta !== undefined) updateData.documentos_meta = agendamento.documentos_meta
+    if (agendamento.observacao_agendamento !== undefined) updateData.observacao_agendamento = agendamento.observacao_agendamento
     if (agendamento.especialidade !== undefined) updateData.especialidade = agendamento.especialidade
     if (agendamento.medico !== undefined) updateData.medico = agendamento.medico
     // REMOVIDO: medico_id não existe no schema

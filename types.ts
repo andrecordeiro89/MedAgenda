@@ -1,5 +1,5 @@
 
-export type StatusLiberacao = 'anestesista' | 'cardio' | 'exames' | 'liberado'; // Status de liberação do paciente
+export type StatusLiberacao = 'pendente' | 'anestesista' | 'cardio' | 'exames' | 'liberado'; // Status de liberação do paciente
 export type TipoAgendamento = 'cirurgico' | 'ambulatorial';
 export type View = 'dashboard' | 'calendar' | 'documentacao' | 'anestesista' | 'faturamento';
 
@@ -19,6 +19,11 @@ export interface Agendamento {
   procedimento_especificacao?: string | null; // NOVO CAMPO - Especificação/subnome do procedimento (editável)
   created_at?: string;
   updated_at?: string;
+  status_aih?: string | null; // Novo: Status AIH textual
+  status_de_liberacao?: string | null; // Novo: Status de liberação textual simples
+  tipo_de_exame?: string | null; // Novo: Tipo de exame selecionado para anexos
+  documentos_meta?: any | null;
+  observacao_agendamento?: string | null; // Novo: Observação geral do agendamento (Documentação)
   
   // Campos de documentação (fluxo pré-cirúrgico)
   documentos_ok?: boolean; // Indica se exames foram anexados pela recepção
