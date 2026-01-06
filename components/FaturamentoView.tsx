@@ -85,8 +85,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         return false; // ❌ Excluir para manter consistência com outras telas
       });
       
-      // NÃO FILTRAR POR documentos_ok - mostrar TODOS os pacientes válidos
-      const paraFaturamento = semGradeCirurgica;
+      const paraFaturamento = semGradeCirurgica.filter(ag => ag.documentos_ok === true);
       
       // DEBUG: Análise detalhada e contagem de pacientes únicos
       const totalOriginal = dados.length;
@@ -193,17 +192,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     return Array.from(pacientesMap.values());
   };
 
-  // FILTRO PRINCIPAL: Apenas registros COM PACIENTE (não contar procedimentos vazios)
+  // FILTRO PRINCIPAL: Apenas registros COM PACIENTE e COM EXAMES
   const agendamentosComPaciente = agendamentos.filter(ag => {
     // Deve ter nome de paciente
     const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
-    // Deve ter procedimento (não pode ser linha vazia)
-    const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+    const temExames = ag.documentos_ok === true;
     
-    return temPaciente && temProcedimento;
+    return temPaciente && temExames;
   });
   
-  // Separar agendamentos em PRONTOS e PENDENTES (apenas os que têm paciente)
+  // Separar agendamentos em PRONTOS (exames + pré-op) e PENDENTES
   const agendamentosProntos = agendamentosComPaciente.filter(ag => 
     ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true
   );
@@ -273,7 +271,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     });
   };
   
-  const agendamentosProntosFiltrados = aplicarFiltros(agendamentosProntos);
+  const agendamentosComAnexosFiltrados = aplicarFiltros(agendamentosComPaciente);
   const agendamentosPendentesFiltrados = aplicarFiltros(agendamentosPendentes);
   
   // Limpar todos os filtros
@@ -338,11 +336,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   };
   
   // Aplicar ordenação
-  const agendamentosProntosOrdenados = ordenarPorDataEMedico(agendamentosProntosFiltrados);
+  const agendamentosComAnexosOrdenados = ordenarPorDataEMedico(agendamentosComAnexosFiltrados);
   const agendamentosPendentesOrdenados = ordenarPorDataEMedico(agendamentosPendentesFiltrados);
   
   // Paginação
-  const totalRegistros = agendamentosProntosOrdenados.length;
+  const totalRegistros = agendamentosComAnexosOrdenados.length;
   const totalPaginas = Math.ceil(totalRegistros / itensPorPagina);
   
   // Resetar para página 1 quando filtros mudarem
@@ -360,7 +358,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Aplicar paginação
   const indexInicio = (paginaAtual - 1) * itensPorPagina;
   const indexFim = indexInicio + itensPorPagina;
-  const agendamentosPaginados = agendamentosProntosOrdenados.slice(indexInicio, indexFim);
+  const agendamentosPaginados = agendamentosComAnexosOrdenados.slice(indexInicio, indexFim);
 
   // Toggle expandir/recolher linha
   const toggleExpandirLinha = (agendamentoId: string | undefined) => {
@@ -712,7 +710,6 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
   };
 
-
   // Renderizar linha de agendamento
   const renderizarLinhaAgendamento = (ag: Agendamento) => {
     const expandida = isLinhaExpandida(ag.id);
@@ -996,22 +993,24 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             Liberação de pacientes e download de documentos para entrada no sistema G-SUS
           </p>
         </div>
-        <button
-          onClick={carregarAgendamentos}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          title="Atualizar lista"
-        >
-          <svg 
-            className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={carregarAgendamentos}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            title="Atualizar lista"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {loading ? 'Carregando...' : 'Atualizar'}
-        </button>
+            <svg 
+              className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {loading ? 'Carregando...' : 'Atualizar'}
+          </button>
+        </div>
       </div>
 
       {/* Seção de Filtros de Busca */}
@@ -1160,57 +1159,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         {temFiltrosAtivos && (
           <div className="mt-3 pt-3 border-t border-gray-200">
             <p className="text-xs text-gray-600">
-              Prontos: <span className="font-semibold text-gray-800">{agendamentosProntosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosProntos.length}</span> • 
-              Pendentes: <span className="font-semibold text-gray-800">{agendamentosPendentesFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosPendentes.length}</span>
+              Com anexos: <span className="font-semibold text-gray-800">{agendamentosComAnexosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosComPaciente.length}</span> • 
+              Pendências: <span className="font-semibold text-gray-800">{agendamentosPendentesFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosPendentes.length}</span>
             </p>
           </div>
         )}
       </div>
       
-      {/* Cards de Resumo - Compactos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-        {/* Card: Prontos */}
-        <div className="bg-white rounded-lg shadow px-3 py-2 border-l-4 border-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-600">Prontos para Faturamento</p>
-              <p className="text-xl font-bold text-gray-900">{agendamentosProntosOrdenados.length}</p>
-              <p className="text-[10px] text-gray-500">Exames + Pré-Op anexados</p>
-            </div>
-            <div className="text-2xl">✅</div>
-          </div>
-        </div>
-        
-        {/* Card: Pendentes */}
-        <div className="bg-white rounded-lg shadow px-3 py-2 border-l-4 border-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-600">Pendências</p>
-              <p className="text-xl font-bold text-gray-900">{totalPendentesUnicos}</p>
-              <p className="text-[10px] text-gray-500">Falta exames ou pré-op</p>
-            </div>
-            <button
-              onClick={() => setMostrarPendencias(!mostrarPendencias)}
-              className="text-2xl hover:scale-110 transition-transform cursor-pointer"
-              title={mostrarPendencias ? 'Ocultar pendências' : 'Ver pendências'}
-            >
-              ⚠️
-            </button>
-          </div>
-        </div>
-        
-        {/* Card: Total */}
-        <div className="bg-white rounded-lg shadow px-3 py-2 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-600">Total de Pacientes</p>
-              <p className="text-xl font-bold text-gray-900">{totalPacientesUnicos}</p>
-              <p className="text-[10px] text-gray-500">Com procedimento associado</p>
-            </div>
-            <div className="text-2xl">📊</div>
-          </div>
-        </div>
-      </div>
+      
 
       {/* Loading */}
       {loading ? (
@@ -1231,7 +1187,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <p className="text-sm text-gray-700">
                       Mostrando <span className="font-semibold">{Math.min((paginaAtual - 1) * itensPorPagina + 1, totalRegistros)}</span> a{' '}
                       <span className="font-semibold">{Math.min(paginaAtual * itensPorPagina, totalRegistros)}</span> de{' '}
-                      <span className="font-semibold">{totalRegistros}</span> pacientes prontos
+                      <span className="font-semibold">{totalRegistros}</span> pacientes com exames
                     </p>
                     {agendamentosPaginados.length > 0 && (
                       <p className="text-xs text-blue-600 font-medium">
@@ -1349,7 +1305,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </div>
           )}
           
-          {/* Tabela de Prontos */}
+          {/* Tabela de pacientes com anexos */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full divide-y divide-gray-200 table-fixed">
@@ -1411,11 +1367,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          <p className="text-gray-500 font-medium">Nenhum paciente pronto encontrado</p>
+                          <p className="text-gray-500 font-medium">Nenhum paciente com anexos encontrado</p>
                           <p className="text-sm text-gray-400">
                             {temFiltrosAtivos 
                               ? 'Nenhum paciente corresponde aos filtros aplicados.'
-                              : 'Não há pacientes com exames e pré-op anexados.'
+                              : 'Não há pacientes com anexos (exames ou pré-op).'
                             }
                           </p>
                         </div>
@@ -1438,7 +1394,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <p className="text-sm text-gray-700">
                       Mostrando <span className="font-semibold">{Math.min((paginaAtual - 1) * itensPorPagina + 1, totalRegistros)}</span> a{' '}
                       <span className="font-semibold">{Math.min(paginaAtual * itensPorPagina, totalRegistros)}</span> de{' '}
-                      <span className="font-semibold">{totalRegistros}</span> pacientes prontos
+                      <span className="font-semibold">{totalRegistros}</span> pacientes com exames
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1552,15 +1508,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                   ⚠️ Pendências ({agendamentosPendentesOrdenados.length})
                 </h3>
-                <button
-                  onClick={() => setMostrarPendencias(false)}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
-                  title="Ocultar pendências"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setMostrarPendencias(false)}
+                    className="text-gray-500 hover:text-gray-700 transition-colors"
+                    title="Ocultar pendências"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               
               <div className="mb-3 p-3 bg-white rounded border border-yellow-300">
@@ -1631,7 +1589,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           <div className="mt-6 p-3 bg-gray-50 rounded border border-gray-200">
             <div className="text-xs text-gray-600 space-y-1.5">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span>• Tabela exibe pacientes com exames E pré-op anexados</span>
+                <span>• Tabela exibe pacientes com exames anexados</span>
                 <span>• Clique em "Pendências" para ver documentos faltantes</span>
                 <span>• Expanda a linha (►) para detalhes completos</span>
               </div>
