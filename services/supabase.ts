@@ -439,6 +439,7 @@ export const agendamentoService = {
       // Manter campos originais do banco
       data_agendamento: item.data_agendamento,
       nome_paciente: item.nome_paciente || '',
+      n_prontuario: item.n_prontuario ?? null,
       especialidade: item.especialidade || null,
       procedimentos: item.procedimentos || null,
       procedimento_especificacao: item.procedimento_especificacao || null,
@@ -485,6 +486,7 @@ export const agendamentoService = {
       data_nascimento: agendamento.data_nascimento,
       data_agendamento: agendamento.data_agendamento,
       data_consulta: agendamento.data_consulta || null,
+      n_prontuario: agendamento.n_prontuario || null,
       especialidade: agendamento.especialidade || null,
       medico: agendamento.medico || null,
       // REMOVIDO: medico_id não existe no schema do banco
@@ -535,6 +537,7 @@ export const agendamentoService = {
     if (agendamento.telefone !== undefined) updateData.telefone = agendamento.telefone
     if (agendamento.cidade_natal !== undefined) updateData.cidade_natal = agendamento.cidade_natal
     if (agendamento.data_consulta !== undefined) updateData.data_consulta = agendamento.data_consulta
+    if (agendamento.n_prontuario !== undefined) updateData.n_prontuario = agendamento.n_prontuario
     if (agendamento.especialidade !== undefined) updateData.especialidade = agendamento.especialidade
     if (agendamento.medico !== undefined) updateData.medico = agendamento.medico
     // REMOVIDO: medico_id não existe no schema

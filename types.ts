@@ -9,6 +9,7 @@ export interface Agendamento {
   data_nascimento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
   cidade_natal?: string | null; // CAMPO REAL DO BANCO (nullable)
   telefone?: string | null; // CAMPO REAL DO BANCO (nullable)
+  n_prontuario?: string | null;
   data_agendamento: string; // CAMPO REAL DO BANCO (YYYY-MM-DD)
   data_consulta?: string | null; // NOVO CAMPO - Data da consulta médica (YYYY-MM-DD)
   hospital_id?: string | null; // CAMPO REAL DO BANCO (nullable)
@@ -147,6 +148,7 @@ export interface PacienteGrade {
     cidade?: string | null;
     telefone?: string | null;
     dataConsulta?: string | null;
+    prontuario?: string | null;
 }
 
 export interface GradeCirurgicaItem {

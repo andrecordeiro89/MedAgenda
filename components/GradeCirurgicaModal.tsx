@@ -261,15 +261,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     }
                     
                     // Se tem paciente cadastrado, incluir os dados
-                    if (agendamento.nome_paciente && agendamento.nome_paciente.trim()) {
-                      procedimentoData.paciente = {
-                        nome: agendamento.nome_paciente,
-                        dataNascimento: agendamento.data_nascimento,
-                        cidade: agendamento.cidade_natal,
-                        telefone: agendamento.telefone,
-                        dataConsulta: agendamento.data_consulta
-                      };
-                    }
+                  if (agendamento.nome_paciente && agendamento.nome_paciente.trim()) {
+                    procedimentoData.paciente = {
+                      nome: agendamento.nome_paciente,
+                      dataNascimento: agendamento.data_nascimento,
+                      cidade: agendamento.cidade_natal,
+                      telefone: agendamento.telefone,
+                      dataConsulta: agendamento.data_consulta,
+                      prontuario: (agendamento as any).n_prontuario ?? null
+                    };
+                  }
                     
                     gruposPorEspecialidade.get(chave)!.procedimentos.push(procedimentoData);
                   }
@@ -425,6 +426,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [pacienteCidade, setPacienteCidade] = useState('');
   const [pacienteTelefone, setPacienteTelefone] = useState('');
   const [pacienteDataConsulta, setPacienteDataConsulta] = useState('');
+  const [pacienteProntuario, setPacienteProntuario] = useState('');
   const [salvandoPaciente, setSalvandoPaciente] = useState(false);
 
   // Estado para modal de confirmação
@@ -476,6 +478,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     cidadeNatal?: string | null;
     telefone?: string | null;
     dataConsulta?: string | null;
+    prontuario?: string | null;
   } | null>(null);
   const [novaDataSelecionada, setNovaDataSelecionada] = useState('');
   const [datasDisponiveis, setDatasDisponiveis] = useState<Array<{ data: string; label: string }>>([]);
@@ -2014,6 +2017,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setPacienteCidade('');
     setPacienteTelefone('');
     setPacienteDataConsulta('');
+    setPacienteProntuario('');
   };
 
   // NOVO: Editar paciente (ABRE MODAL PREENCHIDO)
@@ -2044,6 +2048,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setPacienteCidade(paciente.cidade || '');
     setPacienteTelefone(paciente.telefone || '');
     setPacienteDataConsulta(paciente.dataConsulta || '');
+    setPacienteProntuario(paciente.prontuario || '');
   };
 
   // Salvar paciente (UPDATE no banco)
@@ -2078,7 +2083,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_nascimento: pacienteDataNascimento,
         cidade_natal: pacienteCidade || null,
         telefone: pacienteTelefone || null,
-        data_consulta: pacienteDataConsulta || null
+        data_consulta: pacienteDataConsulta || null,
+        n_prontuario: pacienteProntuario || null
       });
       
       console.log(`✅ Paciente ${modoEdicao ? 'atualizado' : 'cadastrado'} com sucesso!`);
@@ -2088,7 +2094,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         dataNascimento: pacienteDataNascimento,
         cidade: pacienteCidade || null,
         telefone: pacienteTelefone || null,
-        dataConsulta: pacienteDataConsulta || null
+        dataConsulta: pacienteDataConsulta || null,
+        prontuario: pacienteProntuario || null
       };
       
       // Atualizar UI
@@ -2175,7 +2182,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             data_nascimento: '2000-01-01', // Data placeholder
             cidade_natal: null,
             telefone: null,
-            data_consulta: null
+            data_consulta: null,
+            n_prontuario: null
           });
           
           console.log('✅ Paciente removido com sucesso!');
@@ -2295,7 +2303,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         dataNascimento: paciente.dataNascimento || null,
         cidadeNatal: paciente.cidade || null,
         telefone: paciente.telefone || null,
-        dataConsulta: paciente.dataConsulta || null
+        dataConsulta: paciente.dataConsulta || null,
+        prontuario: paciente.prontuario || null
       });
       setDatasDisponiveis(datasComGrades);
       setNovaDataSelecionada('');
@@ -2468,7 +2477,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_nascimento: agendamentoParaMover.dataNascimento || null,
         cidade_natal: agendamentoParaMover.cidadeNatal || null,
         telefone: agendamentoParaMover.telefone || null,
-        data_consulta: agendamentoParaMover.dataConsulta || null
+        data_consulta: agendamentoParaMover.dataConsulta || null,
+        n_prontuario: agendamentoParaMover.prontuario || null
       });
 
       console.log('✅ Paciente atribuído ao destino com sucesso!', resultadoDestino);
@@ -2479,7 +2489,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_nascimento: '2000-01-01', // placeholder, seguindo a lógica de remoção existente
         cidade_natal: null,
         telefone: null,
-        data_consulta: null
+        data_consulta: null,
+        n_prontuario: null
       });
 
       console.log('✅ Slot de origem limpo com sucesso!');
@@ -3370,16 +3381,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                             <div className="overflow-x-auto">
                               <table className="w-full border-collapse table-fixed">
                                 {/* Cabeçalho da tabela */}
-                                <thead>
-                                  <tr className="bg-slate-100 border-b-2 border-slate-300">
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-[26rem] min-w-[26rem]">Procedimento</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-36">Médico</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
-                                    <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
-                                    <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
+        <thead>
+          <tr className="bg-slate-100 border-b-2 border-slate-300">
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-[26rem] min-w-[26rem]">Procedimento</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-36">Médico</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-40">Nº Prontuário</th>
+            <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
+            <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
                                   {(() => {
                                     const expanded = grupo.especialidade ? isExpanded(index, grupo.especialidade.id) : true;
                                     const procedimentosVisiveis = expanded ? grupo.procedimentos : grupo.procedimentos.slice(0, 5);
@@ -3494,6 +3506,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                     </button>
                                                   )}
                                                 </div>
+                                              </td>
+                                              {/* Coluna Nº Prontuário */}
+                                              <td className="px-3 py-2 border-r border-slate-200 w-40 overflow-hidden">
+                                                <span className="text-sm text-slate-700 truncate">{paciente.prontuario || '-'}</span>
                                               </td>
                                               
                                               {/* Coluna Idade */}
@@ -3699,6 +3715,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </div>
                                             </td>
                                             
+                                            {/* Coluna Nº Prontuário */}
+                                            <td className="px-3 py-2 border-r border-slate-200 w-40 overflow-hidden">
+                                              <span className="text-sm text-slate-400">-</span>
+                                            </td>
+                                            
+                                            {/* Coluna Idade */}
+                                            <td className="px-3 py-2 text-center border-r border-slate-200 w-20 overflow-hidden">
+                                              <span className="text-sm text-slate-400">-</span>
+                                            </td>
+                                            
                                             {/* Coluna Idade */}
                                             <td className="px-3 py-2 text-center border-r border-slate-200 w-20 overflow-hidden">
                                               <span className="text-sm text-slate-400">-</span>
@@ -3816,6 +3842,19 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             placeholder="Digite o nome completo"
             className="w-full"
             autoFocus
+          />
+        </div>
+        
+        {/* Nº Prontuário */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Nº Prontuário
+          </label>
+          <Input
+            value={pacienteProntuario}
+            onChange={(e) => setPacienteProntuario(e.target.value)}
+            placeholder="Digite o número do prontuário"
+            className="w-full"
           />
         </div>
 
