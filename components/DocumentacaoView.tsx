@@ -170,7 +170,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         console.log('👥 Pacientes com múltiplos registros:', Object.fromEntries(comDuplicatas));
       }
       
-      setAgendamentos(agendamentosFiltrados.map(ag => ({ ...ag, confirmacao: 'Aguardando' })));
+      const normalizarConfirmacao = (v: string | null | undefined) => {
+        const t = (v || '').toLowerCase();
+        if (t === 'confirmado') return 'Confirmado';
+        return 'Aguardando';
+      };
+      const lista = agendamentosFiltrados.map(ag => ({ ...ag, confirmacao: normalizarConfirmacao(ag.confirmacao) }));
+      setAgendamentos(lista);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
@@ -390,40 +396,46 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
   
-  // ORDENAR: 1º por DATA selecionada, 2º por MÉDICO (alfabético dentro de cada dia)
+  const parseDateStr = (s?: string | null) => {
+    if (!s || s === '9999-12-31') return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const refDate = (ag: Agendamento) => {
+    if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
+    return parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+  };
+  const monthPriority = (d: Date | null) => {
+    if (!d) return 3;
+    const now = new Date();
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return 0;
+    if (d > now) return 1;
+    return 2;
+  };
+  // ORDENAR: mês atual primeiro, depois pela DATA selecionada e MÉDICO
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
-    // PRIORIDADE 1: Ordenar pela coluna selecionada
-    let dataA: string;
-    let dataB: string;
-    
-    if (colunaOrdenacao === 'data_consulta') {
-      dataA = a.data_consulta || '9999-12-31';
-      dataB = b.data_consulta || '9999-12-31';
-    } else {
-      // Default: data_cirurgia
-      dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
-      dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+    const dA = refDate(a);
+    const dB = refDate(b);
+    const pA = monthPriority(dA);
+    const pB = monthPriority(dB);
+    if (pA !== pB) return pA - pB;
+    const sA = dA ? dA.toISOString().slice(0, 10) : '9999-12-31';
+    const sB = dB ? dB.toISOString().slice(0, 10) : '9999-12-31';
+    if (sA !== sB) {
+      const cmp = sA.localeCompare(sB);
+      return direcaoOrdenacao === 'asc' ? cmp : -cmp;
     }
     
-    // Se datas diferentes, ordenar por data
-    if (dataA !== dataB) {
-      const comparacao = dataA.localeCompare(dataB);
-      return direcaoOrdenacao === 'asc' ? comparacao : -comparacao;
-    }
-    
-    // PRIORIDADE 2: Se mesma data, ordenar por nome do médico (alfabético)
+    // PRIORIDADE: nome do médico
     const medicoA = (a.medico || '').trim().toUpperCase();
     const medicoB = (b.medico || '').trim().toUpperCase();
     
-    // Se médicos diferentes, ordenar alfabeticamente
     if (medicoA !== medicoB) {
-      // Colocar registros sem médico no final
       if (!medicoA) return 1;
       if (!medicoB) return -1;
       return medicoA.localeCompare(medicoB, 'pt-BR');
     }
     
-    // PRIORIDADE 3: Se ordenar por anestesista está ativo, usar essa ordenação
     if (ordenarPorAnestesista) {
       const statusA = (a.status_de_liberacao || a.status_liberacao || '').toString().toLowerCase();
       const statusB = (b.status_de_liberacao || b.status_liberacao || '').toString().toLowerCase();
@@ -1554,22 +1566,24 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             Gerenciamento de documentos dos pacientes
           </p>
         </div>
-        <button
-          onClick={carregarAgendamentos}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          title="Atualizar lista"
-        >
-          <svg 
-            className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={carregarAgendamentos}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            title="Atualizar lista"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {loading ? 'Carregando...' : 'Atualizar'}
-        </button>
+            <svg 
+              className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {loading ? 'Carregando...' : 'Atualizar'}
+          </button>
+        </div>
       </div>
 
       {/* Seção de Filtros de Busca */}
