@@ -204,6 +204,77 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     };
   };
 
+  const getAihStatusStyle = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'agendado':
+        return 'bg-slate-100 border-slate-400 text-slate-900';
+      case 'ag regulação':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'solicitar':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'emitida':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'aih represada':
+        return 'bg-red-50 border-red-400 text-red-800';
+      case 'ag ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      default:
+        return 'bg-white border-gray-300 text-gray-600';
+    }
+  };
+
+  const getAihDotColor = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'agendado':
+        return 'bg-slate-500';
+      case 'ag regulação':
+        return 'bg-indigo-500';
+      case 'solicitar':
+        return 'bg-amber-500';
+      case 'emitida':
+        return 'bg-green-500';
+      case 'aih represada':
+        return 'bg-red-500';
+      case 'ag ciência sms':
+        return 'bg-blue-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
+  
+  const getLiberacaoStatusStyle = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'liberado':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'anestesista':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'cardio':
+        return 'bg-violet-50 border-violet-400 text-violet-800';
+      case 'exames':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'não liberado':
+        return 'bg-red-50 border-red-400 text-red-800';
+      default:
+        return 'bg-white border-gray-300 text-gray-600';
+    }
+  };
+  
+  const getLiberacaoDotColor = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'liberado':
+        return 'bg-green-500';
+      case 'anestesista':
+        return 'bg-blue-500';
+      case 'cardio':
+        return 'bg-violet-500';
+      case 'exames':
+        return 'bg-amber-500';
+      case 'não liberado':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
   // Formatar data
   const formatarData = (data: string | null | undefined) => {
     if (!data || data === '2000-01-01') return '-';
@@ -922,37 +993,40 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         }`}>
           {/* Status AIH */}
           <td className="px-3 py-3 w-36">
-            <select
-              value={ag.status_aih || ''}
-              onChange={async (e) => {
-                const novo = e.target.value || null;
-                try {
-                  if (!ag.id) return;
-                  setSalvandoAIH(prev => new Set(prev).add(ag.id!));
-                  await agendamentoService.update(ag.id, { status_aih: novo });
-                  setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
-                  success('Status AIH atualizado');
-                } catch (err) {}
-                finally {
-                  setSalvandoAIH(prev => {
-                    const next = new Set(prev);
-                    if (ag.id) next.delete(ag.id);
-                    return next;
-                  });
-                }
-              }}
-              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-              title="Atualizar Status AIH"
-              disabled={ag.id ? salvandoAIH.has(ag.id) : false}
-            >
-              <option value="">Selecione</option>
-              <option value="Agendado">Agendado</option>
-              <option value="AG Regulação">AG Regulação</option>
-              <option value="Solicitar">Solicitar</option>
-              <option value="Emitida">Emitida</option>
-              <option value="AIH Represada">AIH Represada</option>
-              <option value="AG Ciência SMS">AG Ciência SMS</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih)}`} />
+              <select
+                value={ag.status_aih || ''}
+                onChange={async (e) => {
+                  const novo = e.target.value || null;
+                  try {
+                    if (!ag.id) return;
+                    setSalvandoAIH(prev => new Set(prev).add(ag.id!));
+                    await agendamentoService.update(ag.id, { status_aih: novo });
+                    setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
+                    success('Status AIH atualizado');
+                  } catch (err) {}
+                  finally {
+                    setSalvandoAIH(prev => {
+                      const next = new Set(prev);
+                      if (ag.id) next.delete(ag.id);
+                      return next;
+                    });
+                  }
+                }}
+                className={`w-full px-2 py-1 text-xs border rounded ${getAihStatusStyle(ag.status_aih)}`}
+                title="Atualizar Status AIH"
+                disabled={ag.id ? salvandoAIH.has(ag.id) : false}
+              >
+                <option value="">Selecione</option>
+                <option value="Agendado">Agendado</option>
+                <option value="AG Regulação">AG Regulação</option>
+                <option value="Solicitar">Solicitar</option>
+                <option value="Emitida">Emitida</option>
+                <option value="AIH Represada">AIH Represada</option>
+                <option value="AG Ciência SMS">AG Ciência SMS</option>
+              </select>
+            </div>
           </td>
           {/* Paciente */}
           <td className="px-3 py-3 w-64">
@@ -960,7 +1034,15 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-snug"
               title={ag.nome_paciente || ag.nome || '-'}
             >
-              {ag.nome_paciente || ag.nome || '-'}
+              <div className="flex items-center gap-1">
+                <span className="truncate">{ag.nome_paciente || ag.nome || '-'}</span>
+                {(((obsAgendamentoEdicao[ag.id!] ?? ag.observacao_agendamento ?? '') as string).trim() !== '') && (
+                  <span
+                    className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-500"
+                    title="Possui observação do agendamento"
+                  />
+                )}
+              </div>
             </div>
           </td>
           
@@ -1001,103 +1083,33 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </span>
           </td>
           
-          {/* Status Liberação */}
           <td className="px-3 py-3 w-36">
-            <select
-              value={ag.status_de_liberacao || ''}
-              onChange={(e) => handleAtualizarStatusLiberacao(ag.id, (e.target.value || null) as any)}
-              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-              title="Atualizar Status Liberação"
-              disabled={ag.id ? salvandoLiberacao.has(ag.id) : false}
-            >
-              <option value="">Selecione</option>
-              <option value="Liberado">Liberado</option>
-              <option value="Anestesista">Anestesista</option>
-              <option value="Cardio">Cardio</option>
-              <option value="Exames">Exames</option>
-              <option value="Não Liberado">Não Liberado</option>
-            </select>
-          </td>
-          
-          
-          {/* Documentação - SEMÁFORO COM CHECKBOXES */}
-          <td className="px-4 py-3 w-48">
-            <div className="flex items-center gap-1 justify-start flex-nowrap overflow-hidden">
-              {/* Checkbox 1: EXAMES */}
-              <div className="flex items-center gap-1">
-                <div 
-                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
-                    ag.documentos_ok === true 
-                      ? 'bg-green-500 border-green-600' 
-                      : 'bg-white border-gray-300'
-                  }`}
-                >
-                  {ag.documentos_ok === true && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setAbaAtiva('documentos');
-                    handleAbrirModalUpload(ag);
-                  }}
-                  className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
-                    ag.documentos_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
-                  }`}
-                  title="Clique para anexar/ver anexos"
-                >
-                  📎 Anexos
-                </button>
-              </div>
-              
-              {/* Separador */}
-              <div className="h-3 w-px bg-gray-300"></div>
-              
-              {/* Checkbox 2: PRÉ-OPERATÓRIO */}
-              <div className="flex items-center gap-1">
-                <div 
-                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
-                    ag.ficha_pre_anestesica_ok === true 
-                      ? 'bg-green-500 border-green-600' 
-                      : 'bg-white border-gray-300'
-                  }`}
-                >
-                  {ag.ficha_pre_anestesica_ok === true && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setAbaAtiva('ficha');
-                    handleAbrirModalUpload(ag);
-                  }}
-                  className={`text-[11px] font-semibold cursor-pointer hover:underline transition-colors ${
-                    ag.ficha_pre_anestesica_ok === true ? 'text-green-700' : 'text-gray-600 hover:text-blue-600'
-                  }`}
-                  title="Clique para anexar/ver pré-operatório"
-                >
-                  📋 Pré-op
-                </button>
-              </div>
-              
-              {/* Separador removido do bloco de complementares */}
-              <div className="h-3 w-px bg-gray-300"></div>
-              
-              
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full ${getLiberacaoDotColor(ag.status_de_liberacao)}`} />
+              <select
+                value={ag.status_de_liberacao || ''}
+                onChange={(e) => handleAtualizarStatusLiberacao(ag.id, (e.target.value || null) as any)}
+                className={`w-full px-2 py-1 text-xs border rounded ${getLiberacaoStatusStyle(ag.status_de_liberacao)}`}
+                title="Atualizar Status Liberação"
+                disabled={ag.id ? salvandoLiberacao.has(ag.id) : false}
+              >
+                <option value="">Selecione</option>
+                <option value="Liberado">Liberado</option>
+                <option value="Anestesista">Anestesista</option>
+                <option value="Cardio">Cardio</option>
+                <option value="Exames">Exames</option>
+                <option value="Não Liberado">Não Liberado</option>
+              </select>
             </div>
           </td>
           
           {/* Confirmado */}
-          <td className="px-3 py-3 w-24">
+          <td className="px-3 py-3 w-28 whitespace-nowrap">
             {(() => {
               const confirmado = (ag.confirmacao || '').toLowerCase() === 'confirmado';
               return (
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                  <span className={`px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
                     confirmado ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
                   }`}>
                     {confirmado ? 'Confirmado' : 'Aguardando'}
@@ -1121,6 +1133,42 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               );
             })()}
           </td>
+          
+          {/* Documentação - Botão único com indicador */}
+          <td className="px-4 py-3 w-40">
+            {(() => {
+              let docsUrls = false;
+              try {
+                if (ag.documentos_urls) {
+                  const urls = JSON.parse(ag.documentos_urls);
+                  docsUrls = Array.isArray(urls) && urls.some((u: any) => typeof u === 'string' && u.trim() !== '');
+                }
+              } catch {
+                docsUrls = !!(ag.documentos_urls && ag.documentos_urls.trim() !== '');
+              }
+              const fichaUrl = !!(ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '');
+              const hasAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || docsUrls || fichaUrl;
+              return (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-block w-2.5 h-2.5 rounded-full ${hasAnexo ? 'bg-green-500' : 'bg-gray-300'}`}
+                    title={hasAnexo ? 'Possui algum anexo' : 'Sem anexos'}
+                  />
+                  <button
+                    onClick={() => {
+                      setAbaAtiva('documentos');
+                      handleAbrirModalUpload(ag);
+                    }}
+                    className="text-[11px] font-semibold text-blue-700 hover:underline"
+                    title="Anexar ou visualizar documentação (exames e pré-op)"
+                  >
+                    Documentação
+                  </button>
+                </div>
+              );
+            })()}
+          </td>
+          
           
           {/* Botão Expandir/Recolher */}
           <td className="px-2 py-3 whitespace-nowrap text-center">
@@ -1883,14 +1931,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
                       Status Liberação
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-bold text-xs">📋 DOCUMENTAÇÃO</span>
-                        <span className="text-[9px] text-gray-500 font-normal normal-case">(Clique nos itens)</span>
-                      </div>
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
                       Confirmado
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                      Documentação
                     </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
                       {/* Botão expandir */}
@@ -2139,7 +2184,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           setAgendamentoSelecionado(null);
           setTipoDeExame('');
         }}
-        title={`📎 Documentação - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+        title={`Documentação - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
         size="large"
       >
         <div className="space-y-4">
@@ -2167,7 +2212,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                📎 Anexos {agendamentoSelecionado?.documentos_ok && '✓'}
+                Anexos {agendamentoSelecionado?.documentos_ok && '✓'}
               </button>
               <button
                 onClick={() => setAbaAtiva('ficha')}
@@ -2498,7 +2543,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
-              📎 Anexos
+              Anexos
             </h3>
             {documentosAnexados.length > 0 ? (
               <div className="space-y-2 max-h-48 overflow-y-auto">
