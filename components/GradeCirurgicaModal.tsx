@@ -2585,6 +2585,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       procedimentoEspecificacao: string | null;
       medico: string;
       paciente: string;
+      prontuario: string | null;
       idade: number | null;
       cidade: string | null;
       telefone: string | null;
@@ -2625,6 +2626,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 procedimentoEspecificacao,
                 medico: medicoNome,
                 paciente: paciente.nome || 'Sem nome',
+                prontuario: paciente.prontuario || null,
                 idade,
                 cidade: paciente.cidade || null,
                 telefone: paciente.telefone || null,
@@ -2641,6 +2643,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               procedimentoEspecificacao,
               medico: medicoNome,
               paciente: procedimentoNome, // Mostrar nome do procedimento ao invés de "Sem paciente"
+              prontuario: null,
               idade: null,
               cidade: null,
               telefone: null,
@@ -2730,6 +2733,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       linha.procedimentoEspecificacao || '-',
       linha.medico,
       linha.paciente,
+      linha.prontuario || '-',
       linha.idade !== null ? String(linha.idade) : '-',
       linha.cidade || '-',
       linha.telefone || '-',
@@ -2754,7 +2758,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     // Adicionar tabela ao PDF usando autoTable como função
     autoTable(doc, {
-      head: [['Data', 'Especialidade', 'Procedimento', 'Especificação do Procedimento', 'Médico', 'Paciente', 'Idade', 'Cidade', 'Telefone', 'Data Consulta', 'Data Nascimento']],
+      head: [['Data', 'Especialidade', 'Procedimento', 'Especificação do Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Data Consulta', 'Data Nascimento']],
       body: tableData,
       startY: 28,
       styles: {
@@ -2770,17 +2774,18 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         fontSize: 6
       },
       columnStyles: {
-        0: { cellWidth: 18 }, // Data
-        1: { cellWidth: 26 }, // Especialidade
-        2: { cellWidth: 30 }, // Procedimento
-        3: { cellWidth: 32 }, // Especificação do Procedimento
-        4: { cellWidth: 26 }, // Médico
-        5: { cellWidth: 32 }, // Paciente
-        6: { cellWidth: 14 }, // Idade
-        7: { cellWidth: 22 }, // Cidade
-        8: { cellWidth: 22 }, // Telefone
-        9: { cellWidth: 22 }, // Data Consulta
-        10: { cellWidth: 22 }  // Data Nascimento
+        0: { cellWidth: 16 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 24 },
+        5: { cellWidth: 26 },
+        6: { cellWidth: 18 },
+        7: { cellWidth: 12 },
+        8: { cellWidth: 18 },
+        9: { cellWidth: 18 },
+        10: { cellWidth: 18 },
+        11: { cellWidth: 19 }
       },
       margin: { left: 14, right: 14 },
       didDrawPage: function (data: any) {
@@ -3551,15 +3556,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
                                                   </button>
-                                                  {isFirstPaciente && (
-                                                    <button
-                                                      onClick={() => handleRemoveItem(index, proc.id)}
-                                                      className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
-                                                      title="Remover procedimento"
-                                                    >
-                                                      <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                  )}
                                                 </div>
                                               </td>
                                             </tr>
@@ -3569,7 +3565,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           if (isFirstPaciente && isProcExpanded) {
                                             linhas.push(
                                               <tr key={`${proc.id}-expanded`} className="bg-gradient-to-r from-slate-50 to-blue-50/30">
-                                                <td colSpan={5} className="px-3 py-3">
+                                              <td colSpan={6} className="px-3 py-3">
                                                   <div className="flex items-start gap-2 pl-6 border-l-2 border-blue-400/30">
                                                     {/* Ícone de informação */}
                                                     <div className="flex-shrink-0 mt-0.5">
@@ -3724,12 +3720,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             <td className="px-3 py-2 text-center border-r border-slate-200 w-20 overflow-hidden">
                                               <span className="text-sm text-slate-400">-</span>
                                             </td>
-                                            
-                                            {/* Coluna Idade */}
-                                            <td className="px-3 py-2 text-center border-r border-slate-200 w-20 overflow-hidden">
-                                              <span className="text-sm text-slate-400">-</span>
-                                            </td>
-                                            
                                             {/* Coluna Ações */}
                                             <td className="px-3 py-2 text-center w-24 overflow-hidden">
                                               <div className="flex items-center justify-center gap-1">
@@ -3756,7 +3746,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                         if (isProcExpanded) {
                                           linhas.push(
                                             <tr key={`${proc.id}-expanded`} className="bg-slate-50">
-                                              <td colSpan={5} className="px-3 py-2">
+                                              <td colSpan={6} className="px-3 py-2">
                                                 <div className="text-xs text-slate-500 italic">
                                                   Nenhum paciente cadastrado ainda. Clique no botão "+" para adicionar.
                                                 </div>
@@ -4041,6 +4031,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Especificação do Procedimento</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Médico</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Paciente</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Prontuário</th>
                   <th className="border border-gray-300 px-3 py-2 text-center text-xs font-semibold text-gray-700">Idade</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Cidade</th>
                   <th className="border border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-700">Telefone</th>
@@ -4051,7 +4042,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               <tbody>
                 {dadosRelatorio.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="border border-gray-300 px-3 py-4 text-center text-gray-500">
+                    <td colSpan={12} className="border border-gray-300 px-3 py-4 text-center text-gray-500">
                       Nenhum agendamento encontrado para o período selecionado.
                     </td>
                   </tr>
@@ -4064,6 +4055,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       <td className="border border-gray-300 px-3 py-2 text-sm">{linha.procedimentoEspecificacao || '-'}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm">{linha.medico}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm font-medium">{linha.paciente}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-sm">{linha.prontuario || '-'}</td>
                       <td className="border border-gray-300 px-3 py-2 text-sm text-center">
                         {linha.idade !== null ? `${linha.idade} anos` : '-'}
                       </td>
