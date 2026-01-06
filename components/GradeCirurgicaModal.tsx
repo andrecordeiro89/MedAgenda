@@ -2758,34 +2758,36 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     // Adicionar tabela ao PDF usando autoTable como função
     autoTable(doc, {
-      head: [['Data', 'Especialidade', 'Procedimento', 'Especificação do Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Data Consulta', 'Data Nascimento']],
+      head: [['Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento']],
       body: tableData,
       startY: 28,
       styles: {
         fontSize: 6,
-        cellPadding: 1,
+        cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 },
         overflow: 'linebreak',
-        halign: 'left'
+        halign: 'left',
+        valign: 'middle'
       },
       headStyles: {
         fillColor: [128, 128, 128],
         textColor: 255,
         fontStyle: 'bold',
-        fontSize: 6
+        fontSize: 6,
+        valign: 'middle'
       },
       columnStyles: {
-        0: { cellWidth: 16 },
-        1: { cellWidth: 24 },
-        2: { cellWidth: 26 },
-        3: { cellWidth: 28 },
-        4: { cellWidth: 24 },
-        5: { cellWidth: 26 },
-        6: { cellWidth: 18 },
-        7: { cellWidth: 12 },
-        8: { cellWidth: 18 },
-        9: { cellWidth: 18 },
-        10: { cellWidth: 18 },
-        11: { cellWidth: 19 }
+        0: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
+        1: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
+        2: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        3: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        4: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
+        5: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
+        6: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
+        7: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
+        8: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        10: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' }
       },
       margin: { left: 14, right: 14 },
       didDrawPage: function (data: any) {
