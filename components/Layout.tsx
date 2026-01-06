@@ -293,7 +293,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     {hospitalSelecionado?.nome || 'Hospital não selecionado'}{hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
-                            {usuario?.role === 'coordenacao' && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
                                 <select
                                     value={hospitalSelecionado?.id || ''}
                                     onChange={(e) => {
@@ -360,7 +360,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     {hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
-                            {usuario?.role === 'coordenacao' && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
                                 <div className="px-3 py-2">
                                     <select
                                         value={hospitalSelecionado?.id || ''}
