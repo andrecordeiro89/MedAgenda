@@ -300,28 +300,37 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
   };
   
+  const parseDateStr = (s?: string | null) => {
+    if (!s || s === '9999-12-31') return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const refDate = (ag: Agendamento) => {
+    if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
+    return parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+  };
+  const monthPriority = (d: Date | null) => {
+    if (!d) return 3;
+    const now = new Date();
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return 0;
+    if (d > now) return 1;
+    return 2;
+  };
   // Ordenar por data e médico
   const ordenarPorDataEMedico = (lista: Agendamento[]) => {
     return [...lista].sort((a, b) => {
-      // PRIORIDADE 1: Coluna selecionada para ordenação
-      let dataA: string;
-      let dataB: string;
-      
-      if (colunaOrdenacao === 'data_consulta') {
-        dataA = a.data_consulta || '9999-12-31';
-        dataB = b.data_consulta || '9999-12-31';
-      } else {
-        // Default: data_cirurgia
-        dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
-        dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
+      const dA = refDate(a);
+      const dB = refDate(b);
+      const pA = monthPriority(dA);
+      const pB = monthPriority(dB);
+      if (pA !== pB) return pA - pB;
+      const sA = dA ? dA.toISOString().slice(0, 10) : '9999-12-31';
+      const sB = dB ? dB.toISOString().slice(0, 10) : '9999-12-31';
+      if (sA !== sB) {
+        const cmp = sA.localeCompare(sB);
+        return direcaoOrdenacao === 'asc' ? cmp : -cmp;
       }
       
-      if (dataA !== dataB) {
-        const comparacao = dataA.localeCompare(dataB);
-        return direcaoOrdenacao === 'asc' ? comparacao : -comparacao;
-      }
-      
-      // PRIORIDADE 2: Nome do médico (alfabético)
       const medicoA = (a.medico || '').trim().toUpperCase();
       const medicoB = (b.medico || '').trim().toUpperCase();
       

@@ -244,12 +244,30 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
   };
   
+  const parseDateStr = (s?: string | null) => {
+    if (!s || s === '9999-12-31') return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const refDate = (ag: Agendamento) => parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+  const monthPriority = (d: Date | null) => {
+    if (!d) return 3;
+    const now = new Date();
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return 0;
+    if (d > now) return 1;
+    return 2;
+  };
   // Ordenar por data de cirurgia
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
-    const dataA = a.data_agendamento || a.dataAgendamento || '9999-12-31';
-    const dataB = b.data_agendamento || b.dataAgendamento || '9999-12-31';
-    const comparacao = dataA.localeCompare(dataB);
-    return direcaoOrdenacao === 'asc' ? comparacao : -comparacao;
+    const dA = refDate(a);
+    const dB = refDate(b);
+    const pA = monthPriority(dA);
+    const pB = monthPriority(dB);
+    if (pA !== pB) return pA - pB;
+    const sA = dA ? dA.toISOString().slice(0, 10) : '9999-12-31';
+    const sB = dB ? dB.toISOString().slice(0, 10) : '9999-12-31';
+    const cmp = sA.localeCompare(sB);
+    return direcaoOrdenacao === 'asc' ? cmp : -cmp;
   });
   
   // Total e paginação
