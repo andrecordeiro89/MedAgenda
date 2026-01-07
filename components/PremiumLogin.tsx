@@ -5,7 +5,7 @@ import { Button, Input, Card } from './ui';
 // ============================================================================
 // TIPOS E INTERFACES
 // ============================================================================
-export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'coordenacao' | 'diretoria';
+export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'coordenacao' | 'diretoria' | 'diretriz';
 
 interface Hospital {
   id: string;
@@ -383,6 +383,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
       
+      if (email === 'diretriz@medagenda.com') {
+        const hospitais: Hospital[] = [
+          { id: '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba', nome: 'Hospital Municipal Santa Alice', cidade: 'Santa Mariana', cnpj: '14.736.446/0001-93' },
+          { id: '4111b99d-8b4a-4b51-9561-a2fbd14e776e', nome: 'Hospital Municipal Juarez Barreto de Macedo', cidade: 'Faxinal', cnpj: '14.736.446/0006-06' },
+          { id: '4a2527c1-df09-4a36-a08f-adc63f555123', nome: 'Hospital Maternidade Rio Branco do Sul', cidade: 'Rio Branco do Sul', cnpj: '14.736.446/0012-46' },
+          { id: '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7', nome: 'Hospital Torao Tokuda', cidade: 'Apucarana', cnpj: '08325231001400' },
+          { id: '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a', nome: 'Hospital Municipal 18 de Dezembro', cidade: 'Arapoti', cnpj: '14.736.446/0008-60' },
+          { id: '933de4fb-ebfd-4838-bb43-153a7354d333', nome: 'Hospital Maternidade Nossa Senhora Aparecida', cidade: 'Fazenda Rio Grande', cnpj: '14.736.446/0010-84' },
+          { id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da', nome: 'Hospital Municipal São José', cidade: 'Carlópolis', cnpj: '14.736.446/0007-89' },
+          { id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f', nome: 'Hospital Nossa Senhora Aparecida', cidade: 'Foz do Iguaçu', cnpj: '14.736.446/0009-40' },
+          { id: '09ab26a8-8c2c-4a67-94f7-d450a1be328e', nome: 'Hospital Regional Centro Oeste', cidade: 'Guarapuava', cnpj: '76416866000140' }
+        ];
+        
+        const usuarioDirz: Usuario = {
+          id: `user-${Date.now()}`,
+          email,
+          hospital_id: hospitais[0].id,
+          hospital: hospitais[0],
+          role: 'diretriz'
+        };
+        
+        setUsuario(usuarioDirz);
+        setHospitalSelecionado(hospitais[0]);
+        setHospitaisDisponiveis(hospitais);
+        setIsAuthenticated(true);
+        
+        localStorage.setItem('medagenda-auth', JSON.stringify({
+          usuario: usuarioDirz,
+          hospital: hospitais[0],
+          hospitais
+        }));
+        console.log('💾 Login diretriz (consultoria) com múltiplos hospitais:', hospitais.length);
+        setIsLoading(false);
+        return;
+      }
+      
       if (email === 'diretoria@medagenda.com') {
         const hospitais: Hospital[] = [
           { id: '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba', nome: 'Hospital Municipal Santa Alice', cidade: 'Santa Mariana', cnpj: '14.736.446/0001-93' },
@@ -513,6 +549,10 @@ export const useHospitalFilter = () => {
     if (userRole === 'diretoria') return true;
     // Faturamento multi-hospital com acesso total, como coordenação
     if (userRole === 'faturamento') return true;
+    // Consultoria (diretriz): acesso apenas a Dashboard e Faturamento
+    if (userRole === 'diretriz') {
+      return viewName === 'dashboard' || viewName === 'faturamento';
+    }
     
     // Recepcao e Triagem têm acesso apenas a Dashboard e Documentação
     if (userRole === 'recepcao' || userRole === 'triagem') {

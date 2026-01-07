@@ -293,7 +293,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                     {hospitalSelecionado?.nome || 'Hospital não selecionado'}{hospitalSelecionado?.cidade && ` • ${hospitalSelecionado.cidade}`}
                                 </div>
                             </div>
-                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento' || usuario?.role === 'diretoria') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
+                            {(usuario?.role === 'coordenacao' || usuario?.role === 'faturamento' || usuario?.role === 'diretoria' || usuario?.role === 'diretriz') && hospitaisDisponiveis && hospitaisDisponiveis.length > 0 && (
                                 <select
                                     value={hospitalSelecionado?.id || ''}
                                     onChange={(e) => {
