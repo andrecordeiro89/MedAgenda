@@ -74,6 +74,66 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const { error: toastError } = useToast();
   // Verificar se é usuário TI (permissão especial para alterar procedimentos base)
   const isUsuarioTI = userEmail?.toLowerCase() === 'tifoz@medagenda.com';
+  const getAihStatusStyle = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'auditor externo':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'aguardando ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'agendado':
+        return 'bg-slate-100 border-slate-400 text-slate-900';
+      case 'ag regulação':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'solicitar':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'emitida':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'aih represada':
+        return 'bg-red-50 border-red-400 text-red-800';
+      case 'ag ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      default:
+        return 'bg-white border-gray-300 text-gray-600';
+    }
+  };
+  const getAihDotColor = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-500';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-amber-500';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-amber-500';
+      case 'auditor externo':
+        return 'bg-indigo-500';
+      case 'aguardando ciência sms':
+        return 'bg-blue-500';
+      case 'agendado':
+        return 'bg-slate-500';
+      case 'ag regulação':
+        return 'bg-indigo-500';
+      case 'solicitar':
+        return 'bg-amber-500';
+      case 'emitida':
+        return 'bg-green-500';
+      case 'aih represada':
+        return 'bg-red-500';
+      case 'ag ciência sms':
+        return 'bg-blue-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
   
   // Estado para controlar a navegação entre meses (offset)
   const [offsetMes, setOffsetMes] = useState(0);
@@ -203,12 +263,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   agendamentoId: string;
                   medicoId?: string;
                   medicoNome?: string;
+                  statusAih?: string | null;
                   paciente?: {
                     nome: string;
                     dataNascimento: string;
                     cidade?: string | null;
                     telefone?: string | null;
                     dataConsulta?: string | null;
+                    prontuario?: string | null;
                   };
                 }>;
               }>();
@@ -234,6 +296,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       agendamentoId: agendamento.id,
                       especificacao: agendamento.procedimento_especificacao || undefined // Carregar especificação
                     };
+                    procedimentoData.statusAih = agendamento.status_aih || 'Pendência Faturamento';
                     
                     // Log para debug de especificação
                     if (agendamento.procedimento_especificacao) {
@@ -314,7 +377,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     pacientes: pacientes,
                     agendamentoId: proc.agendamentoId,
                     ...(proc.medicoId && { medicoId: proc.medicoId }),
-                    ...(proc.medicoNome && { medicoNome: proc.medicoNome })
+                    ...(proc.medicoNome && { medicoNome: proc.medicoNome }),
+                    ...(proc.statusAih !== undefined && { statusAih: proc.statusAih })
                   };
                   
                   // Sempre incluir especificação (mesmo que seja undefined)
@@ -3393,6 +3457,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-[26rem] min-w-[26rem]">Procedimento</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-36">Médico</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-28">Status AIH</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-40">Nº Prontuário</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
@@ -3512,6 +3577,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                       )}
                                                     </button>
                                                   )}
+                                              </div>
+                                              </td>
+                                              {/* Coluna Status AIH */}
+                                              <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden">
+                                                <div className="flex items-center gap-1.5">
+                                                  <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(proc.statusAih)}`} />
+                                                  <span className={`px-2 py-1 text-[10px] font-semibold rounded border ${getAihStatusStyle(proc.statusAih)}`}>
+                                                    {proc.statusAih || '-'}
+                                                  </span>
                                                 </div>
                                               </td>
                                               {/* Coluna Nº Prontuário */}
@@ -3567,7 +3641,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           if (isFirstPaciente && isProcExpanded) {
                                             linhas.push(
                                               <tr key={`${proc.id}-expanded`} className="bg-gradient-to-r from-slate-50 to-blue-50/30">
-                                              <td colSpan={6} className="px-3 py-3">
+                                              <td colSpan={7} className="px-3 py-3">
                                                   <div className="flex items-start gap-2 pl-6 border-l-2 border-blue-400/30">
                                                     {/* Ícone de informação */}
                                                     <div className="flex-shrink-0 mt-0.5">
@@ -3748,7 +3822,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                         if (isProcExpanded) {
                                           linhas.push(
                                             <tr key={`${proc.id}-expanded`} className="bg-slate-50">
-                                              <td colSpan={6} className="px-3 py-2">
+                                              <td colSpan={7} className="px-3 py-2">
                                                 <div className="text-xs text-slate-500 italic">
                                                   Nenhum paciente cadastrado ainda. Clique no botão "+" para adicionar.
                                                 </div>

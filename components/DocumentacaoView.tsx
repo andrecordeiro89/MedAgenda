@@ -34,6 +34,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Estados do modal
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
   const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
+  const [modalCancelAberto, setModalCancelAberto] = useState(false);
+  const [cancelAgendamento, setCancelAgendamento] = useState<Agendamento | null>(null);
+  const [cancelObservacao, setCancelObservacao] = useState<string>('');
+  const [salvandoCancel, setSalvandoCancel] = useState<boolean>(false);
   const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'complementares'>('documentos');
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
   
@@ -73,6 +77,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Carregar agendamentos
   useEffect(() => {
     carregarAgendamentos();
+  }, [hospitalId]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`doc-aih-${hospitalId || 'all'}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'agendamentos' }, (payload: any) => {
+        const novo = payload?.new;
+        if (!novo) return;
+        if (hospitalId && novo.hospital_id && novo.hospital_id !== hospitalId) return;
+        setAgendamentos(prev => prev.map(a => a.id === novo.id ? { ...a, status_aih: novo.status_aih } : a));
+      });
+    channel.subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [hospitalId]);
 
   const carregarAgendamentos = async () => {
@@ -212,6 +231,20 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
   const getAihStatusStyle = (status: string | null | undefined) => {
     switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'pendência hospital':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'pendencia hospital':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'pendência faturamento':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'pendencia faturamento':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'auditor externo':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'aguardando ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
       case 'agendado':
         return 'bg-slate-100 border-slate-400 text-slate-900';
       case 'ag regulação':
@@ -231,6 +264,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
   const getAihDotColor = (status: string | null | undefined) => {
     switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-500';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-amber-500';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-amber-500';
+      case 'auditor externo':
+        return 'bg-indigo-500';
+      case 'aguardando ciência sms':
+        return 'bg-blue-500';
       case 'agendado':
         return 'bg-slate-500';
       case 'ag regulação':
@@ -251,6 +296,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const getLiberacaoStatusStyle = (status: string | null | undefined) => {
     switch ((status || '').toLowerCase()) {
       case 'liberado':
+      case 'liberado para cirurgia':
         return 'bg-green-50 border-green-400 text-green-800';
       case 'anestesista':
         return 'bg-blue-50 border-blue-400 text-blue-800';
@@ -259,6 +305,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       case 'exames':
         return 'bg-amber-50 border-amber-400 text-amber-800';
       case 'não liberado':
+      case 'não liberado para cirurgia':
+        return 'bg-red-50 border-red-400 text-red-800';
+      case 'confirmado com paciente':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'cirurgia cancelada':
         return 'bg-red-50 border-red-400 text-red-800';
       default:
         return 'bg-white border-gray-300 text-gray-600';
@@ -268,6 +319,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const getLiberacaoDotColor = (status: string | null | undefined) => {
     switch ((status || '').toLowerCase()) {
       case 'liberado':
+      case 'liberado para cirurgia':
         return 'bg-green-500';
       case 'anestesista':
         return 'bg-blue-500';
@@ -276,6 +328,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       case 'exames':
         return 'bg-amber-500';
       case 'não liberado':
+      case 'não liberado para cirurgia':
+        return 'bg-red-500';
+      case 'confirmado com paciente':
+        return 'bg-green-500';
+      case 'cirurgia cancelada':
         return 'bg-red-500';
       default:
         return 'bg-gray-300';
@@ -998,46 +1055,14 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     return (
       <React.Fragment key={ag.id}>
         {/* Linha principal */}
-        <tr className={`transition-colors ${
-          temExamesEPreOp 
-            ? 'bg-green-50/50 hover:bg-green-100/50 border-l-4 border-green-500' 
-            : 'hover:bg-gray-50'
-        }`}>
+        <tr className="transition-colors hover:bg-gray-50">
           {/* Status AIH */}
-          <td className="px-3 py-3 w-36">
-            <div className="flex items-center gap-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih)}`} />
-              <select
-                value={ag.status_aih || ''}
-                onChange={async (e) => {
-                  const novo = e.target.value || null;
-                  try {
-                    if (!ag.id) return;
-                    setSalvandoAIH(prev => new Set(prev).add(ag.id!));
-                    await agendamentoService.update(ag.id, { status_aih: novo });
-                    setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
-                    success('Status AIH atualizado');
-                  } catch (err) {}
-                  finally {
-                    setSalvandoAIH(prev => {
-                      const next = new Set(prev);
-                      if (ag.id) next.delete(ag.id);
-                      return next;
-                    });
-                  }
-                }}
-                className={`w-full px-2 py-1 text-xs border rounded ${getAihStatusStyle(ag.status_aih)}`}
-                title="Atualizar Status AIH"
-                disabled={ag.id ? salvandoAIH.has(ag.id) : false}
-              >
-                <option value="">Selecione</option>
-                <option value="Agendado">Agendado</option>
-                <option value="AG Regulação">AG Regulação</option>
-                <option value="Solicitar">Solicitar</option>
-                <option value="Emitida">Emitida</option>
-                <option value="AIH Represada">AIH Represada</option>
-                <option value="AG Ciência SMS">AG Ciência SMS</option>
-              </select>
+          <td className="px-2 py-3 w-28">
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
+              <span className={`px-2 py-1 text-xs font-semibold rounded ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}>
+                {ag.status_aih || 'Pendência Faturamento'}
+              </span>
             </div>
           </td>
           {/* Paciente */}
@@ -1102,15 +1127,17 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 value={ag.status_de_liberacao || ''}
                 onChange={(e) => handleAtualizarStatusLiberacao(ag.id, (e.target.value || null) as any)}
                 className={`w-full px-2 py-1 text-xs border rounded ${getLiberacaoStatusStyle(ag.status_de_liberacao)}`}
-                title="Atualizar Status Liberação"
+                title="Atualizar Status Interno"
                 disabled={ag.id ? salvandoLiberacao.has(ag.id) : false}
               >
                 <option value="">Selecione</option>
-                <option value="Liberado">Liberado</option>
                 <option value="Anestesista">Anestesista</option>
                 <option value="Cardio">Cardio</option>
                 <option value="Exames">Exames</option>
-                <option value="Não Liberado">Não Liberado</option>
+                <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
+                <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
+                <option value="Confirmado com Paciente">Confirmado com Paciente</option>
+                <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
               </select>
             </div>
           </td>
@@ -1203,7 +1230,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         
          {/* Linha expandida com detalhes */}
          {expandida && (
-           <tr className={temExamesEPreOp ? 'bg-green-50/50' : 'bg-gray-50'}>
+           <tr className="bg-gray-50">
             <td colSpan={11} className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Nascimento */}
@@ -1332,7 +1359,14 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Atualizar status de liberação
   const handleAtualizarStatusLiberacao = async (agendamentoId: string | undefined, novoStatus: string | null) => {
     if (!agendamentoId) return;
-    
+    const agAtual = agendamentos.find(a => a.id === agendamentoId);
+    if ((novoStatus || '').toLowerCase() === 'cirurgia cancelada') {
+      const obsAtual = (obsAgendamentoEdicao[agendamentoId] ?? agAtual?.observacao_agendamento ?? '').trim();
+      setCancelAgendamento(agAtual || null);
+      setCancelObservacao(obsAtual);
+      setModalCancelAberto(true);
+      return;
+    }
     try {
       setSalvandoLiberacao(prev => new Set(prev).add(agendamentoId));
       await agendamentoService.update(agendamentoId, { status_de_liberacao: novoStatus });
@@ -1374,6 +1408,39 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     } catch (error: any) {
       console.error('Erro ao atualizar confirmação:', error);
       toastError(`Erro ao atualizar confirmação: ${error.message}`);
+    }
+  };
+  
+  const handleConfirmarCancelamento = async () => {
+    const ag = cancelAgendamento;
+    if (!ag?.id) return;
+    const motivo = (cancelObservacao || '').trim();
+    if (motivo === '') {
+      toastError('Informe o motivo do cancelamento');
+      return;
+    }
+    try {
+      setSalvandoCancel(true);
+      const updateData: Partial<Agendamento> = {
+        status_de_liberacao: 'Cirurgia Cancelada',
+        observacao_agendamento: motivo
+      };
+      await agendamentoService.update(ag.id, updateData);
+      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      setObsAgendamentoEdicao(prev => {
+        const next = { ...prev };
+        delete next[ag.id!];
+        return next;
+      });
+      setModalCancelAberto(false);
+      setCancelAgendamento(null);
+      setCancelObservacao('');
+      success('Cancelamento registrado com motivo');
+    } catch (error: any) {
+      console.error('Erro ao salvar cancelamento:', error);
+      toastError('Erro ao registrar cancelamento');
+    } finally {
+      setSalvandoCancel(false);
     }
   };
 
@@ -1888,7 +1955,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
                       Status AIH
                     </th>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
@@ -1943,7 +2010,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </div>
                     </th>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
-                      Status Liberação
+                      Status Interno
                     </th>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
                       Confirmado
@@ -2521,6 +2588,58 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           )}
           
           {/* Conteúdo da aba de complementares removido */}
+        </div>
+      </Modal>
+      
+      {/* Modal de Motivo do Cancelamento */}
+      <Modal
+        isOpen={modalCancelAberto}
+        onClose={() => {
+          setModalCancelAberto(false);
+          setCancelAgendamento(null);
+          setCancelObservacao('');
+        }}
+        title={`Cancelar Cirurgia - ${cancelAgendamento?.nome_paciente || 'Paciente'}`}
+        size="small"
+      >
+        <div className="space-y-3">
+          <div className="bg-red-50 border border-red-200 p-2 rounded">
+            <div className="text-xs text-red-700">
+              Selecionei “Cirurgia Cancelada”. Informe o motivo do cancelamento abaixo.
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
+            <div><strong>Procedimento:</strong> {cancelAgendamento?.procedimentos || '-'}</div>
+            <div><strong>Data Cirurgia:</strong> {formatarData(cancelAgendamento?.data_agendamento)}</div>
+          </div>
+          <textarea
+            value={cancelObservacao}
+            onChange={(e) => setCancelObservacao(e.target.value)}
+            placeholder="Descreva o motivo do cancelamento..."
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+            rows={3}
+            disabled={salvandoCancel}
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setModalCancelAberto(false);
+                setCancelAgendamento(null);
+                setCancelObservacao('');
+              }}
+              className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+              disabled={salvandoCancel}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmarCancelamento}
+              className={`px-4 py-2 text-sm rounded text-white ${salvandoCancel ? 'bg-red-400' : 'bg-red-600 hover:bg-red-700'}`}
+              disabled={salvandoCancel}
+            >
+              Salvar motivo
+            </button>
+          </div>
         </div>
       </Modal>
 

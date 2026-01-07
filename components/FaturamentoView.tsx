@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { agendamentoService } from '../services/supabase';
+import { agendamentoService, supabase } from '../services/supabase';
 import { Agendamento } from '../types';
 import { Modal } from './ui';
 import JSZip from 'jszip';
@@ -22,6 +22,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [filtroMedico, setFiltroMedico] = useState<string>('');
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const [filtroObservacao, setFiltroObservacao] = useState<string>('');
+  const [cancelInfoOpen, setCancelInfoOpen] = useState<{ [id: string]: boolean }>({});
   
   // Estados para ordenação
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
@@ -81,20 +82,19 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           return false; // ❌ Excluir
         }
         
-        // CASO 4: Demais casos (registros parcialmente preenchidos) → OCULTAR
-        return false; // ❌ Excluir para manter consistência com outras telas
+        // CASO 4: Demais casos → MOSTRAR (mesma lógica da Documentação)
+        return true;
       });
-      
-      const paraFaturamento = semGradeCirurgica.filter(ag => ag.documentos_ok === true);
+      const agendamentosFiltrados = semGradeCirurgica;
       
       // DEBUG: Análise detalhada e contagem de pacientes únicos
       const totalOriginal = dados.length;
-      const totalFiltrado = paraFaturamento.length;
+      const totalFiltrado = agendamentosFiltrados.length;
       const totalExcluidos = totalOriginal - totalFiltrado;
       
       // Contar pacientes ÚNICOS no total filtrado
       const pacientesUnicos = new Set<string>();
-      paraFaturamento.forEach(ag => {
+      agendamentosFiltrados.forEach(ag => {
         const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
         if (nomePaciente && nomePaciente !== '') {
           pacientesUnicos.add(nomePaciente);
@@ -108,7 +108,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       console.log(`  🎯 PACIENTES ÚNICOS (final): ${pacientesUnicos.size}`);
       
       // Estatísticas (apenas pacientes reais, não procedimentos vazios)
-      const comPaciente = paraFaturamento.filter(ag => 
+      const comPaciente = agendamentosFiltrados.filter(ag => 
         ag.nome_paciente && ag.nome_paciente.trim() !== '' &&
         ag.procedimentos && ag.procedimentos.trim() !== ''
       );
@@ -123,11 +123,159 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       console.log('   - Prontos (exames + pré-op):', prontos);
       console.log('   - Pendentes:', pendentes);
       
-      setAgendamentos(paraFaturamento);
+      setAgendamentos(agendamentosFiltrados);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Status e estilos iguais aos da Documentação
+  const getAihStatusStyle = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'auditor externo':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'aguardando ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'agendado':
+        return 'bg-slate-100 border-slate-400 text-slate-900';
+      case 'ag regulação':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'solicitar':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'emitida':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'aih represada':
+        return 'bg-red-50 border-red-400 text-red-800';
+      case 'ag ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      default:
+        return 'bg-white border-gray-300 text-gray-600';
+    }
+  };
+  const getAihDotColor = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-500';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-amber-500';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-amber-500';
+      case 'auditor externo':
+        return 'bg-indigo-500';
+      case 'aguardando ciência sms':
+        return 'bg-blue-500';
+      case 'agendado':
+        return 'bg-slate-500';
+      case 'ag regulação':
+        return 'bg-indigo-500';
+      case 'solicitar':
+        return 'bg-amber-500';
+      case 'emitida':
+        return 'bg-green-500';
+      case 'aih represada':
+        return 'bg-red-500';
+      case 'ag ciência sms':
+        return 'bg-blue-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
+  const getLiberacaoStatusStyle = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'liberado':
+      case 'liberado para cirurgia':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'anestesista':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'cardio':
+        return 'bg-violet-50 border-violet-400 text-violet-800';
+      case 'exames':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'não liberado':
+      case 'não liberado para cirurgia':
+        return 'bg-red-50 border-red-400 text-red-800';
+      case 'confirmado com paciente':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'cirurgia cancelada':
+        return 'bg-red-50 border-red-400 text-red-800';
+      default:
+        return 'bg-white border-gray-300 text-gray-600';
+    }
+  };
+  const getLiberacaoDotColor = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'liberado':
+      case 'liberado para cirurgia':
+        return 'bg-green-500';
+      case 'anestesista':
+        return 'bg-blue-500';
+      case 'cardio':
+        return 'bg-violet-500';
+      case 'exames':
+        return 'bg-amber-500';
+      case 'não liberado':
+      case 'não liberado para cirurgia':
+        return 'bg-red-500';
+      case 'confirmado com paciente':
+        return 'bg-green-500';
+      case 'cirurgia cancelada':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
+  const getStatusPaciente = (ag: Agendamento) => {
+    const temExames = ag.documentos_ok === true;
+    if (temExames) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800', grupo: 'com_exames' as const };
+    return { texto: 'SEM EXAMES', cor: 'bg-red-100 text-red-800', grupo: 'sem_exames' as const };
+  };
+  const getStatusPreOp = (ag: Agendamento) => {
+    const temPreOp = ag.ficha_pre_anestesica_ok === true;
+    if (temPreOp) return { texto: 'COM PRE-OP', cor: 'bg-blue-100 text-blue-800' };
+    return { texto: 'SEM PRE-OP', cor: 'bg-orange-100 text-orange-800' };
+  };
+
+  // Atualizações iguais às da Documentação
+  const [salvandoAIH, setSalvandoAIH] = useState<Set<string>>(new Set());
+  const [salvandoLiberacao, setSalvandoLiberacao] = useState<Set<string>>(new Set());
+  const handleAtualizarStatusLiberacao = async (agendamentoId: string | undefined, novoStatus: string | null) => {
+    if (!agendamentoId) return;
+    try {
+      setSalvandoLiberacao(prev => new Set(prev).add(agendamentoId));
+      await agendamentoService.update(agendamentoId, { status_de_liberacao: novoStatus });
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoId ? { ...ag, status_de_liberacao: novoStatus } : ag));
+      success('Status de liberação atualizado');
+    } catch (error: any) {
+      console.error('Erro ao atualizar status de liberação:', error);
+      toastError(`Erro ao atualizar status: ${error.message}`);
+    } finally {
+      setSalvandoLiberacao(prev => {
+        const next = new Set(prev);
+        next.delete(agendamentoId);
+        return next;
+      });
+    }
+  };
+  const handleAtualizarConfirmacao = async (agendamentoId: string | undefined, novaConfirmacao: string) => {
+    if (!agendamentoId) return;
+    try {
+      await agendamentoService.update(agendamentoId, { confirmacao: novaConfirmacao });
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoId ? { ...ag, confirmacao: novaConfirmacao } : ag));
+    } catch (error: any) {
+      console.error('Erro ao atualizar confirmação:', error);
+      toastError(`Erro ao atualizar confirmação: ${error.message}`);
     }
   };
 
@@ -192,29 +340,23 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     return Array.from(pacientesMap.values());
   };
 
-  // FILTRO PRINCIPAL: Apenas registros COM PACIENTE e COM EXAMES
+  // Conjuntos iguais aos da Documentação para pendências
   const agendamentosComPaciente = agendamentos.filter(ag => {
-    // Deve ter nome de paciente
     const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
-    const temExames = ag.documentos_ok === true;
-    
-    return temPaciente && temExames;
+    const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+    if (temPaciente && temProcedimento) return true;
+    if (ag.is_grade_cirurgica === true && !temPaciente) return false;
+    if (!temProcedimento && !temPaciente) return false;
+    return true;
   });
-  
-  // Separar agendamentos em PRONTOS (exames + pré-op) e PENDENTES
-  const agendamentosProntos = agendamentosComPaciente.filter(ag => 
-    ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true
-  );
-  
-  const agendamentosPendentes = agendamentosComPaciente.filter(ag => 
-    !(ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true)
-  );
+  const agendamentosProntos = agendamentosComPaciente.filter(ag => ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true);
+  const agendamentosPendentes = agendamentosComPaciente.filter(ag => !(ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true));
   
   // Calcular pacientes únicos para os KPIs (usando Set - mais simples e direto)
   const totalPacientesUnicos = getPacientesUnicos(agendamentosComPaciente);
   const totalPendentesUnicos = getPacientesUnicos(agendamentosPendentes);
   
-  // Aplicar filtros
+  // Aplicar filtros (mantidos)
   const aplicarFiltros = (lista: Agendamento[]) => {
     return lista.filter(ag => {
       // Filtro por paciente
@@ -556,7 +698,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
   };
   
-  // Obter estilo do select de status
+  // Obter estilo do select de status (faturamento)
   const getStatusSelectStyle = (status: string | null | undefined) => {
     switch (status) {
       case 'pendente':
@@ -569,7 +711,274 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         return 'bg-gray-50 border-gray-300 text-gray-600';
     }
   };
-  
+
+  // Estados e funções de Documentação (upload/visualização)
+  const [modalUploadAberto, setModalUploadAberto] = useState(false);
+  const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'complementares'>('documentos');
+  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
+  const [arquivosDocumentosSelecionados, setArquivosDocumentosSelecionados] = useState<File[]>([]);
+  const [documentosAnexados, setDocumentosAnexados] = useState<string[]>([]);
+  const fileInputDocumentosRef = useRef<HTMLInputElement>(null);
+  const [arquivoFichaSelecionado, setArquivoFichaSelecionado] = useState<File | null>(null);
+  const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
+  const fileInputFichaRef = useRef<HTMLInputElement>(null);
+  const [arquivosComplementaresSelecionados, setArquivosComplementaresSelecionados] = useState<File[]>([]);
+  const [complementaresAnexados, setComplementaresAnexados] = useState<string[]>([]);
+  const [tipoDeExame, setTipoDeExame] = useState<string>('');
+  const [examesMeta, setExamesMeta] = useState<Array<{ url: string; tipo: string }>>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const handleAbrirModalUpload = async (ag: Agendamento) => {
+    setAgendamentoSelecionado(ag);
+    setArquivosDocumentosSelecionados([]);
+    setArquivoFichaSelecionado(null);
+    setArquivosComplementaresSelecionados([]);
+    setAbaAtiva('documentos');
+    setModalUploadAberto(true);
+    setTipoDeExame('');
+    setExamesMeta([]);
+    if (ag.documentos_urls) {
+      try { const urls = JSON.parse(ag.documentos_urls); setDocumentosAnexados(Array.isArray(urls) ? urls : []); } catch { setDocumentosAnexados([]); }
+    } else { setDocumentosAnexados([]); }
+    const rawMeta: any = (ag as any).documentos_meta;
+    if (typeof rawMeta === 'string') { try { const parsed = JSON.parse(rawMeta); setExamesMeta(Array.isArray(parsed) ? parsed : []); } catch { setExamesMeta([]); } }
+    else if (Array.isArray(rawMeta)) { setExamesMeta(rawMeta); } else { setExamesMeta([]); }
+    setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    if (ag.complementares_urls) {
+      try { const urls = JSON.parse(ag.complementares_urls); setComplementaresAnexados(Array.isArray(urls) ? urls : []); } catch { setComplementaresAnexados([]); }
+    } else { setComplementaresAnexados([]); }
+  };
+  const handleAbrirModalVisualizacao = async (ag: Agendamento) => {
+    setAgendamentoSelecionado(ag);
+    if (ag.documentos_urls) {
+      try { const urls = JSON.parse(ag.documentos_urls); setDocumentosAnexados(Array.isArray(urls) ? urls : []); } catch { setDocumentosAnexados([]); }
+    } else { setDocumentosAnexados([]); }
+    const rawMeta2: any = (ag as any).documentos_meta;
+    if (typeof rawMeta2 === 'string') { try { const parsed = JSON.parse(rawMeta2); setExamesMeta(Array.isArray(parsed) ? parsed : []); } catch { setExamesMeta([]); } }
+    else if (Array.isArray(rawMeta2)) { setExamesMeta(rawMeta2); } else { setExamesMeta([]); }
+    setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    if (ag.complementares_urls) {
+      try { const urls = JSON.parse(ag.complementares_urls); setComplementaresAnexados(Array.isArray(urls) ? urls : []); } catch { setComplementaresAnexados([]); }
+    } else { setComplementaresAnexados([]); }
+    setModalVisualizacaoAberto(true);
+  };
+  const handleSelecionarDocumentos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) { const files = Array.from(e.target.files); setArquivosDocumentosSelecionados(prev => [...prev, ...files]); }
+  };
+  const handleRemoverDocumento = (index: number) => {
+    setArquivosDocumentosSelecionados(prev => prev.filter((_, i) => i !== index));
+    setTipoDeExame('');
+  };
+  const handleSelecionarFicha = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) { setArquivoFichaSelecionado(e.target.files[0]); }
+  };
+  const handleSelecionarComplementares = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) { const files = Array.from(e.target.files); setArquivosComplementaresSelecionados(prev => [...prev, ...files]); }
+  };
+  const handleRemoverComplementar = (index: number) => {
+    setArquivosComplementaresSelecionados(prev => prev.filter((_, i) => i !== index));
+  };
+  const handleUploadDocumentos = async () => {
+    if (!agendamentoSelecionado?.id || arquivosDocumentosSelecionados.length === 0) return;
+    if (!tipoDeExame || tipoDeExame.trim() === '') { warning('Selecione o tipo do exame antes de anexar'); return; }
+    setUploading(true);
+    const urlsUploaded: string[] = [];
+    try {
+      const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
+        const existing = new Set((data || []).map(f => f.name));
+        if (!existing.has(originalName)) return originalName;
+        const dot = originalName.lastIndexOf('.');
+        const ext = dot >= 0 ? originalName.slice(dot) : '';
+        const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        let i = 1; let candidate = `${base} (${i})${ext}`;
+        while (existing.has(candidate)) { i++; candidate = `${base} (${i})${ext}`; }
+        return candidate;
+      };
+      const folder = `documentos/${agendamentoSelecionado.id}`;
+      for (const arquivo of arquivosDocumentosSelecionados) {
+        const uniqueName = await getUniqueFileName(folder, arquivo.name);
+        const filePath = `${folder}/${uniqueName}`;
+        const { error: uploadError } = await supabase.storage.from('Documentos').upload(filePath, arquivo, { cacheControl: '3600', upsert: false });
+        if (uploadError) throw new Error(`Erro ao fazer upload de ${arquivo.name}: ${uploadError.message}`);
+        const { data: urlData } = supabase.storage.from('Documentos').getPublicUrl(filePath);
+        if (urlData?.publicUrl) { urlsUploaded.push(urlData.publicUrl); }
+      }
+      const todasUrls = [...documentosAnexados, ...urlsUploaded];
+      const novasMetas = [...examesMeta, ...urlsUploaded.map(u => ({ url: u, tipo: tipoDeExame }))];
+      const updateData: Partial<Agendamento> = {
+        documentos_urls: JSON.stringify(todasUrls),
+        documentos_ok: todasUrls.length > 0,
+        documentos_data: new Date().toISOString(),
+        tipo_de_exame: tipoDeExame,
+        documentos_meta: novasMetas
+      };
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoSelecionado.id ? { ...ag, ...updateData } : ag));
+      setArquivosDocumentosSelecionados([]);
+      setDocumentosAnexados(todasUrls);
+      setTipoDeExame('');
+      setExamesMeta(novasMetas);
+      success('Exames anexados com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao fazer upload:', error);
+      toastError(`Erro ao anexar documentos: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const handleUploadFicha = async () => {
+    if (!agendamentoSelecionado?.id || !arquivoFichaSelecionado) return;
+    if (!agendamentoSelecionado.documentos_ok) { warning('É necessário anexar os exames primeiro'); setAbaAtiva('documentos'); return; }
+    setUploading(true);
+    try {
+      const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
+        const existing = new Set((data || []).map(f => f.name));
+        if (!existing.has(originalName)) return originalName;
+        const dot = originalName.lastIndexOf('.'); const ext = dot >= 0 ? originalName.slice(dot) : ''; const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        let i = 1; let candidate = `${base} (${i})${ext}`; while (existing.has(candidate)) { i++; candidate = `${base} (${i})${ext}`; } return candidate;
+      };
+      const folder = `fichas/${agendamentoSelecionado.id}`;
+      const uniqueName = await getUniqueFileName(folder, arquivoFichaSelecionado.name);
+      const filePath = `${folder}/${uniqueName}`;
+      const { error: uploadError } = await supabase.storage.from('Documentos').upload(filePath, arquivoFichaSelecionado, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw new Error(`Erro ao fazer upload da ficha: ${uploadError.message}`);
+      const { data: urlData } = supabase.storage.from('Documentos').getPublicUrl(filePath);
+      if (!urlData?.publicUrl) throw new Error('Erro ao obter URL do arquivo');
+      const updateData: Partial<Agendamento> = {
+        ficha_pre_anestesica_url: urlData.publicUrl,
+        ficha_pre_anestesica_ok: true,
+        ficha_pre_anestesica_data: new Date().toISOString()
+      };
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoSelecionado.id ? { ...ag, ...updateData } : ag));
+      setArquivoFichaSelecionado(null);
+      setFichaAnexada(urlData.publicUrl);
+      success('Ficha pré-anestésica anexada com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao fazer upload:', error);
+      toastError(`Erro ao anexar ficha: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const handleRemoverDocumentoAnexado = async (url: string) => {
+    if (!agendamentoSelecionado?.id) return;
+    try {
+      const novasUrls = documentosAnexados.filter(u => u !== url);
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const filePath = pathParts.slice(pathParts.indexOf('Documentos') + 1).join('/');
+      const { error: deleteError } = await supabase.storage.from('Documentos').remove([filePath]);
+      if (deleteError) console.error('Erro ao deletar arquivo:', deleteError);
+      const metaFiltrada = examesMeta.filter(m => m.url !== url);
+      const updateData: Partial<Agendamento> = {
+        documentos_urls: novasUrls.length > 0 ? JSON.stringify(novasUrls) : null,
+        documentos_ok: novasUrls.length > 0,
+        documentos_data: novasUrls.length > 0 ? new Date().toISOString() : null,
+        tipo_de_exame: novasUrls.length > 0 ? (agendamentoSelecionado.tipo_de_exame || tipoDeExame || null) : null,
+        documentos_meta: metaFiltrada.length > 0 ? metaFiltrada : null
+      };
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+      setDocumentosAnexados(novasUrls);
+      setExamesMeta(metaFiltrada);
+      setTipoDeExame('');
+      setAgendamentoSelecionado(prev => prev ? { ...prev, ...updateData } : prev);
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoSelecionado.id ? { ...ag, ...updateData } : ag));
+      if (fileInputDocumentosRef.current) { fileInputDocumentosRef.current.value = ''; }
+      success('Documento removido com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao remover documento:', error);
+      toastError(`Erro ao remover documento: ${error.message}`);
+    }
+  };
+  const handleUploadComplementares = async () => {
+    if (!agendamentoSelecionado?.id || arquivosComplementaresSelecionados.length === 0) return;
+    setUploading(true);
+    const urlsUploaded: string[] = [];
+    try {
+      const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
+        const existing = new Set((data || []).map(f => f.name));
+        if (!existing.has(originalName)) return originalName;
+        const dot = originalName.lastIndexOf('.'); const ext = dot >= 0 ? originalName.slice(dot) : ''; const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        let i = 1; let candidate = `${base} (${i})${ext}`; while (existing.has(candidate)) { i++; candidate = `${base} (${i})${ext}`; } return candidate;
+      };
+      const folder = `complementares/${agendamentoSelecionado.id}`;
+      for (const arquivo of arquivosComplementaresSelecionados) {
+        const uniqueName = await getUniqueFileName(folder, arquivo.name);
+        const filePath = `${folder}/${uniqueName}`;
+        const { error: uploadError } = await supabase.storage.from('Documentos').upload(filePath, arquivo, { cacheControl: '3600', upsert: false });
+        if (uploadError) throw new Error(`Erro ao fazer upload de ${arquivo.name}: ${uploadError.message}`);
+        const { data: urlData } = supabase.storage.from('Documentos').getPublicUrl(filePath);
+        if (urlData?.publicUrl) { urlsUploaded.push(urlData.publicUrl); }
+      }
+      const todasUrls = [...complementaresAnexados, ...urlsUploaded];
+      const updateData: Partial<Agendamento> = {
+        complementares_urls: JSON.stringify(todasUrls),
+        complementares_ok: todasUrls.length > 0,
+        complementares_data: new Date().toISOString()
+      };
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoSelecionado.id ? { ...ag, ...updateData } : ag));
+      setArquivosComplementaresSelecionados([]);
+      setComplementaresAnexados(todasUrls);
+      success('Complementares anexados com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao fazer upload:', error);
+      toastError(`Erro ao anexar complementares: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const handleRemoverComplementarAnexado = async (url: string) => {
+    if (!agendamentoSelecionado?.id) return;
+    try {
+      const novasUrls = complementaresAnexados.filter(u => u !== url);
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const filePath = pathParts.slice(pathParts.indexOf('Documentos') + 1).join('/');
+      const { error: deleteError } = await supabase.storage.from('Documentos').remove([filePath]);
+      if (deleteError) console.error('Erro ao deletar arquivo:', deleteError);
+      const updateData: Partial<Agendamento> = {
+        complementares_urls: novasUrls.length > 0 ? JSON.stringify(novasUrls) : null,
+        complementares_ok: novasUrls.length > 0,
+        complementares_data: novasUrls.length > 0 ? new Date().toISOString() : null
+      };
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+      setComplementaresAnexados(novasUrls);
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoSelecionado.id ? { ...ag, ...updateData } : ag));
+      success('Documento complementar removido com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao remover complementar:', error);
+      toastError(`Erro ao remover complementar: ${error.message}`);
+    }
+  };
+  const handleRemoverFicha = async () => {
+    if (!agendamentoSelecionado?.id || !fichaAnexada) return;
+    try {
+      const urlObj = new URL(fichaAnexada);
+      const pathParts = urlObj.pathname.split('/');
+      const filePath = pathParts.slice(pathParts.indexOf('Documentos') + 1).join('/');
+      const { error: deleteError } = await supabase.storage.from('Documentos').remove([filePath]);
+      if (deleteError) console.error('Erro ao deletar ficha:', deleteError);
+      const updateData: Partial<Agendamento> = {
+        ficha_pre_anestesica_url: null,
+        ficha_pre_anestesica_ok: false,
+        ficha_pre_anestesica_data: null
+      };
+      await agendamentoService.update(agendamentoSelecionado.id, updateData);
+      setFichaAnexada(null);
+      setAgendamentos(prev => prev.map(ag => ag.id === agendamentoSelecionado.id ? { ...ag, ...updateData } : ag));
+      success('Ficha pré-operatória removida com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao remover ficha:', error);
+      toastError(`Erro ao remover ficha: ${error.message}`);
+    }
+  };
+
   // Estado para controlar observação em edição
   const [observacaoEmEdicao, setObservacaoEmEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoObservacao, setSalvandoObservacao] = useState<string | null>(null);
@@ -719,172 +1128,227 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
   };
 
-  // Renderizar linha de agendamento
+  // Renderizar linha de agendamento (igual à Documentação + botão Download G-SUS)
   const renderizarLinhaAgendamento = (ag: Agendamento) => {
     const expandida = isLinhaExpandida(ag.id);
+    const status = getStatusPaciente(ag);
     
     return (
       <React.Fragment key={ag.id}>
-        {/* Linha principal */}
-        <tr className="hover:bg-gray-50">
-          {/* Paciente */}
-          <td className="px-4 py-3 w-48">
-            <div className="flex items-center gap-1">
-              <div 
-                className="text-sm font-medium text-gray-900 truncate"
-                title={ag.nome_paciente || ag.nome || '-'}
+        {/* Linha principal - estrutura igual à Documentação */}
+        <tr className="transition-colors hover:bg-gray-50">
+          {/* Status AIH */}
+          <td className="px-3 py-3 w-36">
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
+              <select
+                value={ag.status_aih || 'Pendência Faturamento'}
+                onChange={async (e) => {
+                  const novo = e.target.value || null;
+                  try {
+                    if (!ag.id) return;
+                    setSalvandoAIH(prev => new Set(prev).add(ag.id!));
+                    await agendamentoService.update(ag.id, { status_aih: novo });
+                    setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
+                    success('Status AIH atualizado');
+                  } catch (err) {}
+                  finally {
+                    setSalvandoAIH(prev => {
+                      const next = new Set(prev);
+                      if (ag.id) next.delete(ag.id);
+                      return next;
+                    });
+                  }
+                }}
+                className={`w-full px-2 py-1 text-xs border rounded ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}
+                title="Atualizar Status AIH"
+                disabled={ag.id ? salvandoAIH.has(ag.id) : false}
               >
-                {ag.nome_paciente || ag.nome || '-'}
-              </div>
-              {ag.observacao_faturamento && (
-                <span 
-                  className="flex-shrink-0 text-amber-500" 
-                  title={`Observação: ${ag.observacao_faturamento}`}
-                >
-                  📝
-                </span>
-              )}
+                <option value="">Selecione</option>
+                <option value="Autorizado">Autorizado</option>
+                <option value="Pendência Hospital">Pendência Hospital</option>
+                <option value="Pendência Faturamento">Pendência Faturamento</option>
+                <option value="Auditor Externo">Auditor Externo</option>
+                <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+              </select>
             </div>
           </td>
-          
+          {/* Paciente */}
+          <td className="px-3 py-3 w-64">
+            <div className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-snug" title={ag.nome_paciente || ag.nome || '-'}>
+              <div className="flex items-center gap-1">
+                <span className="truncate">{ag.nome_paciente || ag.nome || '-'}</span>
+                {(((observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? '') as string).trim() !== '') && (
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" title="Possui observação do faturamento" />
+                )}
+              </div>
+            </div>
+          </td>
           {/* Procedimento */}
-          <td className="px-4 py-3 w-56">
-            <div 
-              className="text-sm text-gray-700 truncate"
-              title={formatarProcedimento(ag)}
-            >
+          <td className="px-3 py-3 w-72">
+            <div className="text-sm text-gray-700 whitespace-normal break-words leading-snug" title={formatarProcedimento(ag)}>
               {formatarProcedimento(ag)}
             </div>
           </td>
-          
           {/* Médico */}
-          <td className="px-4 py-3 w-40">
-            <div 
-              className="text-sm text-gray-700 truncate"
-              title={ag.medico || '-'}
-            >
+          <td className="px-3 py-3 w-48">
+            <div className="text-sm text-gray-700 whitespace-normal break-words leading-snug" title={ag.medico || '-'}>
               {ag.medico || '-'}
             </div>
           </td>
-          
           {/* Data Consulta */}
-          <td className="px-4 py-3 w-32">
-            <div className="text-sm text-gray-500">
-              {formatarData(ag.data_consulta)}
-            </div>
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
+            {formatarData(ag.data_consulta)}
           </td>
-          
           {/* Data Cirurgia */}
-          <td className="px-4 py-3 w-32">
-            <div className="text-sm text-gray-500">
-              {formatarData(ag.data_agendamento || ag.dataAgendamento)}
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
+            {formatarData(ag.data_agendamento || ag.dataAgendamento)}
+          </td>
+          {/* Exames */}
+          <td className="px-4 py-3 whitespace-nowrap w-32">
+            <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>{status.texto}</span>
+          </td>
+          {/* Status Interno */}
+          <td className="px-3 py-3 w-36">
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full ${getLiberacaoDotColor(ag.status_de_liberacao)}`} />
+              <span className={`px-2 py-1 text-xs font-semibold rounded border ${getLiberacaoStatusStyle(ag.status_de_liberacao)}`}>{ag.status_de_liberacao || '-'}</span>
+              {((ag.status_de_liberacao || '').toLowerCase() === 'cirurgia cancelada' && (ag.observacao_agendamento || '').trim() !== '' && ag.id) && (
+                <div className="relative">
+                  <button
+                    className="px-1.5 py-0.5 text-xs font-semibold rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
+                    title="Ver motivo do cancelamento"
+                    onClick={() => setCancelInfoOpen(prev => ({ ...prev, [ag.id!]: !prev[ag.id!] }))}
+                  >
+                    i
+                  </button>
+                  {cancelInfoOpen[ag.id!] && (
+                    <div className="absolute z-10 mt-1 p-2 w-64 text-xs bg-white border border-slate-300 rounded shadow">
+                      <div className="font-semibold text-slate-800 mb-1">Motivo do cancelamento</div>
+                      <div className="text-slate-700">{ag.observacao_agendamento}</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </td>
-          
-          {/* Status */}
-          <td className="px-4 py-3 w-32">
-            <select
-              value={ag.faturamento_status || ''}
-              onChange={(e) => handleAtualizarStatus(ag, e.target.value as 'pendente' | 'auditor' | 'autorizado' | null || null)}
-              className={`w-full px-2 py-1 text-xs font-medium rounded border cursor-pointer transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none ${getStatusSelectStyle(ag.faturamento_status)}`}
-              title="Selecione o status do faturamento"
+          {/* Confirmado */}
+          <td className="px-3 py-3 w-28 whitespace-nowrap">
+            {(() => {
+              const confirmado = (ag.confirmacao || '').toLowerCase() === 'confirmado';
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
+                    confirmado ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    {confirmado ? 'Confirmado' : 'Aguardando'}
+                  </span>
+                  <button
+                    onClick={() => handleAtualizarConfirmacao(ag.id, confirmado ? 'Aguardando' : 'Confirmado')}
+                    className={`p-1 rounded ${confirmado ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                    title={confirmado ? 'Desconfirmar' : 'Confirmar'}
+                  >
+                    {confirmado ? (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    ) : (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
+          </td>
+          {/* Documentação */}
+          <td className="px-4 py-3 w-40">
+            {(() => {
+              let docsUrls = false;
+              try {
+                if (ag.documentos_urls) {
+                  const urls = JSON.parse(ag.documentos_urls);
+                  docsUrls = Array.isArray(urls) && urls.some((u: any) => typeof u === 'string' && u.trim() !== '');
+                }
+              } catch {
+                docsUrls = !!(ag.documentos_urls && (ag.documentos_urls as any)?.trim?.() !== '');
+              }
+              const fichaUrl = !!(ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '');
+              const hasAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || docsUrls || fichaUrl;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${hasAnexo ? 'bg-green-500' : 'bg-gray-300'}`} title={hasAnexo ? 'Possui algum anexo' : 'Sem anexos'} />
+                  <button
+                    onClick={() => { setAbaAtiva('documentos'); handleAbrirModalUpload(ag); }}
+                    className="text-[11px] font-semibold text-blue-700 hover:underline"
+                    title="Anexar ou visualizar documentação (exames e pré-op)"
+                  >
+                    Documentação
+                  </button>
+                </div>
+              );
+            })()}
+          </td>
+          {/* Download G-SUS */}
+          <td className="px-4 py-3 whitespace-nowrap text-sm">
+            <button
+              onClick={() => handleDownloadTodos(ag)}
+              disabled={downloading === ag.id}
+              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+              title="Download de todos os documentos em ZIP"
             >
-              <option value="">Selecione...</option>
-              <option value="pendente">Pendente</option>
-              <option value="auditor">Auditor</option>
-              <option value="autorizado">Autorizado</option>
-            </select>
+              {downloading === ag.id ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                  Gerando ZIP...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download G-SUS
+                </>
+              )}
+            </button>
           </td>
-          
-          {/* Ações - Download */}
-          <td className="px-4 py-4 whitespace-nowrap text-sm">
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => handleDownloadTodos(ag)}
-                disabled={downloading === ag.id}
-                className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
-                title="Download de todos os documentos em ZIP"
-              >
-                {downloading === ag.id ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
-                    Gerando ZIP...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download G-SUS
-                  </>
-                )}
-              </button>
-            </div>
-          </td>
-          
-          {/* Botão Expandir/Recolher */}
-          <td className="px-4 py-4 whitespace-nowrap">
+          {/* Expandir */}
+          <td className="px-2 py-3 whitespace-nowrap text-center">
             <button
               onClick={() => toggleExpandirLinha(ag.id)}
               className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
               title={expandida ? 'Recolher detalhes' : 'Expandir detalhes'}
             >
-              <svg 
-                className={`w-5 h-5 transition-transform ${expandida ? 'rotate-90' : ''}`}
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
+              <svg className={`w-4 h-4 transition-transform ${expandida ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </td>
         </tr>
         
-        {/* Linha expandida com detalhes */}
+        {/* Linha expandida com detalhes (mantendo bloco de observação de faturamento) */}
         {expandida && (
           <tr className="bg-gray-50">
-            <td colSpan={8} className="px-4 py-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                {/* Nascimento */}
+            <td colSpan={12} className="px-4 py-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
-                    Nascimento
-                  </div>
-                  <div className="text-sm text-gray-900">
-                    {formatarData(ag.data_nascimento || ag.dataNascimento)}
-                  </div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Nascimento</div>
+                  <div className="text-sm text-gray-900">{formatarData(ag.data_nascimento || ag.dataNascimento)}</div>
                 </div>
-                
-                {/* Cidade */}
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
-                    Cidade
-                  </div>
-                  <div className="text-sm text-gray-900">
-                    {ag.cidade_natal || ag.cidadeNatal || '-'}
-                  </div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Cidade</div>
+                  <div className="text-sm text-gray-900">{ag.cidade_natal || ag.cidadeNatal || '-'}</div>
                 </div>
-                
-                {/* Telefone */}
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
-                    Telefone
-                  </div>
-                  <div className="text-sm text-gray-900">
-                    {ag.telefone || '-'}
-                  </div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Telefone</div>
+                  <div className="text-sm text-gray-900">{ag.telefone || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Médico</div>
+                  <div className="text-sm text-gray-900">{ag.medico || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Procedimento</div>
+                  <div className="text-sm text-gray-900">{ag.procedimentos || '-'}</div>
                 </div>
               </div>
-              
-              {/* Campo de Observação do Faturamento */}
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-amber-600">📝</span>
-                  <label className="text-sm font-semibold text-gray-700">
-                    Observação do Faturamento
-                  </label>
-                </div>
+                <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
                 <textarea
                   value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ''}
                   onChange={(e) => setObservacaoEmEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
@@ -894,17 +1358,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   disabled={salvandoObservacao === ag.id}
                 />
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-gray-500">
-                    {ag.observacao_faturamento ? 'Observação salva' : 'Nenhuma observação salva'}
-                  </span>
+                  <span className="text-xs text-gray-500">{ag.observacao_faturamento ? 'Observação salva' : 'Nenhuma observação salva'}</span>
                   <button
                     onClick={() => handleSalvarObservacao(ag)}
                     disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                      observacaoModificada(ag)
-                        ? 'bg-amber-500 text-white hover:bg-amber-600'
-                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    }`}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${observacaoModificada(ag) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                   >
                     {salvandoObservacao === ag.id ? (
                       <>
@@ -913,23 +1371,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       </>
                     ) : (
                       <>
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                         Salvar Observação
                       </>
                     )}
                   </button>
                 </div>
               </div>
-              
-              {/* Observação de NÃO LIBERADO (se houver) */}
               {ag.faturamento_liberado === false && ag.faturamento_observacao && (
                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded">
                   <div className="flex items-start gap-2">
-                    <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     <div className="flex-1">
                       <div className="text-sm font-bold text-red-800 mb-1">❌ NÃO LIBERADO PARA FATURAMENTO</div>
                       <div className="text-sm text-gray-700 whitespace-pre-wrap">{ag.faturamento_observacao}</div>
@@ -942,8 +1394,6 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   </div>
                 </div>
               )}
-              
-              {/* Links para documentos individuais */}
               <div className="border-t border-gray-200 pt-4">
                 <div className="text-xs font-semibold text-gray-700 mb-2">Documentos disponíveis:</div>
                 <div className="flex flex-wrap gap-2">
@@ -952,16 +1402,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       const urls = JSON.parse(ag.documentos_urls);
                       if (Array.isArray(urls) && urls.length > 0) {
                         return urls.map((url: string, index: number) => (
-                          <a
-                            key={index}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                          <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Doc {index + 1}
                           </a>
                         ));
@@ -969,17 +1411,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     } catch {}
                     return null;
                   })()}
-                  
                   {ag.ficha_pre_anestesica_url && (
-                    <a
-                      href={ag.ficha_pre_anestesica_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors flex items-center gap-1"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                    <a href={ag.ficha_pre_anestesica_url} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                       Ficha Pré-Anestésica
                     </a>
                   )}
@@ -1187,10 +1621,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         </div>
       ) : (
         <>
-          {/* Controles de Paginação - Topo */}
-          {totalPaginas > 1 && (
-            <div ref={tabelaRef} className="bg-white rounded-lg shadow p-4 mb-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Controles de Paginação - Topo */}
+      {totalPaginas > 1 && (
+        <div ref={tabelaRef} className="bg-white rounded-lg shadow p-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex flex-col sm:flex-row items-center gap-3">
                   <div className="flex flex-col items-start gap-1">
                     <p className="text-sm text-gray-700">
@@ -1314,23 +1748,18 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </div>
           )}
           
-          {/* Tabela de pacientes com anexos */}
+          {/* Tabela igual à Documentação + coluna de Download */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
-                      Paciente
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
-                      Procedimento
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
-                      Médico
-                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">Status AIH</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">Paciente</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-72">Procedimento</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Médico</th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_consulta')}
                       title="Clique para ordenar por Data Consulta"
                     >
@@ -1344,7 +1773,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       </div>
                     </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
                     >
@@ -1357,21 +1786,18 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                         </span>
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
-                      Ações
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                      {/* Botão expandir */}
-                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-28" title="Agrupar por exames">Exames</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">Status Interno</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Confirmado</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Documentação</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Download</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {agendamentosPaginados.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center">
+                      <td colSpan={12} className="px-4 py-8 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1598,7 +2024,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           <div className="mt-6 p-3 bg-gray-50 rounded border border-gray-200">
             <div className="text-xs text-gray-600 space-y-1.5">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span>• Tabela exibe pacientes com exames anexados</span>
+                <span>• Tabela exibe pacientes da Documentação (mesma estrutura)</span>
                 <span>• Clique em "Pendências" para ver documentos faltantes</span>
                 <span>• Expanda a linha (►) para detalhes completos</span>
               </div>
@@ -1609,6 +2035,237 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               </div>
             </div>
           </div>
+
+          {/* Modais de Documentação, mantidos nesta tela para usar a mesma tabela */}
+          <Modal
+            isOpen={modalUploadAberto}
+            onClose={() => {
+              setModalUploadAberto(false);
+              setArquivosDocumentosSelecionados([]);
+              setArquivoFichaSelecionado(null);
+              setAgendamentoSelecionado(null);
+              setTipoDeExame('');
+            }}
+            title={`Documentação - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+            size="large"
+          >
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-700"><strong>Paciente:</strong> {agendamentoSelecionado?.nome_paciente || '-'}</p>
+                <p className="text-sm text-gray-700"><strong>Procedimento:</strong> {agendamentoSelecionado?.procedimentos || '-'}</p>
+                <p className="text-sm text-gray-700"><strong>Data Cirurgia:</strong> {formatarData(agendamentoSelecionado?.data_agendamento)}</p>
+              </div>
+              <div className="border-b border-gray-200">
+                <nav className="flex gap-4">
+                  <button onClick={() => setAbaAtiva('documentos')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${abaAtiva === 'documentos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Anexos {agendamentoSelecionado?.documentos_ok && '✓'}</button>
+                  <button onClick={() => setAbaAtiva('ficha')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${abaAtiva === 'ficha' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>📋 Pré-Operatório {agendamentoSelecionado?.ficha_pre_anestesica_ok && '✓'}</button>
+                </nav>
+              </div>
+              {abaAtiva === 'documentos' && (
+                <div className="space-y-4">
+                  {documentosAnexados.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2">Documentos já anexados:</h3>
+                      <div className="space-y-2">
+                        {documentosAnexados.map((url, index) => {
+                          const fileName = url.split('/').pop() || `Documento ${index + 1}`;
+                          const meta = examesMeta.find(m => m.url === url);
+                          return (
+                            <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                {fileName}
+                              </a>
+                              {meta?.tipo && (
+                                <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded border border-blue-200 mr-2">{meta.tipo}</span>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setConfirmMessage('Tem certeza que deseja remover este documento?');
+                                  confirmActionRef.current = () => handleRemoverDocumentoAnexado(url);
+                                  setConfirmOpen(true);
+                                }}
+                                className="text-red-600 hover:text-red-800 p-1"
+                                title="Remover documento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Adicionar novos anexos:</h3>
+                    <input ref={fileInputDocumentosRef} type="file" multiple onChange={handleSelecionarDocumentos} className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+                    <button
+                      onClick={() => { if (fileInputDocumentosRef.current) { fileInputDocumentosRef.current.value = ''; } setTipoDeExame(''); fileInputDocumentosRef.current?.click(); }}
+                      className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors text-center"
+                    >
+                      <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                      <p className="text-sm text-gray-600">Clique para selecionar arquivos</p>
+                      <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX</p>
+                    </button>
+                    {arquivosDocumentosSelecionados.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Arquivos selecionados:</p>
+                        {arquivosDocumentosSelecionados.map((arquivo, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <span className="text-sm text-gray-700 flex-1">{arquivo.name}</span>
+                            <span className="text-xs text-gray-500 mr-2">{(arquivo.size / 1024 / 1024).toFixed(2)} MB</span>
+                            <button onClick={() => handleRemoverDocumento(index)} className="text-red-600 hover:text-red-800 p-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          </div>
+                        ))}
+                        <div className="mt-3">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Tipo do anexo</label>
+                          <select value={tipoDeExame} onChange={(e) => setTipoDeExame(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            <option value="">Selecione</option>
+                            <option value="Tomografia computadorizada">Tomografia computadorizada</option>
+                            <option value="Ultrassonografia">Ultrassonografia</option>
+                            <option value="Radiografia">Radiografia</option>
+                            <option value="Ressonância magnética">Ressonância magnética</option>
+                            <option value="Exames de laboratório">Exames de laboratório</option>
+                            <option value="Termo de planejamento familiar">Termo de planejamento familiar</option>
+                            <option value="Outros">Outros</option>
+                          </select>
+                          {!tipoDeExame && <p className="text-xs text-red-600 mt-1">Selecione o tipo do anexo para enviar</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-3 pt-4 border-t">
+                    <button onClick={() => { setModalUploadAberto(false); setArquivosDocumentosSelecionados([]); setAgendamentoSelecionado(null); }} className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors" disabled={uploading}>Cancelar</button>
+                    <button onClick={handleUploadDocumentos} disabled={uploading || arquivosDocumentosSelecionados.length === 0 || !tipoDeExame} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                      {uploading ? (<><div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>Enviando...</>) : (<><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>Anexar Arquivos</>)}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {abaAtiva === 'ficha' && (
+                <div className="space-y-4">
+                  {fichaAnexada && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2">📋 Ficha pré-anestésica anexada:</h3>
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <a href={fichaAnexada} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          {fichaAnexada.split('/').pop() || 'Ficha Pré-Anestésica'}
+                        </a>
+                        <button
+                          onClick={() => { setConfirmMessage('Tem certeza que deseja remover a ficha pré-operatória?'); confirmActionRef.current = () => handleRemoverFicha(); setConfirmOpen(true); }}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="Remover ficha"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!fichaAnexada && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Anexar ficha pré-anestésica:</h3>
+                      <input ref={fileInputFichaRef} type="file" onChange={handleSelecionarFicha} className="hidden" accept=".pdf" />
+                      <button onClick={() => fileInputFichaRef.current?.click()} className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 transition-colors text-center">
+                        <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                        <p className="text-sm text-gray-600">Clique para selecionar ficha pré-anestésica</p>
+                        <p className="text-xs text-gray-400 mt-1">PDF</p>
+                      </button>
+                      {arquivoFichaSelecionado && (
+                        <div className="mt-4 p-2 bg-gray-50 rounded">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-700 flex-1">{arquivoFichaSelecionado.name}</span>
+                            <span className="text-xs text-gray-500 mr-2">{(arquivoFichaSelecionado.size / 1024 / 1024).toFixed(2)} MB</span>
+                            <button onClick={() => setArquivoFichaSelecionado(null)} className="text-red-600 hover:text-red-800 p-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex gap-3 pt-4 border-t">
+                        <button onClick={() => { setModalUploadAberto(false); setArquivoFichaSelecionado(null); setAgendamentoSelecionado(null); }} className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors" disabled={uploading}>Cancelar</button>
+                        <button onClick={handleUploadFicha} disabled={uploading || !arquivoFichaSelecionado || !!fichaAnexada} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                          {uploading ? (<><div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>Enviando...</>) : (<><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>Anexar Ficha</>)}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Modal>
+          <Modal
+            isOpen={modalVisualizacaoAberto}
+            onClose={() => {
+              setModalVisualizacaoAberto(false);
+              setAgendamentoSelecionado(null);
+              setDocumentosAnexados([]);
+              setComplementaresAnexados([]);
+              setFichaAnexada(null);
+            }}
+            title={`📄 Documentos - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+            size="large"
+          >
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-700"><strong>Paciente:</strong> {agendamentoSelecionado?.nome_paciente || '-'}</p>
+                <p className="text-sm text-gray-700"><strong>Procedimento:</strong> {agendamentoSelecionado?.procedimentos || '-'}</p>
+                <p className="text-sm text-gray-700"><strong>Data Cirurgia:</strong> {formatarData(agendamentoSelecionado?.data_agendamento)}</p>
+              </div>
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>Anexos</h3>
+                {documentosAnexados.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {documentosAnexados.map((url, index) => {
+                      const fileName = url.split('/').pop() || `Anexo ${index + 1}`;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded hover:bg-green-100 transition-colors">
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            <span className="truncate">{fileName}</span>
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (<p className="text-sm text-gray-500 italic">Nenhum anexo enviado</p>)}
+              </div>
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>📋 Ficha Pré-Operatória</h3>
+                {fichaAnexada ? (
+                  <div className="flex items-center justify-between p-2 bg-orange-50 rounded hover:bg-orange-100 transition-colors">
+                    <a href={fichaAnexada} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      <span className="truncate">{fichaAnexada.split('/').pop() || 'Ficha Pré-Anestésica'}</span>
+                    </a>
+                  </div>
+                ) : (<p className="text-sm text-gray-500 italic">Nenhuma ficha anexada</p>)}
+              </div>
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>📁 Documentos Complementares</h3>
+                {complementaresAnexados.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {complementaresAnexados.map((url, index) => {
+                      const fileName = url.split('/').pop() || `Complementar ${index + 1}`;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 bg-purple-50 rounded hover:bg-purple-100 transition-colors">
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            <span className="truncate">{fileName}</span>
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (<p className="text-sm text-gray-500 italic">Nenhum documento complementar anexado</p>)}
+              </div>
+              <div className="flex justify-end pt-4 border-t">
+                <button onClick={() => { setModalVisualizacaoAberto(false); setAgendamentoSelecionado(null); setDocumentosAnexados([]); setComplementaresAnexados([]); setFichaAnexada(null); }} className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Fechar</button>
+              </div>
+            </div>
+          </Modal>
         </>
       )}
       

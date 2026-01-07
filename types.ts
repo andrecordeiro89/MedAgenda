@@ -168,6 +168,7 @@ export interface GradeCirurgicaItem {
     medicoId?: string; // ID do médico associado ao procedimento (quando tipo='procedimento')
     medicoNome?: string; // Nome do médico associado ao procedimento (para exibição)
     especificacao?: string; // Especificação editável do procedimento (ex: "meniscectomia medial à esquerda")
+    statusAih?: string | null; // Status AIH do procedimento/agendamento
 }
 
 export interface GradeCirurgicaDia {
