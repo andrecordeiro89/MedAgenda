@@ -570,15 +570,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     
     return (
       <React.Fragment key={ag.id}>
-        <tr className={`transition-colors ${
-          temExamesEPreOp 
-            ? 'bg-green-50/50 hover:bg-green-100/50 border-l-4 border-green-500' 
-            : 'hover:bg-gray-50'
-        }`}>
+        <tr className="transition-colors hover:bg-gray-50">
           {/* Paciente */}
-          <td className="px-4 py-3 w-48">
+          <td className="px-2 py-3 sm:w-auto md:w-auto lg:w-auto">
             <div 
-              className="text-sm font-medium text-gray-900 truncate"
+              className="text-sm sm:text-xs font-medium text-gray-900 whitespace-normal break-words leading-tight"
               title={ag.nome_paciente || ag.nome || '-'}
             >
               {ag.nome_paciente || ag.nome || '-'}
@@ -586,9 +582,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           </td>
           
           {/* Procedimento */}
-          <td className="px-4 py-3 w-56">
+          <td className="px-2 py-3 sm:w-auto md:w-auto lg:w-auto">
             <div 
-              className="text-sm text-gray-700 truncate"
+              className="text-sm sm:text-xs text-gray-700 whitespace-normal break-words leading-tight"
               title={ag.procedimentos || '-'}
             >
               {ag.procedimentos || '-'}
@@ -596,19 +592,19 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           </td>
           
           {/* Data Cirurgia */}
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 w-32">
+          <td className="px-2 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 sm:w-28 md:w-32 lg:w-36">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
           
           {/* Médico */}
-          <td className="px-4 py-3 w-40">
-            <div className="text-sm text-gray-700 truncate" title={ag.medico || '-'}>
+          <td className="px-2 py-3 sm:w-40 md:w-48 lg:w-56">
+            <div className="text-sm sm:text-xs text-gray-700 whitespace-normal break-words leading-tight" title={ag.medico || '-'}>
               {ag.medico || '-'}
             </div>
           </td>
 
           {/* COLUNA: Avaliação do Anestesista (3 checkboxes na linha) - REPOSICIONADA */}
-          <td className="px-3 py-3 w-56">
+          <td className="px-3 py-3 sm:w-56 md:w-64 lg:w-72">
             <div className="flex items-center gap-2">
               {/* Checkbox APROVADO */}
               <label 
@@ -691,7 +687,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           </td>
           
           {/* Status Exames */}
-          <td className="px-4 py-3 text-center w-32">
+          <td className="px-4 py-3 text-center sm:w-28 md:w-32 lg:w-36">
             {ag.documentos_ok === true ? (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -710,7 +706,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           </td>
           
           {/* Ação */}
-          <td className="px-4 py-3 text-center w-36">
+          <td className="px-4 py-3 text-center sm:w-32 md:w-36 lg:w-40">
             {/* Se não tem ficha, mostrar botão de anexar. Se tem ficha, mostrar botão de visualizar */}
             {ag.ficha_pre_anestesica_ok !== true ? (
               <button
@@ -1227,17 +1223,17 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           {/* Tabela */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="w-full divide-y divide-gray-200 table-auto">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Paciente
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Procedimento
                     </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={handleOrdenacao}
                       title="Clique para ordenar por Data Cirurgia"
                     >
@@ -1248,16 +1244,16 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                         </span>
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">
                       Médico
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-56 md:w-64 lg:w-72">
                       🩺 Avaliação Anestesista
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">
                       Status Exames
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-32 md:w-36 lg:w-40">
                       Ação
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
@@ -1265,7 +1261,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-200 text-sm sm:text-xs">
                   {agendamentosPaginados.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center">

@@ -65,6 +65,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [examesMeta, setExamesMeta] = useState<Array<{ url: string; tipo: string }>>([]);
   const [obsAgendamentoEdicao, setObsAgendamentoEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoObsAgendamento, setSalvandoObsAgendamento] = useState<string | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<{ [id: string]: boolean }>({});
   
   const [salvandoAIH, setSalvandoAIH] = useState<Set<string>>(new Set());
   const [salvandoLiberacao, setSalvandoLiberacao] = useState<Set<string>>(new Set());
@@ -1066,9 +1067,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </div>
           </td>
           {/* Paciente */}
-          <td className="px-3 py-3 w-64">
+          <td className="px-3 py-3 sm:w-auto md:w-auto lg:w-auto xl:w-auto">
             <div 
-              className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-snug"
+              className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-tight sm:text-xs"
               title={ag.nome_paciente || ag.nome || '-'}
             >
               <div className="flex items-center gap-1">
@@ -1084,9 +1085,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </td>
           
           {/* Procedimento */}
-          <td className="px-3 py-3 w-72">
+          <td className="px-3 py-3 sm:w-auto md:w-auto lg:w-auto xl:w-auto">
             <div 
-              className="text-sm text-gray-700 whitespace-normal break-words leading-snug"
+              className="text-sm text-gray-700 whitespace-normal break-words leading-tight sm:text-xs"
               title={ag.procedimentos || '-'}
             >
               {ag.procedimentos || '-'}
@@ -1096,7 +1097,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           {/* Médico */}
           <td className="px-3 py-3 w-48">
             <div 
-              className="text-sm text-gray-700 whitespace-normal break-words leading-snug"
+              className="text-sm sm:text-xs text-gray-700 whitespace-normal break-words leading-tight"
               title={ag.medico || '-'}
             >
               {ag.medico || '-'}
@@ -1104,12 +1105,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </td>
           
           {/* Data Consulta */}
-          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
+          <td className="px-3 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 w-28">
             {formatarData(ag.data_consulta)}
           </td>
           
           {/* Data Cirurgia */}
-          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
+          <td className="px-3 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 w-28">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
           
@@ -1123,22 +1124,53 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           <td className="px-3 py-3 w-36">
             <div className="flex items-center gap-2">
               <span className={`inline-block w-2 h-2 rounded-full ${getLiberacaoDotColor(ag.status_de_liberacao)}`} />
-              <select
-                value={ag.status_de_liberacao || ''}
-                onChange={(e) => handleAtualizarStatusLiberacao(ag.id, (e.target.value || null) as any)}
-                className={`w-full px-2 py-1 text-xs border rounded ${getLiberacaoStatusStyle(ag.status_de_liberacao)}`}
-                title="Atualizar Status Interno"
-                disabled={ag.id ? salvandoLiberacao.has(ag.id) : false}
-              >
-                <option value="">Selecione</option>
-                <option value="Anestesista">Anestesista</option>
-                <option value="Cardio">Cardio</option>
-                <option value="Exames">Exames</option>
-                <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
-                <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
-                <option value="Confirmado com Paciente">Confirmado com Paciente</option>
-                <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
-              </select>
+              <div className="relative w-full">
+                <button
+                  type="button"
+                  onClick={() => ag.id && setStatusDropdownOpen(prev => ({ ...prev, [ag.id!]: !prev[ag.id!] }))}
+                  disabled={ag.id ? salvandoLiberacao.has(ag.id) : false}
+                  className={`w-full px-2 py-1 text-xs border rounded text-left ${getLiberacaoStatusStyle(ag.status_de_liberacao)}`}
+                  title="Atualizar Status Interno"
+                >
+                  <span
+                    className="block"
+                    style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                  >
+                    {ag.status_de_liberacao || 'Selecione'}
+                  </span>
+                </button>
+                {ag.id && statusDropdownOpen[ag.id!] && (
+                  <div className="absolute mt-1 w-full bg-white border border-gray-200 rounded shadow z-20">
+                    {[
+                      'Selecione',
+                      'Anestesista',
+                      'Cardio',
+                      'Exames',
+                      'Liberado para Cirurgia',
+                      'Não Liberado para Cirurgia',
+                      'Confirmado com Paciente',
+                      'Cirurgia Cancelada',
+                    ].map(op => (
+                      <button
+                        key={op}
+                        type="button"
+                        onClick={() => {
+                          setStatusDropdownOpen(prev => ({ ...prev, [ag.id!]: false }));
+                          handleAtualizarStatusLiberacao(ag.id, op === 'Selecione' ? null : op);
+                        }}
+                        className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100"
+                      >
+                        <span
+                          className="block"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        >
+                          {op}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </td>
           
@@ -1952,23 +1984,23 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           {/* Tabela */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200 table-fixed">
-                <thead className="bg-gray-50">
+              <table className="w-full divide-y divide-gray-200 table-auto">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-32 md:w-36 lg:w-40 xl:w-44">
                       Status AIH
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Paciente
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-72">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Procedimento
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">
                       Médico
                     </th>
                     <th 
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_consulta')}
                       title="Clique para ordenar por Data Consulta"
                     >
@@ -1982,7 +2014,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </div>
                     </th>
                     <th 
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
                     >
@@ -1996,7 +2028,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </div>
                     </th>
                     <th 
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-28"
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors sm:w-28 md:w-32 lg:w-36"
                       onClick={toggleAgruparPorStatus}
                       title={agruparPorStatus ? 'Clique para desagrupar' : 'Clique para agrupar por exames'}
                     >
@@ -2009,13 +2041,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         )}
                       </div>
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-36 md:w-40 lg:w-44 xl:w-52">
                       Status Interno
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">
                       Confirmado
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">
                       Documentação
                     </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
@@ -2023,7 +2055,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-200 text-sm sm:text-xs">
                   {(() => {
                     const grupos = agendamentosAgrupados();
                     

@@ -23,6 +23,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const [filtroObservacao, setFiltroObservacao] = useState<string>('');
   const [cancelInfoOpen, setCancelInfoOpen] = useState<{ [id: string]: boolean }>({});
+  const [aihDropdownOpen, setAihDropdownOpen] = useState<{ [id: string]: boolean }>({});
   
   // Estados para ordenação
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
@@ -1141,41 +1142,70 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           <td className="px-3 py-3 w-44">
             <div className="flex items-center gap-2">
               <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
-              <select
-                value={ag.status_aih || 'Pendência Faturamento'}
-                onChange={async (e) => {
-                  const novo = e.target.value || null;
-                  try {
-                    if (!ag.id) return;
-                    setSalvandoAIH(prev => new Set(prev).add(ag.id!));
-                    await agendamentoService.update(ag.id, { status_aih: novo });
-                    setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
-                    success('Status AIH atualizado');
-                  } catch (err) {}
-                  finally {
-                    setSalvandoAIH(prev => {
-                      const next = new Set(prev);
-                      if (ag.id) next.delete(ag.id);
-                      return next;
-                    });
-                  }
-                }}
-                className={`w-full px-2 py-1 text-xs border rounded ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}
-                title="Atualizar Status AIH"
-                disabled={ag.id ? salvandoAIH.has(ag.id) : false}
-              >
-                <option value="">Selecione</option>
-                <option value="Autorizado">Autorizado</option>
-                <option value="Pendência Hospital">Pendência Hospital</option>
-                <option value="Pendência Faturamento">Pendência Faturamento</option>
-                <option value="Auditor Externo">Auditor Externo</option>
-                <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
-              </select>
+              <div className="relative w-full">
+                <button
+                  type="button"
+                  onClick={() => ag.id && setAihDropdownOpen(prev => ({ ...prev, [ag.id!]: !prev[ag.id!] }))}
+                  disabled={ag.id ? salvandoAIH.has(ag.id) : false}
+                  className={`w-full px-2 py-1 text-xs border rounded text-left ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}
+                  title="Atualizar Status AIH"
+                >
+                  <span
+                    className="block"
+                    style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                  >
+                    {ag.status_aih || 'Pendência Faturamento'}
+                  </span>
+                </button>
+                {ag.id && aihDropdownOpen[ag.id!] && (
+                  <div className="absolute mt-1 w-full bg-white border border-gray-200 rounded shadow z-20">
+                    {[
+                      'Selecione',
+                      'Autorizado',
+                      'Pendência Hospital',
+                      'Pendência Faturamento',
+                      'Auditor Externo',
+                      'Aguardando Ciência SMS',
+                    ].map(op => (
+                      <button
+                        key={op}
+                        type="button"
+                        onClick={async () => {
+                          setAihDropdownOpen(prev => ({ ...prev, [ag.id!]: false }));
+                          const novo = op === 'Selecione' ? null : op;
+                          try {
+                            if (!ag.id) return;
+                            setSalvandoAIH(prev => new Set(prev).add(ag.id!));
+                            await agendamentoService.update(ag.id, { status_aih: novo });
+                            setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
+                            success('Status AIH atualizado');
+                          } catch (err) {}
+                          finally {
+                            setSalvandoAIH(prev => {
+                              const next = new Set(prev);
+                              if (ag.id) next.delete(ag.id);
+                              return next;
+                            });
+                          }
+                        }}
+                        className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100"
+                      >
+                        <span
+                          className="block"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        >
+                          {op}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </td>
           {/* Paciente */}
-          <td className="px-3 py-3 w-64">
-            <div className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-snug" title={ag.nome_paciente || ag.nome || '-'}>
+          <td className="px-3 py-3 sm:w-auto md:w-auto lg:w-auto xl:w-auto">
+            <div className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-tight sm:text-xs" title={ag.nome_paciente || ag.nome || '-'}>
               <div className="flex items-center gap-1">
                 <span className="truncate">{ag.nome_paciente || ag.nome || '-'}</span>
                 {(((observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? '') as string).trim() !== '') && (
@@ -1185,27 +1215,27 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </div>
           </td>
           {/* Procedimento */}
-          <td className="px-3 py-3 w-72">
-            <div className="text-sm text-gray-700 whitespace-normal break-words leading-snug" title={formatarProcedimento(ag)}>
+          <td className="px-3 py-3 sm:w-auto md:w-auto lg:w-auto xl:w-auto">
+            <div className="text-sm text-gray-700 whitespace-normal break-words leading-tight sm:text-xs" title={formatarProcedimento(ag)}>
               {formatarProcedimento(ag)}
             </div>
           </td>
           {/* Médico */}
           <td className="px-3 py-3 w-48">
-            <div className="text-sm text-gray-700 whitespace-normal break-words leading-snug" title={ag.medico || '-'}>
+            <div className="text-sm sm:text-xs text-gray-700 whitespace-normal break-words leading-tight" title={ag.medico || '-'}>
               {ag.medico || '-'}
             </div>
           </td>
           {/* Data Consulta */}
-          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
+          <td className="px-3 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 w-28">
             {formatarData(ag.data_consulta)}
           </td>
           {/* Data Cirurgia */}
-          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 w-28">
+          <td className="px-3 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 w-28">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
           {/* Exames */}
-          <td className="px-4 py-3 whitespace-nowrap w-32">
+          <td className="px-2 py-3 whitespace-nowrap w-32">
             <span className={`px-2 py-1 text-xs font-semibold rounded ${status.cor}`}>{status.texto}</span>
           </td>
           {/* Status Interno */}
@@ -1751,15 +1781,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           {/* Tabela igual à Documentação + coluna de Download */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200 table-fixed">
-                <thead className="bg-gray-50">
+              <table className="w-full divide-y divide-gray-200 table-auto">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">Status AIH</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">Paciente</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-72">Procedimento</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Médico</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-44 lg:w-48 xl:w-52">Status AIH</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Procedimento</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">Médico</th>
                     <th 
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_consulta')}
                       title="Clique para ordenar por Data Consulta"
                     >
@@ -1773,7 +1803,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       </div>
                     </th>
                     <th 
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
                     >
@@ -1786,15 +1816,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                         </span>
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors w-28" title="Agrupar por exames">Exames</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">Status Interno</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Confirmado</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Documentação</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Download</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors sm:w-28 md:w-32 lg:w-36" title="Agrupar por exames">Exames</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-36 md:w-40 lg:w-44 xl:w-52">Status Interno</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">Confirmado</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">Documentação</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">Download</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10"></th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-200 text-sm sm:text-xs">
                   {agendamentosPaginados.length === 0 ? (
                     <tr>
                       <td colSpan={12} className="px-4 py-8 text-center">
