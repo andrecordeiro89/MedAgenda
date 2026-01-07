@@ -5,7 +5,7 @@ import { Button, Input, Card } from './ui';
 // ============================================================================
 // TIPOS E INTERFACES
 // ============================================================================
-export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'coordenacao' | 'diretoria' | 'diretriz';
+export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'faturamento_local' | 'coordenacao' | 'diretoria' | 'diretriz';
 
 interface Hospital {
   id: string;
@@ -207,6 +207,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cidade: 'Foz do Iguaçu',
           cnpj: '14.736.446/0009-40',
           role: 'triagem'
+        },
+        'faturamento.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'faturamento_local' // ✅ Acesso restrito: Dashboard + Faturamento
         },
         'foz.carla@medagenda.com': {
           id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
@@ -551,6 +558,10 @@ export const useHospitalFilter = () => {
     if (userRole === 'faturamento') return true;
     // Consultoria (diretriz): acesso apenas a Dashboard e Faturamento
     if (userRole === 'diretriz') {
+      return viewName === 'dashboard' || viewName === 'faturamento';
+    }
+    // Faturamento local: acesso apenas a Dashboard e Faturamento
+    if (userRole === 'faturamento_local') {
       return viewName === 'dashboard' || viewName === 'faturamento';
     }
     
