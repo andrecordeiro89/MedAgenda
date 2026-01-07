@@ -580,6 +580,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               {ag.nome_paciente || ag.nome || '-'}
             </div>
           </td>
+          {/* Nº Prontuário */}
+          <td className="px-2 py-3 sm:w-28 md:w-32 lg:w-40">
+            <span className="text-sm sm:text-xs text-gray-700">{ag.n_prontuario || '-'}</span>
+          </td>
           
           {/* Procedimento */}
           <td className="px-2 py-3 sm:w-auto md:w-auto lg:w-auto">
@@ -1229,6 +1233,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Paciente
                     </th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-40">
+                      Nº Prontuário
+                    </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Procedimento
                     </th>
@@ -1264,7 +1271,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                 <tbody className="bg-white divide-y divide-gray-200 text-sm sm:text-xs">
                   {agendamentosPaginados.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center">
+                      <td colSpan={9} className="px-4 py-8 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

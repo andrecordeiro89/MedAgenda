@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { agendamentoService, supabase } from '../services/supabase';
-import { Agendamento, StatusLiberacao } from '../types';
+import { agendamentoService, supabase, medicoService } from '../services/supabase';
+import { Agendamento, StatusLiberacao, Medico } from '../types';
 import { Button, Modal } from './ui';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
@@ -20,12 +20,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   // Estados para filtros de busca
   const [filtroStatus, setFiltroStatus] = useState<string>('');
-  const [filtroPreOp, setFiltroPreOp] = useState<string>(''); // Novo filtro para Pré-Operatório
+  const [filtroAih, setFiltroAih] = useState<string>('');
+  const [filtroStatusInterno, setFiltroStatusInterno] = useState<string>('');
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
+  const [filtroProntuario, setFiltroProntuario] = useState<string>('');
+  const [filtroConfirmado, setFiltroConfirmado] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>(''); // Filtro por mês da cirurgia
-  const [filtroMedico, setFiltroMedico] = useState<string>('');
+  const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
+  const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
   
   // Estados para ordenação por data
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
@@ -80,6 +84,15 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     carregarAgendamentos();
   }, [hospitalId]);
 
+  useEffect(() => {
+    const carregarMedicos = async () => {
+      try {
+        const medicos = await medicoService.getAll(hospitalId);
+        setMedicosDisponiveis(medicos || []);
+      } catch {}
+    };
+    if (hospitalId) carregarMedicos();
+  }, [hospitalId]);
   useEffect(() => {
     const channel = supabase
       .channel(`doc-aih-${hospitalId || 'all'}`)
@@ -397,17 +410,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       if (status.texto.toUpperCase() !== filtroStatus.toUpperCase()) return false;
     }
     
-    // Filtro por status de PRÉ-OPERATÓRIO (novo)
-    if (filtroPreOp) {
-      const statusPreOp = getStatusPreOp(ag);
-      // Comparação exata (case-insensitive)
-      if (statusPreOp.texto.toUpperCase() !== filtroPreOp.toUpperCase()) return false;
-    }
+    // Removido filtro de PRÉ-OPERATÓRIO
     
     // Filtro por paciente
     if (filtroPaciente) {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').toLowerCase();
       if (!nomePaciente.includes(filtroPaciente.toLowerCase())) return false;
+    }
+    
+    // Filtro por Nº Prontuário (contém dígitos digitados)
+    if (filtroProntuario) {
+      const filtroDigits = (filtroProntuario || '').replace(/\D/g, '');
+      const prDigits = (ag.n_prontuario || '').toString().replace(/\D/g, '');
+      if (!prDigits.includes(filtroDigits)) return false;
     }
     
     // Filtro por data consulta
@@ -431,9 +446,37 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
     
     // Filtro por médico
-    if (filtroMedico) {
-      const medico = (ag.medico || '').toLowerCase();
-      if (!medico.includes(filtroMedico.toLowerCase())) return false;
+    if (filtroMedicoId) {
+      const agMedicoId = ag.medico_id || ag.medicoId || '';
+      if (agMedicoId) {
+        if (agMedicoId !== filtroMedicoId) return false;
+      } else {
+        const sel = medicosDisponiveis.find(m => m.id === filtroMedicoId);
+        const nomeSel = (sel?.nome || '').trim().toLowerCase();
+        const nomeAg = (ag.medico || '').trim().toLowerCase();
+        if (!nomeSel || nomeAg !== nomeSel) return false;
+      }
+    }
+    
+    // Filtro por Status AIH
+    if (filtroAih) {
+      const aih = (ag.status_aih || 'Pendência Faturamento').toString().toLowerCase();
+      if (aih !== filtroAih.toLowerCase()) return false;
+    }
+    
+    // Filtro por Status Interno
+    if (filtroStatusInterno) {
+      const interno = (ag.status_de_liberacao || '').toString().toLowerCase();
+      if (interno !== filtroStatusInterno.toLowerCase()) return false;
+    }
+    
+    if (filtroConfirmado) {
+      const c = (ag.confirmacao || '').toString().toLowerCase();
+      if (filtroConfirmado.toLowerCase() === 'confirmado') {
+        if (c !== 'confirmado') return false;
+      } else if (filtroConfirmado.toLowerCase() === 'aguardando') {
+        if (c === 'confirmado') return false;
+      }
     }
     
     return true;
@@ -527,7 +570,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroPreOp, filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedico]);
+  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -547,16 +590,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Limpar todos os filtros
   const limparFiltros = () => {
     setFiltroStatus('');
-    setFiltroPreOp('');
     setFiltroPaciente('');
+    setFiltroProntuario('');
     setFiltroDataConsulta('');
     setFiltroDataCirurgia('');
     setFiltroMesCirurgia('');
-    setFiltroMedico('');
+    setFiltroMedicoId('');
+    setFiltroAih('');
+    setFiltroStatusInterno('');
+    setFiltroConfirmado('');
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPreOp || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedico;
+  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -1084,6 +1130,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </div>
           </td>
           
+          {/* Nº Prontuário */}
+          <td className="px-3 py-3 sm:w-28 md:w-32 lg:w-40">
+            <span className="text-sm sm:text-xs text-gray-700">{ag.n_prontuario || '-'}</span>
+          </td>
+          
           {/* Procedimento */}
           <td className="px-3 py-3 sm:w-auto md:w-auto lg:w-auto xl:w-auto">
             <div 
@@ -1263,7 +1314,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
          {/* Linha expandida com detalhes */}
          {expandida && (
            <tr className="bg-gray-50">
-            <td colSpan={11} className="px-4 py-4">
+            <td colSpan={12} className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Nascimento */}
                 <div>
@@ -1702,7 +1753,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Filtro Status EXAMES - DESTACADO */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1723,25 +1774,34 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </select>
           </div>
           
-          {/* Filtro Status PRÉ-OPERATÓRIO - NOVO */}
+          
+          {/* Filtro Status Interno */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              🩺 Status do Pré-Op
+              Status Interno
             </label>
             <select
-              value={filtroPreOp}
-              onChange={(e) => setFiltroPreOp(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium ${
-                filtroPreOp 
-                  ? 'border-purple-500 bg-purple-50' 
+              value={filtroStatusInterno}
+              onChange={(e) => setFiltroStatusInterno(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
+                filtroStatusInterno 
+                  ? 'border-blue-500 bg-blue-50' 
                   : 'border-gray-300'
               }`}
             >
               <option value="">📊 Todos</option>
-              <option value="COM PRE-OP">💙 Com Pré-Op</option>
-              <option value="SEM PRE-OP">🔶 Sem Pré-Op</option>
+              <option value="Anestesista">Anestesista</option>
+              <option value="Cardio">Cardio</option>
+              <option value="Exames">Exames</option>
+              <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
+              <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
+              <option value="Confirmado com Paciente">Confirmado com Paciente</option>
+              <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
             </select>
           </div>
+          
+          
+          {/* Filtro Status PRÉ-OPERATÓRIO removido */}
           
           {/* Filtro Paciente */}
           <div>
@@ -1755,6 +1815,45 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               placeholder="Nome do paciente..."
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
+          </div>
+          
+          {/* Filtro Nº Prontuário */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Nº Prontuário
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={filtroProntuario}
+              onChange={(e) => setFiltroProntuario(e.target.value)}
+              placeholder="Digite números do prontuário..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+              title="Filtrar por números do prontuário"
+            />
+          </div>
+          
+          {/* Filtro Médico */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Médico
+            </label>
+            <select
+              value={filtroMedicoId}
+              onChange={(e) => setFiltroMedicoId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            >
+              <option value="">Todos</option>
+              {medicosDisponiveis
+                .slice()
+                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                .map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.nome}
+                  </option>
+                ))}
+            </select>
           </div>
           
           {/* Filtro Data Consulta */}
@@ -1783,6 +1882,55 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               placeholder="DD/MM/AAAA"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
+          </div>
+          
+          {/* Filtro Status AIH */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              🧾 Status AIH
+            </label>
+            <select
+              value={filtroAih}
+              onChange={(e) => setFiltroAih(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
+                filtroAih 
+                  ? 'border-amber-500 bg-amber-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="Autorizado">Autorizado</option>
+              <option value="Pendência Hospital">Pendência Hospital</option>
+              <option value="Pendência Faturamento">Pendência Faturamento</option>
+              <option value="Auditor Externo">Auditor Externo</option>
+              <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+              <option value="Agendado">Agendado</option>
+              <option value="AG Regulação">AG Regulação</option>
+              <option value="Solicitar">Solicitar</option>
+              <option value="Emitida">Emitida</option>
+              <option value="AIH Represada">AIH Represada</option>
+              <option value="AG Ciência SMS">AG Ciência SMS</option>
+            </select>
+          </div>
+          
+          {/* Filtro Confirmado */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Confirmado
+            </label>
+            <select
+              value={filtroConfirmado}
+              onChange={(e) => setFiltroConfirmado(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
+                filtroConfirmado 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="Confirmado">Confirmado</option>
+              <option value="Aguardando">Aguardando</option>
+            </select>
           </div>
           
           {/* Filtro Mês da Cirurgia */}
@@ -1818,19 +1966,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </select>
           </div>
           
-          {/* Filtro Médico */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Médico
-            </label>
-            <input
-              type="text"
-              value={filtroMedico}
-              onChange={(e) => setFiltroMedico(e.target.value)}
-              placeholder="Nome do médico..."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
-          </div>
+          {/* Filtro Médico (removido input; usar dropdown acima) */}
         </div>
         
         {/* Indicador de resultados filtrados */}
@@ -1993,6 +2129,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Paciente
                     </th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-40">
+                      Nº Prontuário
+                    </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Procedimento
                     </th>
@@ -2065,7 +2204,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       if (lista.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={10} className="px-4 py-8 text-center">
+                            <td colSpan={11} className="px-4 py-8 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2101,7 +2240,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         <React.Fragment key={grupoInfo.chave}>
                           {/* Cabeçalho do grupo */}
                           <tr className={`${grupoInfo.cor} border-t-2 border-b-2`}>
-                            <td colSpan={8} className="px-4 py-3">
+                            <td colSpan={9} className="px-4 py-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-gray-800">{grupoInfo.titulo}</span>
