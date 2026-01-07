@@ -25,6 +25,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroProntuario, setFiltroProntuario] = useState<string>('');
   const [filtroConfirmado, setFiltroConfirmado] = useState<string>('');
+  const [filtroObservacao, setFiltroObservacao] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>(''); // Filtro por mês da cirurgia
@@ -470,6 +471,23 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       if (interno !== filtroStatusInterno.toLowerCase()) return false;
     }
     
+    // Filtro Confirmado
+    if (filtroConfirmado) {
+      const c = (ag.confirmacao || '').toString().toLowerCase();
+      if (filtroConfirmado.toLowerCase() === 'confirmado') {
+        if (c !== 'confirmado') return false;
+      } else if (filtroConfirmado.toLowerCase() === 'aguardando') {
+        if (c === 'confirmado') return false;
+      }
+    }
+    
+    // Filtro Observação (ag.observacao_agendamento)
+    if (filtroObservacao) {
+      const temObs = !!(ag.observacao_agendamento && ag.observacao_agendamento.trim() !== '');
+      if (filtroObservacao === 'com_observacao' && !temObs) return false;
+      if (filtroObservacao === 'sem_observacao' && temObs) return false;
+    }
+    
     if (filtroConfirmado) {
       const c = (ag.confirmacao || '').toString().toLowerCase();
       if (filtroConfirmado.toLowerCase() === 'confirmado') {
@@ -570,7 +588,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado]);
+  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -599,10 +617,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setFiltroAih('');
     setFiltroStatusInterno('');
     setFiltroConfirmado('');
+    setFiltroObservacao('');
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado;
+  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -1990,7 +2009,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       ) : (
         <>
           {/* Paginação Superior */}
-          {!agruparPorStatus && totalRegistros > 0 && (
+          {!agruparPorStatus && (
             <div ref={tabelaRef} className="mb-4 bg-white rounded-lg shadow p-4">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 {/* Informações e seletor de itens por página */}
@@ -2025,6 +2044,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       <option value="50">50</option>
                       <option value="100">100</option>
                     </select>
+                    <div className="hidden sm:flex items-center gap-2 ml-4">
+                      <label className="text-sm text-gray-600">Observação:</label>
+                      <select
+                        value={filtroObservacao}
+                        onChange={(e) => setFiltroObservacao(e.target.value)}
+                        className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                        title="Filtrar por observação"
+                      >
+                        <option value="">Todos</option>
+                        <option value="com_observacao">📝 Com observação</option>
+                        <option value="sem_observacao">Sem observação</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
