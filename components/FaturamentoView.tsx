@@ -1138,7 +1138,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         {/* Linha principal - estrutura igual à Documentação */}
         <tr className="transition-colors hover:bg-gray-50">
           {/* Status AIH */}
-          <td className="px-3 py-3 w-36">
+          <td className="px-3 py-3 w-44">
             <div className="flex items-center gap-2">
               <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
               <select
@@ -1754,7 +1754,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">Status AIH</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">Status AIH</th>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">Paciente</th>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-72">Procedimento</th>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Médico</th>
