@@ -94,9 +94,11 @@ interface ModalProps {
   footer?: ReactNode;
   size?: 'small' | 'medium' | 'large' | 'xlarge' | 'full' | 'fullscreen';
   hideCloseButton?: boolean; // Nova prop para esconder o botão X
+  titleClassName?: string;
+  headerActions?: ReactNode;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, size = 'medium', hideCloseButton = false }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, size = 'medium', hideCloseButton = false, titleClassName, headerActions }) => {
   if (!isOpen) return null;
 
   const isFullscreen = size === 'fullscreen';
@@ -119,12 +121,15 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       }`}>
         {title && (
           <div className={`flex justify-between items-center border-b ${isFullscreen ? 'px-6 py-3' : 'p-4'}`}>
-            <h3 className={`font-semibold text-slate-700 ${isFullscreen ? 'text-lg' : 'text-xl'}`}>{title}</h3>
-            {!hideCloseButton && (
-              <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-                <XIcon className={isFullscreen ? 'w-5 h-5' : 'w-6 h-6'} />
-              </button>
-            )}
+            <h3 className={`font-semibold ${titleClassName || 'text-slate-700'} ${isFullscreen ? 'text-lg' : 'text-xl'}`}>{title}</h3>
+            <div className="flex items-center gap-2">
+              {headerActions}
+              {!hideCloseButton && (
+                <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+                  <XIcon className={isFullscreen ? 'w-5 h-5' : 'w-6 h-6'} />
+                </button>
+              )}
+            </div>
           </div>
         )}
         <div className={`flex-1 ${isFullscreen ? 'overflow-y-auto' : 'p-6 overflow-y-auto'}`}>

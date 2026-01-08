@@ -12,6 +12,7 @@ const simpleGradeCirurgicaService = mockServices.gradeCirurgica;
 
 // Importar service real de agendamentos e médicos do Supabase
 import { agendamentoService, medicoService } from '../services/supabase';
+import PreAnestesiaModal from './PreAnestesiaModal';
 import { Medico } from '../types';
 import { useToast } from '../contexts/ToastContext';
 
@@ -424,8 +425,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           if (procsComEspecificacao.length > 0) {
             console.log(`📋 Grade ${idx} (${grade.data}) - Procedimentos com especificação:`, 
               procsComEspecificacao.map(p => ({ texto: p.texto, especificacao: p.especificacao }))
-            );
-          }
+  );
+}
         });
         
         setGrades(gradesCarregadas);
@@ -523,6 +524,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [carregandoMedicos, setCarregandoMedicos] = useState(false); // Loading ao carregar médicos
   const [procedimentosTemp, setProcedimentosTemp] = useState<Array<{id: string, nome: string}>>([]);
   const [novoProcedimentoNome, setNovoProcedimentoNome] = useState('');
+  const [preModalOpen, setPreModalOpen] = useState(false);
+  const [preModalInitial, setPreModalInitial] = useState<any>({});
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false); // Loading ao salvar
   
   // Estado para médicos disponíveis (carregados uma vez ao abrir o modal)
@@ -3632,6 +3635,29 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
                                                   </button>
+                                                  {paciente.nome && (
+                                                    <button
+                                                      onClick={() => {
+                                                        setPreModalInitial({
+                                                          municipio: paciente.cidade || '',
+                                                          unidade_hospitalar: '',
+                                                          nome_paciente: paciente.nome || '',
+                                                          data_nascimento: paciente.dataNascimento || '',
+                                                          idade: idade ? String(idade) : '',
+                                                          sexo: '',
+                                                          procedimento_s: proc.especificacao || proc.texto || '',
+                                                          cirurgiao: proc.medicoNome || ''
+                                                        });
+                                                        setPreModalOpen(true);
+                                                      }}
+                                                      className="p-1 text-teal-600 hover:bg-teal-100 rounded transition-all"
+                                                      title="Ficha Pré-Anestésica"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zm0 10c-4.418 0-8-2.239-8-5V7a2 2 0 012-2h12a2 2 0 012 2v6c0 2.761-3.582 5-8 5z" />
+                                                      </svg>
+                                                    </button>
+                                                  )}
                                                 </div>
                                               </td>
                                             </tr>
@@ -4521,7 +4547,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         </div>
       </Modal>
     )}
-  </>
+    <PreAnestesiaModal isOpen={preModalOpen} onClose={() => setPreModalOpen(false)} initial={preModalInitial} />
+    </>
   );
 };
 

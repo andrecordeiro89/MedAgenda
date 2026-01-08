@@ -694,6 +694,17 @@ export const agendamentoService = {
   }
 }
 
+export const triagemPreAnestesicaService = {
+  async create(payload: Record<string, string>): Promise<any> {
+    const { data, error } = await supabase
+      .from('triagem_pre_anestesica')
+      .insert([payload])
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return data
+  }
+}
 // ============================================
 // SERVIÇOS DE ESTATÍSTICAS
 // ============================================
