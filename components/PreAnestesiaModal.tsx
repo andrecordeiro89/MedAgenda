@@ -153,18 +153,60 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       const startX = margin;
       let y = margin + 6;
       const bottomMargin = 10;
+      const colW = pageW - margin * 2;
+      const imageToBase64 = (url: string): Promise<{ data: string; width: number; height: number }> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              resolve({ data: canvas.toDataURL('image/png'), width: img.width, height: img.height });
+            } else {
+              reject(new Error('Canvas context error'));
+            }
+          };
+          img.onerror = reject;
+          img.src = url;
+        });
+      };
+      let logoInfo: { data: string; width: number; height: number } | null = null;
+      try {
+        logoInfo = await imageToBase64('/CIS_marca-1.png');
+      } catch {}
       const ensureSpace = (needed: number) => {
         if (y + needed > pageH - bottomMargin) {
           doc.addPage();
           y = margin + 6;
-          doc.setTextColor(200, 0, 0);
+          doc.setTextColor(72, 128, 87);
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(16);
-          doc.text('Triagem Pré Anestésica', startX, y);
+          const titleText = 'Triagem Pré Anestésica';
+          const titleX = startX + (colW - doc.getTextWidth(titleText)) / 2;
+          if (logoInfo) {
+            const lw = 40;
+            const lh = lw * (logoInfo.height / logoInfo.width);
+            doc.addImage(logoInfo.data, 'PNG', startX, y - 18, lw, lh, undefined, 'FAST');
+          }
+          doc.text(titleText, titleX, y + 2);
           doc.setTextColor(0, 0, 0);
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
-          y += 6;
+          y += 10;
+          const hospNomeBreak = dados.unidade_hospitalar || hospitalSelecionado?.nome || '';
+          doc.setTextColor(72, 128, 87);
+          const unidadeLabelBreak = 'Unidade:';
+          const unidadeLabelWBreak = doc.getTextWidth(unidadeLabelBreak);
+          const unidadeValueWBreak = doc.getTextWidth(hospNomeBreak ? ` ${hospNomeBreak}` : ' ___________________________');
+          const unidadeXBreak = startX + (colW - (unidadeLabelWBreak + unidadeValueWBreak)) / 2;
+          doc.text(unidadeLabelBreak, unidadeXBreak, y);
+          doc.setTextColor(0, 0, 0);
+          doc.text(hospNomeBreak ? ` ${hospNomeBreak}` : ' ___________________________', unidadeXBreak + unidadeLabelWBreak, y);
+          y += 12;
         }
       };
       const fitText = (t: string, maxW: number) => {
@@ -183,92 +225,98 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         const s = fitText(String(val), maxW);
         if (s) doc.text(s, x, y);
       };
-      doc.setTextColor(200, 0, 0);
+      const drawLabeledBox = (x: number, yy: number, w: number, h: number, label: string, value?: string) => {
+        doc.rect(x, yy, w, h);
+        const oldSize = 10;
+        doc.setFontSize(8);
+        doc.text(label, x + 2, yy + 3);
+        doc.setFontSize(oldSize);
+        const vy = yy + h / 2 + 3;
+        print(value || '', x + 2, vy, w - 4);
+      };
+      doc.setTextColor(72, 128, 87);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text('Triagem Pré Anestésica', startX, y);
+      const titleText = 'Triagem Pré Anestésica';
+      const titleX = startX + (colW - doc.getTextWidth(titleText)) / 2;
+      if (logoInfo) {
+        const lw = 40;
+        const lh = lw * (logoInfo.height / logoInfo.width);
+        doc.addImage(logoInfo.data, 'PNG', startX, y - 18, lw, lh, undefined, 'FAST');
+      }
+      doc.text(titleText, titleX, y + 2);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      const municipioW = 65;
-      doc.text('Município', pageW - margin - municipioW + 2, y - 4);
-      doc.setDrawColor(180, 180, 180);
-      doc.rect(pageW - margin - municipioW, y - 8, municipioW, 8);
-      print(dados.municipio, pageW - margin - municipioW + 20, y - 2, municipioW - 22);
-      y += 8;
+      y += 10;
       const hospNome = dados.unidade_hospitalar || hospitalSelecionado?.nome || '';
-      doc.setTextColor(200, 0, 0);
-      doc.text('Unidade:', startX, y);
+      doc.setTextColor(72, 128, 87);
+      const unidadeLabel = 'Unidade:';
+      const unidadeLabelW = doc.getTextWidth(unidadeLabel);
+      const unidadeValueW = doc.getTextWidth(hospNome ? ` ${hospNome}` : ' ___________________________');
+      const unidadeX = startX + (colW - (unidadeLabelW + unidadeValueW)) / 2;
+      doc.text(unidadeLabel, unidadeX, y);
       doc.setTextColor(0, 0, 0);
-      doc.text(hospNome ? ` ${hospNome}` : ' ___________________________', startX + 16, y);
-      y += 6;
+      doc.text(hospNome ? ` ${hospNome}` : ' ___________________________', unidadeX + unidadeLabelW, y);
+      y += 12;
       const rowH = 8;
-      const colW = (pageW - margin * 2);
+      const gap = 4;
+      const halfW = (colW - gap) / 2;
       const c1 = colW * 0.55;
       const c2 = colW * 0.25;
       const c3 = colW * 0.2;
-      doc.rect(startX, y, c1, rowH);
-      doc.text('Nome', startX + 2, y + 3);
-      print(dados.nome_paciente, startX + 30, y + 3, c1 - 34);
-      doc.rect(startX + c1, y, c2, rowH);
-      doc.text('Data de nascimento', startX + c1 + 2, y + 3);
-      print(dados.data_nascimento, startX + c1 + 40, y + 3, c2 - 44);
-      doc.rect(startX + c1 + c2, y, c3, rowH);
-      doc.text('Idade', startX + c1 + c2 + 2, y + 3);
-      print(dados.idade, startX + c1 + c2 + 17, y + 3, c3 - 20);
+      drawLabeledBox(startX, y, c1, rowH, 'Nome', dados.nome_paciente);
+      drawLabeledBox(startX + c1, y, c2, rowH, 'Data de nascimento', dados.data_nascimento);
+      drawLabeledBox(startX + c1 + c2, y, c3, rowH, 'Idade', dados.idade);
       y += rowH + 2;
-      const sexoW = 26;
-      const cirW = 60;
-      doc.rect(startX, y, colW - sexoW - cirW, rowH);
-      doc.text('Procedimento(s)', startX + 2, y + 3);
-      print(dados.procedimento_s, startX + 40, y + 3, colW - sexoW - cirW - 44);
-      doc.rect(startX + colW - sexoW - cirW, y, sexoW, rowH);
-      doc.text('Sexo: F / M', startX + colW - sexoW - cirW + 2, y + 3);
-      doc.rect(startX + colW - cirW, y, cirW, rowH);
-      doc.text('Cirurgião', startX + colW - cirW + 2, y + 3);
-      print(dados.cirurgiao, startX + colW - cirW + 22, y + 3, cirW - 24);
+      const sexoW = 50;
+      drawLabeledBox(startX, y, colW - sexoW, rowH, 'Procedimento(s)', dados.procedimento_s);
+      doc.rect(startX + colW - sexoW, y, sexoW, rowH);
+      doc.text('Sexo [  ] F  [  ] M', startX + colW - sexoW + 2, y + rowH / 2 + 1);
       y += rowH + 2;
-      doc.rect(startX, y, colW * 0.5 - 2, rowH);
-      doc.text('Cirurgias prévias', startX + 2, y + 3);
-      print(dados.cirurgias_previas, startX + 40, y + 3, colW * 0.5 - 46);
-      doc.rect(startX + colW * 0.5, y, colW * 0.5 - 2, rowH);
-      doc.text('Intercorrências anestésicas  [  ] Sim  [  ] Não', startX + colW * 0.5 + 2, y + 3);
+      drawLabeledBox(startX, y, colW, rowH, 'Cirurgião', dados.cirurgiao);
       y += rowH + 2;
-      doc.rect(startX, y, colW * 0.5 - 2, rowH);
-      doc.text('Alergias  [  ] Sim  [  ] Não', startX + 2, y + 3);
-      doc.rect(startX + colW * 0.5, y, colW * 0.5 - 2, rowH);
-      doc.text('Tabagismo  [  ] Sim  [  ] Não  [  ] Ex-tabagista', startX + colW * 0.5 + 2, y + 3);
+      drawLabeledBox(startX, y, halfW, rowH, 'Cirurgias prévias', dados.cirurgias_previas);
+      doc.rect(startX + halfW + gap, y, halfW, rowH);
+      doc.text('Intercorrências anestésicas  [  ] Sim  [  ] Não', startX + halfW + gap + 2, y + rowH / 2 + 1);
       y += rowH + 2;
-      doc.rect(startX, y, colW * 0.5 - 2, rowH);
-      doc.text('Etilismo  [  ] Sim  [  ] Não  [  ] Ex-etilista', startX + 2, y + 3);
-      const smallW = (colW * 0.5 - 2) / 3;
-      doc.rect(startX + colW * 0.5, y, smallW, rowH);
-      doc.text('Peso (kg)', startX + colW * 0.5 + 2, y + 3);
-      print(dados.peso_kg, startX + colW * 0.5 + 22, y + 3, smallW - 24);
-      doc.rect(startX + colW * 0.5 + smallW, y, smallW, rowH);
-      doc.text('Altura (cm)', startX + colW * 0.5 + smallW + 2, y + 3);
-      print(dados.altura_cm, startX + colW * 0.5 + smallW + 25, y + 3, smallW - 27);
-      doc.rect(startX + colW * 0.5 + smallW * 2, y, smallW, rowH);
-      doc.text('IMC (kg/m²)', startX + colW * 0.5 + smallW * 2 + 2, y + 3);
-      print(dados.imc_kg_m2, startX + colW * 0.5 + smallW * 2 + 26, y + 3, smallW - 28);
+      doc.rect(startX, y, halfW, rowH);
+      doc.text('Alergias  [  ] Sim  [  ] Não', startX + 2, y + rowH / 2 + 1);
+      doc.rect(startX + halfW + gap, y, halfW, rowH);
+      doc.text('Tabagismo  [  ] Sim  [  ] Não  [  ] Ex-tabagista', startX + halfW + gap + 2, y + rowH / 2 + 1);
+      y += rowH + 2;
+      doc.rect(startX, y, halfW, rowH);
+      doc.text('Etilismo  [  ] Sim  [  ] Não  [  ] Ex-etilista', startX + 2, y + rowH / 2 + 1);
+      const smallGap = 3;
+      const smallW = (halfW - 2 * smallGap) / 3;
+      const rightStart = startX + halfW + gap;
+      doc.rect(rightStart, y, smallW, rowH);
+      doc.text('Peso (kg)', rightStart + 2, y + 3);
+      print(dados.peso_kg, rightStart + 2, y + rowH / 2 + 3, smallW - 4);
+      doc.rect(rightStart + smallW + smallGap, y, smallW, rowH);
+      doc.text('Altura (cm)', rightStart + smallW + smallGap + 2, y + 3);
+      print(dados.altura_cm, rightStart + smallW + smallGap + 2, y + rowH / 2 + 3, smallW - 4);
+      doc.rect(rightStart + (smallW + smallGap) * 2, y, smallW, rowH);
+      doc.text('IMC (kg/m²)', rightStart + (smallW + smallGap) * 2 + 2, y + 3);
+      print(dados.imc_kg_m2, rightStart + (smallW + smallGap) * 2 + 2, y + rowH / 2 + 3, smallW - 4);
       y += rowH + 4;
       ensureSpace(8 + (rowH + 2) * 4 + rowH * 2.5 + 18);
       doc.setFillColor(240, 240, 240);
-      doc.setDrawColor(200, 0, 0);
+      doc.setDrawColor(72, 128, 87);
       doc.rect(startX, y, colW, 6, 'FD');
-      doc.setTextColor(200, 0, 0);
+      doc.setTextColor(72, 128, 87);
       doc.setFont('helvetica', 'bold');
       doc.text('COMORBIDADES', startX + 2, y + 4);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       y += 8;
-      const itemW = colW / 3 - 3;
+      const itemW = (colW - gap) / 2;
       const renderComorb = (label: string, value: string, ix: number, iy: number) => {
-        const x = startX + ix * (itemW + 3);
+        const x = startX + ix * (itemW + gap);
         const yy = y + iy * (rowH + 2);
         doc.rect(x, yy, itemW, rowH);
         const lbl = fitText(label, itemW - 46);
-        doc.text(`${lbl}   [  ] Sim   [  ] Não`, x + 2, yy + 3);
+        doc.text(`${lbl}   [  ] Sim   [  ] Não`, x + 2, yy + rowH / 2 + 1);
       };
       const comorbList: Array<[string, string]> = [
         ['Hipertensão arterial', dados.hipertensao_arterial],
@@ -286,89 +334,136 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       ];
       let ci = 0;
       comorbList.forEach((c, idx) => {
-        renderComorb(c[0], c[1], idx % 3, Math.floor(idx / 3));
-        ci = Math.floor(idx / 3);
+        renderComorb(c[0], c[1], idx % 2, Math.floor(idx / 2));
+        ci = Math.floor(idx / 2);
       });
       const obsY = y + (ci + 1) * (rowH + 2) + 2;
-      doc.rect(startX, obsY, itemW * 1.5 + 1.5, rowH * 2.5);
+      doc.rect(startX, obsY, colW, rowH * 3);
       doc.text('Observações/Outras comorbidades', startX + 2, obsY + 4);
       if (dados.observacoes_outras_comorbidades) {
-        const s = fitText(dados.observacoes_outras_comorbidades, itemW * 1.5 - 6);
+        const s = fitText(dados.observacoes_outras_comorbidades, colW - 6);
         doc.text(s, startX + 2, obsY + 8);
       }
-      doc.rect(startX + itemW * 1.5 + 3, obsY, itemW * 1.5 + 1.5, rowH * 2.5);
-      doc.text('Medicamentos de uso contínuo', startX + itemW * 1.5 + 5, obsY + 4);
-      if (dados.medicamentos_uso_continuo) {
-        const s = fitText(dados.medicamentos_uso_continuo, itemW * 1.5 - 10);
-        doc.text(s, startX + itemW * 1.5 + 5, obsY + 8);
+      y = obsY + rowH * 3 + 6;
+      ensureSpace(8 + (rowH + 2) * 4 + 12);
+      doc.setFillColor(240, 240, 240);
+      doc.setDrawColor(72, 128, 87);
+      doc.rect(startX, y, colW, 6, 'FD');
+      doc.setTextColor(72, 128, 87);
+      doc.setFont('helvetica', 'bold');
+      doc.text('MEDICAMENTOS DE USO CONTÍNUO', startX + 2, y + 4);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      y += 8;
+      const medsRows = 4;
+      for (let i = 0; i < medsRows; i++) {
+        const yy = y + i * (rowH + 2);
+        doc.rect(startX, yy, colW - 40, rowH);
+        doc.rect(startX + colW - 40, yy, 40, rowH);
+        doc.text('[  ] M   [  ] T   [  ] N', startX + colW - 38, yy + rowH / 2 + 1);
       }
-      y = obsY + rowH * 2.5 + 6;
+      y += medsRows * (rowH + 2) + 6;
       ensureSpace(8 + (rowH + 2) * 3 + 18);
       doc.setFillColor(240, 240, 240);
-      doc.setDrawColor(200, 0, 0);
+      doc.setDrawColor(72, 128, 87);
       doc.rect(startX, y, colW, 6, 'FD');
-      doc.setTextColor(200, 0, 0);
+      doc.setTextColor(72, 128, 87);
       doc.setFont('helvetica', 'bold');
       doc.text('EXAMES', startX + 2, y + 4);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       y += 8;
-      const exRow = (labels: string[], values: string[], yy: number) => {
-        let x = startX;
-        labels.forEach((lab, i) => {
-          doc.rect(x, yy, 18, rowH);
-          doc.text(lab, x + 2, yy + 3);
-          const v = values[i] || '';
-          if (v) {
-            const s = fitText(v, 14);
-            doc.text(s, x + 16, yy + 3, { align: 'right' });
-          }
-          x += 20;
-        });
-      };
-      exRow(['Hb','Ht','Plaq','Na','K','Ur','Cr','Glicemia','HbA1c'], [dados.hb,dados.ht,dados.plaq,dados.na,dados.k,dados.ur,dados.cr,dados.glicemia,dados.hba1c], y);
+      const exGap = 3;
+      // Linha 1: 9 campos simétricos
+      const cellW9 = (colW - exGap * 8) / 9;
+      let exX = startX;
+      const exLabels1 = ['Hb','Ht','Plaq','Na','K','Ur','Cr','Glicemia','HbA1c'];
+      const exValues1 = [dados.hb,dados.ht,dados.plaq,dados.na,dados.k,dados.ur,dados.cr,dados.glicemia,dados.hba1c];
+      exLabels1.forEach((lab, i) => {
+        doc.rect(exX, y, cellW9, rowH);
+        doc.text(lab, exX + 2, y + rowH / 2 + 1);
+        const v = exValues1[i] || '';
+        if (v) {
+          const s = fitText(v, cellW9 - 6);
+          doc.text(s, exX + cellW9 - 2, y + rowH / 2 + 1, { align: 'right' });
+        }
+        exX += cellW9 + exGap;
+      });
       y += rowH + 2;
-      exRow(['TAP','INR','KPTT','Outros'], [dados.tap,dados.inr,dados.kptt,dados.outros_exames], y);
+      // Linha 2: 3 campos pequenos + "Outros" ocupando o restante
+      exX = startX;
+      const smallWEx = cellW9; // manter mesma largura dos pequenos
+      const labelsSmall = ['TAP','INR','KPTT'];
+      const valuesSmall = [dados.tap,dados.inr,dados.kptt];
+      labelsSmall.forEach((lab, i) => {
+        doc.rect(exX, y, smallWEx, rowH);
+        doc.text(lab, exX + 2, y + rowH / 2 + 1);
+        const v = valuesSmall[i] || '';
+        if (v) {
+          const s = fitText(v, smallWEx - 6);
+          doc.text(s, exX + smallWEx - 2, y + rowH / 2 + 1, { align: 'right' });
+        }
+        exX += smallWEx + exGap;
+      });
+      const outrosW = colW - (smallWEx * 3 + exGap * 3);
+      doc.rect(exX, y, outrosW, rowH);
+      doc.text('Outros', exX + 2, y + rowH / 2 + 1);
+      if (dados.outros_exames) {
+        const s = fitText(dados.outros_exames, outrosW - 6);
+        doc.text(s, exX + outrosW - 2, y + rowH / 2 + 1, { align: 'right' });
+      }
       y += rowH + 2;
-      doc.rect(startX, y, colW * 0.7 - 2, rowH);
-      doc.text('ECG/ECO', startX + 2, y + 3);
-      print(dados.ecg_eco, startX + 28, y + 3, colW * 0.7 - 32);
-      doc.rect(startX + colW * 0.7, y, colW * 0.3 - 2, rowH);
-      doc.text('Risco cardiológico  [  ] Sim  [  ] Não', startX + colW * 0.7 + 2, y + 3);
+      // Linha 3: ECG/ECO + Risco cardiológico, com gap (mais espaço para risco)
+      const rightW = Math.round(colW * 0.35);
+      const leftW = colW - rightW - exGap;
+      doc.rect(startX, y, leftW, rowH);
+      doc.text('ECG/ECO', startX + 2, y + rowH / 2 + 1);
+      print(dados.ecg_eco, startX + 2, y + rowH / 2 + 1, leftW - 4);
+      doc.rect(startX + leftW + exGap, y, rightW, rowH);
+      doc.text('Risco cardiológico  [  ] Sim  [  ] Não', startX + leftW + exGap + 2, y + rowH / 2 + 1);
       y += rowH + 6;
       ensureSpace(8 + rowH * 2.5 + (rowH + 2) * 3 + 24);
       doc.setFillColor(240, 240, 240);
-      doc.setDrawColor(200, 0, 0);
+      doc.setDrawColor(72, 128, 87);
       doc.rect(startX, y, colW, 6, 'FD');
-      doc.setTextColor(200, 0, 0);
+      doc.setTextColor(72, 128, 87);
       doc.setFont('helvetica', 'bold');
       doc.text('PARECER ANESTÉSICO', startX + 2, y + 4);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       y += 8;
-      doc.rect(startX, y, colW * 0.35 - 2, rowH);
-      doc.text('Liberado para cirurgia', startX + 2, y + 3);
-      print(dados.liberado_para_cirurgia, startX + 45, y + 3, colW * 0.35 - 50);
+      const leftBoxW = colW * 0.35 - 2;
+      const cbSize = 3;
+      const drawCheckbox = (xx: number, yy: number, checked: boolean) => {
+        doc.rect(xx, yy, cbSize, cbSize);
+        if (checked) {
+          doc.line(xx + 0.7, yy + 1.6, xx + 1.5, yy + 2.4);
+          doc.line(xx + 1.5, yy + 2.4, xx + 2.6, yy + 0.6);
+        }
+      };
+      doc.rect(startX, y, leftBoxW, rowH);
+      doc.text('Liberado para cirurgia', startX + 2, y + rowH / 2 + 1);
+      drawCheckbox(startX + leftBoxW - cbSize - 2, y + (rowH - cbSize) / 2, dados.liberado_para_cirurgia === 'Sim');
       doc.rect(startX + colW * 0.35, y, colW * 0.65 - 2, rowH * 2.5);
       doc.text('Avaliações/Exames complementares', startX + colW * 0.35 + 2, y + 3);
       if (dados.avaliacoes_exames_complementares_texto) {
         const s = fitText(dados.avaliacoes_exames_complementares_texto, colW * 0.65 - 8);
-        doc.text(s, startX + colW * 0.35 + 2, y + 7);
+        doc.text(s, startX + colW * 0.35 + 2, y + 14);
       }
       y += rowH + 2;
-      doc.rect(startX, y, colW * 0.35 - 2, rowH);
-      doc.text('Avaliação com anestesiologista', startX + 2, y + 3);
-      print(dados.avaliacao_com_anestesiologista, startX + 60, y + 3, colW * 0.35 - 64);
+      doc.rect(startX, y, leftBoxW, rowH);
+      doc.text('Avaliação com anestesiologista', startX + 2, y + rowH / 2 + 1);
+      drawCheckbox(startX + leftBoxW - cbSize - 2, y + (rowH - cbSize) / 2, dados.avaliacao_com_anestesiologista === 'Sim');
       y += rowH + 2;
-      doc.rect(startX, y, colW * 0.35 - 2, rowH);
-      doc.text('Avaliação/Exames complementares', startX + 2, y + 3);
-      print(dados.avaliacao_exames_complementares, startX + 70, y + 3, colW * 0.35 - 74);
+      doc.rect(startX, y, leftBoxW, rowH);
+      doc.text('Avaliação/Exames complementares', startX + 2, y + rowH / 2 + 1);
+      drawCheckbox(startX + leftBoxW - cbSize - 2, y + (rowH - cbSize) / 2, dados.avaliacao_exames_complementares === 'Sim');
       y += rowH + 2;
       doc.rect(startX, y, colW, rowH * 2.5);
       doc.text('Observações', startX + 2, y + 3);
       if (dados.observacoes_finais) {
         const s = fitText(dados.observacoes_finais, colW - 8);
-        doc.text(s, startX + 2, y + 7);
+        doc.text(s, startX + 2, y + 14);
       }
       y += rowH * 2.5 + 6;
       doc.text('Anestesiologista', startX, y);
@@ -459,7 +554,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
                     <label className="flex items-center gap-1 text-sm"><input type="radio" name="sexo" checked={dados.sexo === 'M'} onChange={() => setField('sexo', 'M')} />M</label>
                   </div>
                 </div>
-                <div className="col-span-6">
+                <div className="col-span-12">
                   <label className="text-xs text-slate-600">Cirurgião</label>
                   <input className="w-full px-2 py-1 text-sm border rounded" value={dados.cirurgiao} onChange={e => setField('cirurgiao', e.target.value)} />
                 </div>
@@ -541,7 +636,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
                   ['Uso anticoagulante/antiagregante','uso_anticoagulante_antiagregante'],
                 ] as const;
                 return itens.map(([label,key]) => (
-                  <div key={key} className="col-span-4">
+                  <div key={key} className="col-span-6">
                     <div className="text-xs text-slate-700">{label}</div>
                     <div className="flex items-center gap-4 px-2 py-1 border rounded">
                       <label className="flex items-center gap-1 text-sm"><input type="radio" name={String(key)} checked={(dados as any)[key] === 'Sim'} onChange={() => setField(key as keyof PreAnestesiaDados, 'Sim')} />Sim</label>
