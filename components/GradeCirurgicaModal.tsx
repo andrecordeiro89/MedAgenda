@@ -3502,7 +3502,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-32">Nº Prontuário</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-44">Avaliação Anestesista</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
-            <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
+            <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-32 min-w-32">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -3690,8 +3690,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </td>
                                               
                                               {/* Coluna Ações */}
-                                              <td className="px-3 py-2 text-center w-24 overflow-hidden">
-                                                <div className="flex items-center justify-center gap-1">
+                                              <td className="px-3 py-2 text-center w-32 min-w-32 overflow-hidden">
+                                                <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                                                   <button
                                                     onClick={() => handleEditarPaciente(index, proc.id, pIdx)}
                                                     className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-all"
@@ -3751,7 +3751,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                           if (isFirstPaciente && isProcExpanded) {
                                             linhas.push(
                                               <tr key={`${proc.id}-expanded`} className="bg-gradient-to-r from-slate-50 to-blue-50/30">
-                                              <td colSpan={7} className="px-3 py-3">
+                                              <td colSpan={8} className="px-3 py-3">
                                                   <div className="flex items-start gap-2 pl-6 border-l-2 border-blue-400/30">
                                                     {/* Ícone de informação */}
                                                     <div className="flex-shrink-0 mt-0.5">
@@ -3897,9 +3897,53 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </div>
                                             </td>
                                             
-                                            {/* Coluna Nº Prontuário */}
-                                            <td className="px-3 py-2 border-r border-slate-200 w-40 overflow-hidden">
+                                            {/* Coluna Status AIH */}
+                                            <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden">
                                               <span className="text-sm text-slate-400">-</span>
+                                            </td>
+                                            
+                                            {/* Coluna Nº Prontuário */}
+                                            <td className="px-3 py-2 border-r border-slate-200 w-32 overflow-hidden">
+                                              <span className="text-sm text-slate-400">-</span>
+                                            </td>
+                                            
+                                            {/* Coluna Avaliação Anestesista */}
+                                            <td className="px-3 py-2 border-r border-slate-200 w-44 overflow-hidden">
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'aprovado')}
+                                                  className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                                    proc.avaliacaoAnestesista === 'aprovado'
+                                                      ? 'bg-green-100 border-green-400 text-green-700'
+                                                      : 'bg-white border-slate-300 text-slate-700'
+                                                  }`}
+                                                  title="Aprovado"
+                                                >
+                                                  Aprovado
+                                                </button>
+                                                <button
+                                                  onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'reprovado')}
+                                                  className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                                    proc.avaliacaoAnestesista === 'reprovado'
+                                                      ? 'bg-red-100 border-red-400 text-red-700'
+                                                      : 'bg-white border-slate-300 text-slate-700'
+                                                  }`}
+                                                  title="Reprovado"
+                                                >
+                                                  Reprovado
+                                                </button>
+                                                <button
+                                                  onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'complementares')}
+                                                  className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                                    proc.avaliacaoAnestesista === 'complementares'
+                                                      ? 'bg-amber-100 border-amber-400 text-amber-700'
+                                                      : 'bg-white border-slate-300 text-slate-700'
+                                                  }`}
+                                                  title="Complementares"
+                                                >
+                                                  Compl.
+                                                </button>
+                                              </div>
                                             </td>
                                             
                                             {/* Coluna Idade */}
@@ -3907,8 +3951,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               <span className="text-sm text-slate-400">-</span>
                                             </td>
                                             {/* Coluna Ações */}
-                                            <td className="px-3 py-2 text-center w-24 overflow-hidden">
-                                              <div className="flex items-center justify-center gap-1">
+                                            <td className="px-3 py-2 text-center w-32 min-w-32 overflow-hidden">
+                                              <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                                                 <button
                                                   onClick={() => handleAddPacienteClick(index, proc.id)}
                                                   className="p-1 text-green-600 hover:bg-green-100 rounded transition-all"
@@ -3932,7 +3976,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                         if (isProcExpanded) {
                                           linhas.push(
                                             <tr key={`${proc.id}-expanded`} className="bg-slate-50">
-                                              <td colSpan={7} className="px-3 py-2">
+                                              <td colSpan={8} className="px-3 py-2">
                                                 <div className="text-xs text-slate-500 italic">
                                                   Nenhum paciente cadastrado ainda. Clique no botão "+" para adicionar.
                                                 </div>
