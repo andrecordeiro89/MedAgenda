@@ -268,6 +268,16 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
           doc.line(xx + 1.5, yy + 2.4, xx + 2.6, yy + 0.6);
         }
       };
+      const drawRectHighlighted = (x: number, yy: number, w: number, h: number, active: boolean) => {
+        doc.rect(x, yy, w, h);
+        if (active) {
+          doc.setDrawColor(72, 128, 87);
+          doc.setLineWidth(0.6);
+          doc.rect(x - 0.6, yy - 0.6, w + 1.2, h + 1.2);
+          doc.setLineWidth(0.2);
+          doc.setDrawColor(0, 0, 0);
+        }
+      };
       doc.setTextColor(72, 128, 87);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
@@ -327,9 +337,9 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       const cbSizeSimNao = 3;
       drawCheck(interBoxesX, y + (rowH - cbSizeSimNao) / 2, dados.intercorrencias_anestesicas === 'Sim', cbSizeSimNao);
       doc.text('Sim', interBoxesX + cbSizeSimNao + 2, y + rowH / 2 + 1);
-      const naoX = interBoxesX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
-      drawCheck(naoX, y + (rowH - cbSizeSimNao) / 2, false, cbSizeSimNao);
-      doc.text('Não', naoX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      const interNaoX = interBoxesX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
+      drawCheck(interNaoX, y + (rowH - cbSizeSimNao) / 2, false, cbSizeSimNao);
+      doc.text('Não', interNaoX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       y += rowH + 2;
       doc.rect(startX, y, halfW, rowH);
       const alergLabel = 'Alergias';
@@ -396,14 +406,14 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         const x = startX + ix * (itemW + gap);
         const yy = y + iy * (rowH + 2);
         doc.rect(x, yy, itemW, rowH);
-        const checksAreaW = 44;
+        const checksAreaW = 36;
         const lbl = fitText(label, itemW - checksAreaW - 8);
         doc.text(lbl, x + 2, yy + rowH / 2 + 1);
         const checksStartX = x + itemW - checksAreaW + 2;
         const simBoxX = checksStartX;
         drawCheck(simBoxX, yy + (rowH - cbSizeSimNao) / 2, value === 'Sim', cbSizeSimNao);
         doc.text('Sim', simBoxX + cbSizeSimNao + 2, yy + rowH / 2 + 1);
-        const naoBoxX = checksStartX + 22;
+        const naoBoxX = simBoxX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
         drawCheck(naoBoxX, yy + (rowH - cbSizeSimNao) / 2, value === 'Não', cbSizeSimNao);
         doc.text('Não', naoBoxX + cbSizeSimNao + 2, yy + rowH / 2 + 1);
       };
@@ -522,7 +532,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       }
       y += rowH + 2;
       // Linha 3: ECG/ECO + Risco cardiológico, com gap (mais espaço para risco)
-      const rightW = Math.round(colW * 0.35);
+      const rightW = Math.round(colW * 0.40);
       const leftW = colW - rightW - exGap;
       doc.rect(startX, y, leftW, rowH);
       const ecgLabel = 'ECG/ECO';
@@ -531,7 +541,22 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       const ecgValueX = startX + 2 + ecgLabelW + 6;
       print(dados.ecg_eco, ecgValueX, y + rowH / 2 + 1, leftW - (ecgValueX - startX) - 2);
       doc.rect(startX + leftW + exGap, y, rightW, rowH);
-      doc.text('Risco cardiológico  [  ] Sim  [  ] Não', startX + leftW + exGap + 2, y + rowH / 2 + 1);
+      const riscoLabel = 'Risco cardiológico';
+      const riscoBoxX = startX + leftW + exGap;
+      const riscoTextX = riscoBoxX + 2;
+      // label ocupa até rightW - checksAreaW
+      const checksAreaW = 36;
+      const riscoLabelMaxW = rightW - checksAreaW - 8;
+      const riscoLbl = fitText(riscoLabel, riscoLabelMaxW);
+      doc.text(riscoLbl, riscoTextX, y + rowH / 2 + 1);
+      const checksStartX = riscoBoxX + rightW - checksAreaW + 2;
+      const cbSizeStd = 3;
+      const simX = checksStartX;
+      drawCheck(simX, y + (rowH - cbSizeStd) / 2, dados.risco_cardiologico === 'Sim', cbSizeStd);
+      doc.text('Sim', simX + cbSizeStd + 2, y + rowH / 2 + 1);
+      const riscoNaoX = simX + cbSizeStd + 2 + doc.getTextWidth('Sim') + 8;
+      drawCheck(riscoNaoX, y + (rowH - cbSizeStd) / 2, dados.risco_cardiologico === 'Não', cbSizeStd);
+      doc.text('Não', riscoNaoX + cbSizeStd + 2, y + rowH / 2 + 1);
       y += rowH + 6;
       ensureSpace(8 + rowH * 2.5 + (rowH + 2) * 3 + 24);
       doc.setFillColor(240, 240, 240);
@@ -552,26 +577,26 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
           doc.line(xx + 1.5, yy + 2.4, xx + 2.6, yy + 0.6);
         }
       };
-      doc.rect(startX, y, leftBoxW, rowH);
+      drawRectHighlighted(startX, y, leftBoxW, rowH, dados.liberado_para_cirurgia === 'Sim');
       doc.text('Liberado para cirurgia', startX + 2, y + rowH / 2 + 1);
       drawCheckbox(startX + leftBoxW - cbSize - 2, y + (rowH - cbSize) / 2, dados.liberado_para_cirurgia === 'Sim');
-      doc.rect(startX + colW * 0.35, y, colW * 0.65 - 2, rowH * 2.5);
-      doc.text('Avaliações/Exames complementares', startX + colW * 0.35 + 2, y + 3);
+      doc.rect(startX + colW * 0.35, y, colW * 0.65 - 2, rowH * 3 + 4);
+      doc.text('Avaliações/Exames complementares', startX + colW * 0.35 + 2, y + 6);
       if (dados.avaliacoes_exames_complementares_texto) {
         const s = fitText(dados.avaliacoes_exames_complementares_texto, colW * 0.65 - 8);
         doc.text(s, startX + colW * 0.35 + 2, y + 14);
       }
       y += rowH + 2;
-      doc.rect(startX, y, leftBoxW, rowH);
+      drawRectHighlighted(startX, y, leftBoxW, rowH, dados.avaliacao_com_anestesiologista === 'Sim');
       doc.text('Avaliação com anestesiologista', startX + 2, y + rowH / 2 + 1);
       drawCheckbox(startX + leftBoxW - cbSize - 2, y + (rowH - cbSize) / 2, dados.avaliacao_com_anestesiologista === 'Sim');
       y += rowH + 2;
-      doc.rect(startX, y, leftBoxW, rowH);
+      drawRectHighlighted(startX, y, leftBoxW, rowH, dados.avaliacao_exames_complementares === 'Sim');
       doc.text('Avaliação/Exames complementares', startX + 2, y + rowH / 2 + 1);
       drawCheckbox(startX + leftBoxW - cbSize - 2, y + (rowH - cbSize) / 2, dados.avaliacao_exames_complementares === 'Sim');
       y += rowH + 2;
       doc.rect(startX, y, colW, rowH * 2.5);
-      doc.text('Observações', startX + 2, y + 3);
+      doc.text('Observações', startX + 2, y + 6);
       if (dados.observacoes_finais) {
         const s = fitText(dados.observacoes_finais, colW - 8);
         doc.text(s, startX + 2, y + 14);
