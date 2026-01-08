@@ -148,9 +148,25 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
       const margin = 10;
       const startX = margin;
       let y = margin + 6;
+      const bottomMargin = 10;
+      const ensureSpace = (needed: number) => {
+        if (y + needed > pageH - bottomMargin) {
+          doc.addPage();
+          y = margin + 6;
+          doc.setTextColor(200, 0, 0);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(16);
+          doc.text('Triagem Pré Anestésica', startX, y);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          y += 6;
+        }
+      };
       const fitText = (t: string, maxW: number) => {
         if (!t) return '';
         let s = String(t);
@@ -174,12 +190,12 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      const municipioW = 50;
-      doc.text('Município', pageW - margin - municipioW, y - 4);
+      const municipioW = 65;
+      doc.text('Município', pageW - margin - municipioW + 2, y - 4);
       doc.setDrawColor(180, 180, 180);
       doc.rect(pageW - margin - municipioW, y - 8, municipioW, 8);
-      print(dados.municipio, pageW - margin - municipioW + 2, y - 2, municipioW - 4);
-      y += 6;
+      print(dados.municipio, pageW - margin - municipioW + 20, y - 2, municipioW - 22);
+      y += 8;
       const hospNome = dados.unidade_hospitalar || hospitalSelecionado?.nome || '';
       doc.setTextColor(200, 0, 0);
       doc.text('Unidade:', startX, y);
@@ -202,28 +218,29 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       print(dados.idade, startX + c1 + c2 + 17, y + 3, c3 - 20);
       y += rowH + 2;
       const sexoW = 26;
-      doc.rect(startX, y, colW - sexoW - 40, rowH);
+      const cirW = 60;
+      doc.rect(startX, y, colW - sexoW - cirW, rowH);
       doc.text('Procedimento(s)', startX + 2, y + 3);
-      print(dados.procedimento_s, startX + 40, y + 3, colW - sexoW - 40 - 44);
-      doc.rect(startX + colW - sexoW - 40, y, sexoW, rowH);
-      doc.text('Sexo: F / M', startX + colW - sexoW - 38, y + 3);
-      doc.rect(startX + colW - 40, y, 40, rowH);
-      doc.text('Cirurgião', startX + colW - 38, y + 3);
-      print(dados.cirurgiao, startX + colW - 38 + 22, y + 3, 16);
+      print(dados.procedimento_s, startX + 40, y + 3, colW - sexoW - cirW - 44);
+      doc.rect(startX + colW - sexoW - cirW, y, sexoW, rowH);
+      doc.text('Sexo: F / M', startX + colW - sexoW - cirW + 2, y + 3);
+      doc.rect(startX + colW - cirW, y, cirW, rowH);
+      doc.text('Cirurgião', startX + colW - cirW + 2, y + 3);
+      print(dados.cirurgiao, startX + colW - cirW + 22, y + 3, cirW - 24);
       y += rowH + 2;
       doc.rect(startX, y, colW * 0.5 - 2, rowH);
       doc.text('Cirurgias prévias', startX + 2, y + 3);
       print(dados.cirurgias_previas, startX + 40, y + 3, colW * 0.5 - 46);
       doc.rect(startX + colW * 0.5, y, colW * 0.5 - 2, rowH);
-      doc.text('Intercorrências anestésicas  [ ] Sim  [ ] Não', startX + colW * 0.5 + 2, y + 3);
+      doc.text('Intercorrências anestésicas  [  ] Sim  [  ] Não', startX + colW * 0.5 + 2, y + 3);
       y += rowH + 2;
       doc.rect(startX, y, colW * 0.5 - 2, rowH);
-      doc.text('Alergias  [ ] Sim  [ ] Não', startX + 2, y + 3);
+      doc.text('Alergias  [  ] Sim  [  ] Não', startX + 2, y + 3);
       doc.rect(startX + colW * 0.5, y, colW * 0.5 - 2, rowH);
-      doc.text('Tabagismo  [ ] Sim  [ ] Não  [ ] Ex-tabagista', startX + colW * 0.5 + 2, y + 3);
+      doc.text('Tabagismo  [  ] Sim  [  ] Não  [  ] Ex-tabagista', startX + colW * 0.5 + 2, y + 3);
       y += rowH + 2;
       doc.rect(startX, y, colW * 0.5 - 2, rowH);
-      doc.text('Etilismo  [ ] Sim  [ ] Não  [ ] Ex-etilista', startX + 2, y + 3);
+      doc.text('Etilismo  [  ] Sim  [  ] Não  [  ] Ex-etilista', startX + 2, y + 3);
       const smallW = (colW * 0.5 - 2) / 3;
       doc.rect(startX + colW * 0.5, y, smallW, rowH);
       doc.text('Peso (kg)', startX + colW * 0.5 + 2, y + 3);
@@ -235,6 +252,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       doc.text('IMC (kg/m²)', startX + colW * 0.5 + smallW * 2 + 2, y + 3);
       print(dados.imc_kg_m2, startX + colW * 0.5 + smallW * 2 + 26, y + 3, smallW - 28);
       y += rowH + 4;
+      ensureSpace(8 + (rowH + 2) * 4 + rowH * 2.5 + 18);
       doc.setFillColor(240, 240, 240);
       doc.setDrawColor(200, 0, 0);
       doc.rect(startX, y, colW, 6, 'FD');
@@ -250,7 +268,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         const yy = y + iy * (rowH + 2);
         doc.rect(x, yy, itemW, rowH);
         const lbl = fitText(label, itemW - 46);
-        doc.text(`${lbl}   [ ] Sim   [ ] Não`, x + 2, yy + 3);
+        doc.text(`${lbl}   [  ] Sim   [  ] Não`, x + 2, yy + 3);
       };
       const comorbList: Array<[string, string]> = [
         ['Hipertensão arterial', dados.hipertensao_arterial],
@@ -285,6 +303,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         doc.text(s, startX + itemW * 1.5 + 5, obsY + 8);
       }
       y = obsY + rowH * 2.5 + 6;
+      ensureSpace(8 + (rowH + 2) * 3 + 18);
       doc.setFillColor(240, 240, 240);
       doc.setDrawColor(200, 0, 0);
       doc.rect(startX, y, colW, 6, 'FD');
@@ -315,8 +334,9 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       doc.text('ECG/ECO', startX + 2, y + 3);
       print(dados.ecg_eco, startX + 28, y + 3, colW * 0.7 - 32);
       doc.rect(startX + colW * 0.7, y, colW * 0.3 - 2, rowH);
-      doc.text('Risco cardiológico  [ ] Sim  [ ] Não', startX + colW * 0.7 + 2, y + 3);
+      doc.text('Risco cardiológico  [  ] Sim  [  ] Não', startX + colW * 0.7 + 2, y + 3);
       y += rowH + 6;
+      ensureSpace(8 + rowH * 2.5 + (rowH + 2) * 3 + 24);
       doc.setFillColor(240, 240, 240);
       doc.setDrawColor(200, 0, 0);
       doc.rect(startX, y, colW, 6, 'FD');
@@ -354,6 +374,12 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       doc.text('Anestesiologista', startX, y);
       doc.text('Carimbo e assinatura', startX, y + 4);
       doc.text('Data: ____/____/______', pageW - margin - 50, y + 2);
+      const pageCount = (doc as any).getNumberOfPages ? (doc as any).getNumberOfPages() : (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Página ${i}/${pageCount}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' });
+      }
       const nomePaciente = (dados.nome_paciente || 'Paciente').replace(/\s+/g, '_');
       doc.save(`Triagem_Pre_Anestesica_${nomePaciente}.pdf`);
     } finally {
