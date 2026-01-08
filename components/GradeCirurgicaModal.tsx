@@ -3049,7 +3049,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             return (
               <div
                 key={index}
-                className="border-2 border-black rounded-xl bg-white shadow-lg flex flex-col w-full overflow-hidden"
+                className="border-2 border-black bg-white shadow-lg flex flex-col w-full overflow-hidden rounded-none"
               >
                 {/* Header do Card com Data e Dia da Semana Destacados */}
                 <div className="px-4 py-3 border-b-2 border-black bg-white">
@@ -3414,7 +3414,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 )}
 
                 {/* Tabela de Itens Agrupados por Especialidade - Formato Excel */}
-                <div className="flex-1 p-2">
+                <div className="flex-1 p-0">
                   {grade.itens.length === 0 ? (
                     <div className="text-center py-4 text-slate-500">
                       <p className="text-xs">Vazio</p>
@@ -3422,7 +3422,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   ) : (
                     <div className="space-y-2">
                       {getEspecialidadesAgrupadas(grade.itens).map((grupo, grupoIndex) => (
-                        <div key={grupoIndex} className="border border-slate-300 rounded overflow-hidden bg-white shadow-sm">
+                        <div key={grupoIndex} className="border border-slate-300 rounded-none overflow-hidden bg-white shadow-sm">
                           {/* Header da Especialidade */}
                           {grupo.especialidade && (
                             <div className="group flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-800 border-b border-black">

@@ -108,31 +108,57 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     medium: 'max-w-2xl',
     large: 'max-w-4xl',
     xlarge: 'max-w-6xl',
-    full: 'max-w-[95vw]',
-    fullscreen: 'w-screen h-screen'
+    full: 'max-w-[95vw]'
   };
+
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-black bg-opacity-50" />
+        <div className="fixed inset-0 bg-white flex flex-col rounded-none">
+          {title && (
+            <div className="flex justify-between items-center border-b px-6 py-3">
+              <h3 className={`font-semibold ${titleClassName || 'text-slate-700'} text-lg`}>{title}</h3>
+              <div className="flex items-center gap-2">
+                {headerActions}
+                {!hideCloseButton && (
+                  <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+                    <XIcon className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto">
+            {children}
+          </div>
+          {footer && (
+            <div className="flex justify-end items-center gap-3 p-4 border-t bg-slate-50">
+              {footer}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-0">
-      <div className={`bg-white shadow-xl w-full flex flex-col animate-scale-in ${
-        isFullscreen 
-          ? 'w-screen h-screen rounded-none' 
-          : `${sizeClasses[size]} max-h-[90vh] rounded-lg m-4`
-      }`}>
+      <div className={`bg-white shadow-xl w-full flex flex-col animate-scale-in ${sizeClasses[size]} max-h-[90vh] rounded-lg m-4`}>
         {title && (
-          <div className={`flex justify-between items-center border-b ${isFullscreen ? 'px-6 py-3' : 'p-4'}`}>
-            <h3 className={`font-semibold ${titleClassName || 'text-slate-700'} ${isFullscreen ? 'text-lg' : 'text-xl'}`}>{title}</h3>
+          <div className="flex justify-between items-center border-b p-4">
+            <h3 className={`font-semibold ${titleClassName || 'text-slate-700'} text-xl`}>{title}</h3>
             <div className="flex items-center gap-2">
               {headerActions}
               {!hideCloseButton && (
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-                  <XIcon className={isFullscreen ? 'w-5 h-5' : 'w-6 h-6'} />
+                  <XIcon className="w-6 h-6" />
                 </button>
               )}
             </div>
           </div>
         )}
-        <div className={`flex-1 ${isFullscreen ? 'overflow-y-auto' : 'p-6 overflow-y-auto'}`}>
+        <div className="p-6 overflow-y-auto">
           {children}
         </div>
         {footer && (
