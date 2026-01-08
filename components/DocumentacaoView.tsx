@@ -249,13 +249,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       case 'autorizado':
         return 'bg-green-50 border-green-400 text-green-800';
       case 'pendência hospital':
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-orange-50 border-orange-400 text-orange-800';
       case 'pendencia hospital':
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-orange-50 border-orange-400 text-orange-800';
       case 'pendência faturamento':
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-rose-50 border-rose-400 text-rose-800';
       case 'pendencia faturamento':
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-rose-50 border-rose-400 text-rose-800';
       case 'auditor externo':
         return 'bg-indigo-50 border-indigo-400 text-indigo-800';
       case 'aguardando ciência sms':
@@ -283,10 +283,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return 'bg-green-500';
       case 'pendência hospital':
       case 'pendencia hospital':
-        return 'bg-amber-500';
+        return 'bg-orange-500';
       case 'pendência faturamento':
       case 'pendencia faturamento':
-        return 'bg-amber-500';
+        return 'bg-rose-500';
       case 'auditor externo':
         return 'bg-indigo-500';
       case 'aguardando ciência sms':
