@@ -126,13 +126,40 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [gerandoPDF, setGerandoPDF] = useState(false);
+  const [meds, setMeds] = useState<Array<{ nome: string; m: boolean; t: boolean; n: boolean }>>(
+    Array.from({ length: 4 }).map(() => ({ nome: '', m: false, t: false, n: false }))
+  );
 
   useEffect(() => {
     const d: Partial<PreAnestesiaDados> = { ...initial };
     if (d.data_nascimento) d.data_nascimento = formatDate(String(d.data_nascimento));
     if (d.idade && !String(d.idade).includes('anos')) d.idade = `${d.idade} anos`;
-    setDados(prev => ({ ...prev, ...d }));
+    const filtered: Partial<PreAnestesiaDados> = {};
+    Object.entries(d).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        (filtered as any)[k] = v;
+      }
+    });
+    setDados(prev => ({ ...prev, ...filtered }));
+    if (filtered.medicamentos_uso_continuo) {
+      const arr = String(filtered.medicamentos_uso_continuo).split('\n').slice(0, 4);
+      const parsed = Array.from({ length: 4 }).map((_, i) => {
+        const line = arr[i] || '';
+        const [nome, m, t, n] = line.split('|');
+        return {
+          nome: nome || '',
+          m: m === '1',
+          t: t === '1',
+          n: n === '1'
+        };
+      });
+      setMeds(parsed);
+    }
   }, [initial]);
+  const syncMedsToDados = (mm: Array<{ nome: string; m: boolean; t: boolean; n: boolean }>) => {
+    const joined = mm.map(m => `${m.nome}|${m.m ? 1 : 0}|${m.t ? 1 : 0}|${m.n ? 1 : 0}`).join('\n');
+    setDados(prev => ({ ...prev, medicamentos_uso_continuo: joined }));
+  };
 
   useEffect(() => {
     if (hospitalSelecionado?.nome) {
@@ -234,6 +261,13 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         const vy = yy + h / 2 + 3;
         print(value || '', x + 2, vy, w - 4);
       };
+      const drawCheck = (xx: number, yy: number, checked: boolean, size = 3) => {
+        doc.rect(xx, yy, size, size);
+        if (checked) {
+          doc.line(xx + 0.7, yy + 1.6, xx + 1.5, yy + 2.4);
+          doc.line(xx + 1.5, yy + 2.4, xx + 2.6, yy + 0.6);
+        }
+      };
       doc.setTextColor(72, 128, 87);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
@@ -272,21 +306,68 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       const sexoW = 50;
       drawLabeledBox(startX, y, colW - sexoW, rowH, 'Procedimento(s)', dados.procedimento_s);
       doc.rect(startX + colW - sexoW, y, sexoW, rowH);
-      doc.text('Sexo [  ] F  [  ] M', startX + colW - sexoW + 2, y + rowH / 2 + 1);
+      const sexoLabel = 'Sexo';
+      doc.text(sexoLabel, startX + colW - sexoW + 2, y + rowH / 2 + 1);
+      const sexoLabelW = doc.getTextWidth(sexoLabel);
+      let sexoX = startX + colW - sexoW + 2 + sexoLabelW + 6;
+      drawCheck(sexoX, y + (rowH - 3) / 2, dados.sexo === 'F', 3);
+      doc.text('F', sexoX + 3 + 2, y + rowH / 2 + 1);
+      sexoX = sexoX + 3 + 2 + doc.getTextWidth('F') + 8;
+      drawCheck(sexoX, y + (rowH - 3) / 2, dados.sexo === 'M', 3);
+      doc.text('M', sexoX + 3 + 2, y + rowH / 2 + 1);
       y += rowH + 2;
       drawLabeledBox(startX, y, colW, rowH, 'Cirurgião', dados.cirurgiao);
       y += rowH + 2;
       drawLabeledBox(startX, y, halfW, rowH, 'Cirurgias prévias', dados.cirurgias_previas);
       doc.rect(startX + halfW + gap, y, halfW, rowH);
-      doc.text('Intercorrências anestésicas  [  ] Sim  [  ] Não', startX + halfW + gap + 2, y + rowH / 2 + 1);
+      const interLabel = 'Intercorrências anestésicas';
+      doc.text(interLabel, startX + halfW + gap + 2, y + rowH / 2 + 1);
+      const interLabelW = doc.getTextWidth(interLabel);
+      const interBoxesX = startX + halfW + gap + 2 + interLabelW + 6;
+      const cbSizeSimNao = 3;
+      drawCheck(interBoxesX, y + (rowH - cbSizeSimNao) / 2, dados.intercorrencias_anestesicas === 'Sim', cbSizeSimNao);
+      doc.text('Sim', interBoxesX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      const naoX = interBoxesX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
+      drawCheck(naoX, y + (rowH - cbSizeSimNao) / 2, false, cbSizeSimNao);
+      doc.text('Não', naoX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       y += rowH + 2;
       doc.rect(startX, y, halfW, rowH);
-      doc.text('Alergias  [  ] Sim  [  ] Não', startX + 2, y + rowH / 2 + 1);
+      const alergLabel = 'Alergias';
+      doc.text(alergLabel, startX + 2, y + rowH / 2 + 1);
+      const alergLabelW = doc.getTextWidth(alergLabel);
+      const alergBoxesX = startX + 2 + alergLabelW + 6;
+      drawCheck(alergBoxesX, y + (rowH - cbSizeSimNao) / 2, dados.alergias === 'Sim', cbSizeSimNao);
+      doc.text('Sim', alergBoxesX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      const alergNaoX = alergBoxesX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
+      drawCheck(alergNaoX, y + (rowH - cbSizeSimNao) / 2, false, cbSizeSimNao);
+      doc.text('Não', alergNaoX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       doc.rect(startX + halfW + gap, y, halfW, rowH);
-      doc.text('Tabagismo  [  ] Sim  [  ] Não  [  ] Ex-tabagista', startX + halfW + gap + 2, y + rowH / 2 + 1);
+      const tabLabel = 'Tabagismo';
+      doc.text(tabLabel, startX + halfW + gap + 2, y + rowH / 2 + 1);
+      const tabLabelW = doc.getTextWidth(tabLabel);
+      let tabX = startX + halfW + gap + 2 + tabLabelW + 6;
+      drawCheck(tabX, y + (rowH - cbSizeSimNao) / 2, dados.tabagismo === 'Sim', cbSizeSimNao);
+      doc.text('Sim', tabX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      tabX = tabX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
+      drawCheck(tabX, y + (rowH - cbSizeSimNao) / 2, dados.tabagismo === 'Não', cbSizeSimNao);
+      doc.text('Não', tabX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      tabX = tabX + cbSizeSimNao + 2 + doc.getTextWidth('Não') + 8;
+      drawCheck(tabX, y + (rowH - cbSizeSimNao) / 2, dados.tabagismo === 'Ex-tabagista', cbSizeSimNao);
+      doc.text('Ex-tabagista', tabX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       y += rowH + 2;
       doc.rect(startX, y, halfW, rowH);
-      doc.text('Etilismo  [  ] Sim  [  ] Não  [  ] Ex-etilista', startX + 2, y + rowH / 2 + 1);
+      const etilLabel = 'Etilismo';
+      doc.text(etilLabel, startX + 2, y + rowH / 2 + 1);
+      const etilLabelW = doc.getTextWidth(etilLabel);
+      let etilX = startX + 2 + etilLabelW + 6;
+      drawCheck(etilX, y + (rowH - cbSizeSimNao) / 2, dados.etilismo === 'Sim', cbSizeSimNao);
+      doc.text('Sim', etilX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      etilX = etilX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
+      drawCheck(etilX, y + (rowH - cbSizeSimNao) / 2, dados.etilismo === 'Não', cbSizeSimNao);
+      doc.text('Não', etilX + cbSizeSimNao + 2, y + rowH / 2 + 1);
+      etilX = etilX + cbSizeSimNao + 2 + doc.getTextWidth('Não') + 8;
+      drawCheck(etilX, y + (rowH - cbSizeSimNao) / 2, dados.etilismo === 'Ex-etilista', cbSizeSimNao);
+      doc.text('Ex-etilista', etilX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       const smallGap = 3;
       const smallW = (halfW - 2 * smallGap) / 3;
       const rightStart = startX + halfW + gap;
@@ -315,8 +396,16 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         const x = startX + ix * (itemW + gap);
         const yy = y + iy * (rowH + 2);
         doc.rect(x, yy, itemW, rowH);
-        const lbl = fitText(label, itemW - 46);
-        doc.text(`${lbl}   [  ] Sim   [  ] Não`, x + 2, yy + rowH / 2 + 1);
+        const checksAreaW = 44;
+        const lbl = fitText(label, itemW - checksAreaW - 8);
+        doc.text(lbl, x + 2, yy + rowH / 2 + 1);
+        const checksStartX = x + itemW - checksAreaW + 2;
+        const simBoxX = checksStartX;
+        drawCheck(simBoxX, yy + (rowH - cbSizeSimNao) / 2, value === 'Sim', cbSizeSimNao);
+        doc.text('Sim', simBoxX + cbSizeSimNao + 2, yy + rowH / 2 + 1);
+        const naoBoxX = checksStartX + 22;
+        drawCheck(naoBoxX, yy + (rowH - cbSizeSimNao) / 2, value === 'Não', cbSizeSimNao);
+        doc.text('Não', naoBoxX + cbSizeSimNao + 2, yy + rowH / 2 + 1);
       };
       const comorbList: Array<[string, string]> = [
         ['Hipertensão arterial', dados.hipertensao_arterial],
@@ -356,11 +445,30 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       doc.setFont('helvetica', 'normal');
       y += 8;
       const medsRows = 4;
+      const parsedMeds = (dados.medicamentos_uso_continuo || '')
+        .split('\n')
+        .slice(0, medsRows)
+        .map(line => {
+          const [nome, m, t, n] = line.split('|');
+          return { nome: nome || '', m: m === '1', t: t === '1', n: n === '1' };
+        });
       for (let i = 0; i < medsRows; i++) {
         const yy = y + i * (rowH + 2);
-        doc.rect(startX, yy, colW - 40, rowH);
-        doc.rect(startX + colW - 40, yy, 40, rowH);
-        doc.text('[  ] M   [  ] T   [  ] N', startX + colW - 38, yy + rowH / 2 + 1);
+        const item = parsedMeds[i] || { nome: '', m: false, t: false, n: false };
+        const medsRightW = 50;
+        const medsLeftW = colW - medsRightW;
+        doc.rect(startX, yy, medsLeftW, rowH);
+        doc.text(item.nome || '', startX + 2, yy + rowH / 2 + 1);
+        doc.rect(startX + medsLeftW, yy, medsRightW, rowH);
+        const baseX = startX + medsLeftW + 2;
+        drawCheck(baseX, yy + (rowH - 3) / 2, item.m, 3);
+        doc.text('M', baseX + 3 + 2, yy + rowH / 2 + 1);
+        const baseX2 = baseX + 3 + 2 + doc.getTextWidth('M') + 8;
+        drawCheck(baseX2, yy + (rowH - 3) / 2, item.t, 3);
+        doc.text('T', baseX2 + 3 + 2, yy + rowH / 2 + 1);
+        const baseX3 = baseX2 + 3 + 2 + doc.getTextWidth('T') + 8;
+        drawCheck(baseX3, yy + (rowH - 3) / 2, item.n, 3);
+        doc.text('N', baseX3 + 3 + 2, yy + rowH / 2 + 1);
       }
       y += medsRows * (rowH + 2) + 6;
       ensureSpace(8 + (rowH + 2) * 3 + 18);
@@ -377,7 +485,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       // Linha 1: 9 campos simétricos
       const cellW9 = (colW - exGap * 8) / 9;
       let exX = startX;
-      const exLabels1 = ['Hb','Ht','Plaq','Na','K','Ur','Cr','Glicemia','HbA1c'];
+      const exLabels1 = ['Hb','Ht','Plaq','Na','K','Ur','Cr','Glic.','HbA1c'];
       const exValues1 = [dados.hb,dados.ht,dados.plaq,dados.na,dados.k,dados.ur,dados.cr,dados.glicemia,dados.hba1c];
       exLabels1.forEach((lab, i) => {
         doc.rect(exX, y, cellW9, rowH);
@@ -417,8 +525,11 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       const rightW = Math.round(colW * 0.35);
       const leftW = colW - rightW - exGap;
       doc.rect(startX, y, leftW, rowH);
-      doc.text('ECG/ECO', startX + 2, y + rowH / 2 + 1);
-      print(dados.ecg_eco, startX + 2, y + rowH / 2 + 1, leftW - 4);
+      const ecgLabel = 'ECG/ECO';
+      doc.text(ecgLabel, startX + 2, y + rowH / 2 + 1);
+      const ecgLabelW = doc.getTextWidth(ecgLabel);
+      const ecgValueX = startX + 2 + ecgLabelW + 6;
+      print(dados.ecg_eco, ecgValueX, y + rowH / 2 + 1, leftW - (ecgValueX - startX) - 2);
       doc.rect(startX + leftW + exGap, y, rightW, rowH);
       doc.text('Risco cardiológico  [  ] Sim  [  ] Não', startX + leftW + exGap + 2, y + rowH / 2 + 1);
       y += rowH + 6;
@@ -651,7 +762,62 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
               </div>
               <div className="col-span-6">
                 <div className="text-xs text-slate-700">Medicamentos de uso contínuo</div>
-                <textarea className="w-full px-2 py-1 text-sm border rounded h-20" value={dados.medicamentos_uso_continuo} onChange={e => setField('medicamentos_uso_continuo', e.target.value)} />
+                <div className="space-y-2">
+                  {meds.map((m, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        className="flex-1 px-2 py-1 text-sm border rounded"
+                        placeholder={`Medicamento ${idx + 1}`}
+                        value={m.nome}
+                        onChange={e => {
+                          const mm = meds.slice();
+                          mm[idx] = { ...mm[idx], nome: e.target.value };
+                          setMeds(mm);
+                          syncMedsToDados(mm);
+                        }}
+                      />
+                      <label className="flex items-center gap-1 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={m.m}
+                          onChange={e => {
+                            const mm = meds.slice();
+                            mm[idx] = { ...mm[idx], m: e.target.checked };
+                            setMeds(mm);
+                            syncMedsToDados(mm);
+                          }}
+                        />
+                        M
+                      </label>
+                      <label className="flex items-center gap-1 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={m.t}
+                          onChange={e => {
+                            const mm = meds.slice();
+                            mm[idx] = { ...mm[idx], t: e.target.checked };
+                            setMeds(mm);
+                            syncMedsToDados(mm);
+                          }}
+                        />
+                        T
+                      </label>
+                      <label className="flex items-center gap-1 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={m.n}
+                          onChange={e => {
+                            const mm = meds.slice();
+                            mm[idx] = { ...mm[idx], n: e.target.checked };
+                            setMeds(mm);
+                            syncMedsToDados(mm);
+                          }}
+                        />
+                        N
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             </div>
