@@ -16,6 +16,19 @@ import PreAnestesiaModal from './PreAnestesiaModal';
 import { Medico } from '../types';
 import { useToast } from '../contexts/ToastContext';
 
+const HOSPITAL_NAMES: Record<string, string> = {
+  '09ab26a8-8c2c-4a67-94f7-d450a1be328e': 'Hospital Regional Centro Oeste',
+  '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba': 'Hospital Municipal Santa Alice',
+  '4111b99d-8b4a-4b51-9561-a2fbd14e776e': 'Hospital Municipal Juarez Barreto de Macedo',
+  '4a2527c1-df09-4a36-a08f-adc63f555123': 'Hospital Maternidade Rio Branco do Sul',
+  '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7': 'Hospital Torao Tokuda',
+  '8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a': 'Hospital Municipal 18 de Dezembro',
+  '933de4fb-ebfd-4838-bb43-153a7354d333': 'Hospital Maternidade Nossa Senhora Aparecida',
+  'bbe11a40-2689-48af-9aa8-5c6e7f2e48da': 'Hospital Municipal São José',
+  'ece028c8-3c6d-4d0a-98aa-efaa3565b55f': 'Hospital Nossa Senhora Aparecida',
+};
+const getHospitalName = (id?: string) => (id && HOSPITAL_NAMES[id]) ? HOSPITAL_NAMES[id] : '';
+
 
 interface GradeCirurgicaModalProps {
   isOpen: boolean;
@@ -3640,7 +3653,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                       onClick={() => {
                                                         setPreModalInitial({
                                                           municipio: paciente.cidade || '',
-                                                          unidade_hospitalar: '',
+                                                          unidade_hospitalar: getHospitalName(hospitalId) || '',
                                                           nome_paciente: paciente.nome || '',
                                                           data_nascimento: paciente.dataNascimento || '',
                                                           idade: idade ? String(idade) : '',

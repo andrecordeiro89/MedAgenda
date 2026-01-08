@@ -138,7 +138,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
     if (hospitalSelecionado?.nome) {
       setDados(prev => ({
         ...prev,
-        unidade_hospitalar: prev.unidade_hospitalar || hospitalSelecionado.nome
+        unidade_hospitalar: hospitalSelecionado.nome
       }));
     }
   }, [hospitalSelecionado]);
@@ -423,125 +423,133 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       }
     >
       <div className="h-full w-full bg-gradient-to-br from-slate-50 via-white to-slate-100">
-        <div className="w-full h-full bg-white/95 backdrop-blur-sm border border-slate-200 rounded-none shadow-xl">
+        <div className="w-full h-full bg-transparent border-0 shadow-none">
           <div className="px-6 pt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-600">Município</span>
-                <input className="px-2 py-1 text-sm border rounded w-40" value={dados.municipio} onChange={e => setField('municipio', e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-12 gap-3 mt-4">
-              <div className="col-span-6">
-                <label className="text-xs text-slate-600">Unidade</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.unidade_hospitalar} onChange={e => setField('unidade_hospitalar', e.target.value)} />
-              </div>
-              <div className="col-span-4">
-                <label className="text-xs text-slate-600">Data de nascimento</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.data_nascimento} onChange={e => setField('data_nascimento', e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-slate-600">Idade</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.idade} onChange={e => setField('idade', e.target.value)} />
-              </div>
-              <div className="col-span-6">
-                <label className="text-xs text-slate-600">Nome</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.nome_paciente} onChange={e => setField('nome_paciente', e.target.value)} />
-              </div>
-              <div className="col-span-4">
-                <label className="text-xs text-slate-600">Procedimento(s)</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.procedimento_s} onChange={e => setField('procedimento_s', e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-slate-600">Sexo</label>
-                <div className="flex items-center gap-3 px-2 py-1 border rounded">
-                  <label className="flex items-center gap-1 text-sm"><input type="radio" name="sexo" checked={dados.sexo === 'F'} onChange={() => setField('sexo', 'F')} />F</label>
-                  <label className="flex items-center gap-1 text-sm"><input type="radio" name="sexo" checked={dados.sexo === 'M'} onChange={() => setField('sexo', 'M')} />M</label>
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-2">Identificação</div>
+              <div className="p-4 grid grid-cols-12 gap-3 bg-white">
+                <div className="col-span-4">
+                  <label className="text-xs text-slate-600">Município</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.municipio} onChange={e => setField('municipio', e.target.value)} />
                 </div>
-              </div>
-              <div className="col-span-6">
-                <label className="text-xs text-slate-600">Cirurgião</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.cirurgiao} onChange={e => setField('cirurgiao', e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 border-t border-slate-200" />
-
-          <div className="px-6 py-4 grid grid-cols-12 gap-3">
-            <div className="col-span-6">
-              <label className="text-xs text-slate-600">Cirurgias prévias</label>
-              <input className="w-full px-2 py-1 text-sm border rounded" value={dados.cirurgias_previas} onChange={e => setField('cirurgias_previas', e.target.value)} />
-            </div>
-            <div className="col-span-6">
-              <label className="text-xs text-slate-600">Intercorrências anestésicas</label>
-              <div className="flex items-center gap-4 px-2 py-1 border rounded">
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="interc" checked={dados.intercorrencias_anestesicas === 'Sim'} onChange={() => setField('intercorrencias_anestesicas', 'Sim')} />Sim</label>
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="interc" checked={dados.intercorrencias_anestesicas === 'Não'} onChange={() => setField('intercorrencias_anestesicas', 'Não')} />Não</label>
-              </div>
-            </div>
-            <div className="col-span-6">
-              <label className="text-xs text-slate-600">Alergias</label>
-              <div className="flex items-center gap-4 px-2 py-1 border rounded">
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="alergias" checked={dados.alergias === 'Sim'} onChange={() => setField('alergias', 'Sim')} />Sim</label>
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="alergias" checked={dados.alergias === 'Não'} onChange={() => setField('alergias', 'Não')} />Não</label>
-              </div>
-            </div>
-            <div className="col-span-6">
-              <label className="text-xs text-slate-600">Tabagismo</label>
-              <div className="flex items-center gap-4 px-2 py-1 border rounded">
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="tabagismo" checked={dados.tabagismo === 'Sim'} onChange={() => setField('tabagismo', 'Sim')} />Sim</label>
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="tabagismo" checked={dados.tabagismo === 'Não'} onChange={() => setField('tabagismo', 'Não')} />Não</label>
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="tabagismo" checked={dados.tabagismo === 'Ex-tabagista'} onChange={() => setField('tabagismo', 'Ex-tabagista')} />Ex-tabagista</label>
-              </div>
-            </div>
-            <div className="col-span-6">
-              <label className="text-xs text-slate-600">Etilismo</label>
-              <div className="flex items-center gap-4 px-2 py-1 border rounded">
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="etilismo" checked={dados.etilismo === 'Sim'} onChange={() => setField('etilismo', 'Sim')} />Sim</label>
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="etilismo" checked={dados.etilismo === 'Não'} onChange={() => setField('etilismo', 'Não')} />Não</label>
-                <label className="flex items-center gap-1 text-sm"><input type="radio" name="etilismo" checked={dados.etilismo === 'Ex-etilista'} onChange={() => setField('etilismo', 'Ex-etilista')} />Ex-etilista</label>
-              </div>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-slate-600">Peso (kg)</label>
-              <input className="w-full px-2 py-1 text-sm border rounded" value={dados.peso_kg} onChange={e => setField('peso_kg', e.target.value)} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-slate-600">Altura (cm)</label>
-              <input className="w-full px-2 py-1 text-sm border rounded" value={dados.altura_cm} onChange={e => setField('altura_cm', e.target.value)} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-slate-600">IMC (kg/m²)</label>
-              <input className="w-full px-2 py-1 text-sm border rounded" value={dados.imc_kg_m2} onChange={e => setField('imc_kg_m2', e.target.value)} />
-            </div>
-          </div>
-
-          <div className="px-6">
-            <div className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-t-lg px-3 py-2">Comorbidades</div>
-            <div className="border border-slate-200 border-t-0 p-4 grid grid-cols-12 gap-3">
-              {[
-                ['Hipertensão arterial','hipertensao_arterial'],
-                ['Precordialgia','precordialgia'],
-                ['Palpitação','palpitacao'],
-                ['Dispneia','dispneia'],
-                ['Doença renal','doenca_renal'],
-                ['IAM prévio','iam_previo'],
-                ['Cateterismo prévio','cateterismo_previo'],
-                ['AVC prévio','avc_previo'],
-                ['Hipotireoidismo','hipotireoidismo'],
-                ['Hipertireoidismo','hipertireoidismo'],
-                ['Diabetes melitus','diabetes_melitus'],
-                ['Uso anticoagulante/antiagregante','uso_anticoagulante_antiagregante'],
-              ].map(([label,key]) => (
-                <div key={key} className="col-span-4">
-                  <div className="text-xs text-slate-700">{label}</div>
-                  <div className="flex items-center gap-4 px-2 py-1 border rounded">
-                    <label className="flex items-center gap-1 text-sm"><input type="radio" name={String(key)} checked={(dados as any)[key] === 'Sim'} onChange={() => setField(key as keyof PreAnestesiaDados, 'Sim')} />Sim</label>
-                    <label className="flex items-center gap-1 text-sm"><input type="radio" name={String(key)} checked={(dados as any)[key] === 'Não'} onChange={() => setField(key as keyof PreAnestesiaDados, 'Não')} />Não</label>
+                <div className="col-span-4">
+                  <label className="text-xs text-slate-600">Unidade</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded bg-slate-100" value={dados.unidade_hospitalar} readOnly />
+                </div>
+                <div className="col-span-4">
+                  <label className="text-xs text-slate-600">Data de nascimento</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.data_nascimento} onChange={e => setField('data_nascimento', e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-slate-600">Idade</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.idade} onChange={e => setField('idade', e.target.value)} />
+                </div>
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Nome</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.nome_paciente} onChange={e => setField('nome_paciente', e.target.value)} />
+                </div>
+                <div className="col-span-4">
+                  <label className="text-xs text-slate-600">Procedimento(s)</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.procedimento_s} onChange={e => setField('procedimento_s', e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-slate-600">Sexo</label>
+                  <div className="flex items-center gap-3 px-2 py-1 border rounded">
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="sexo" checked={dados.sexo === 'F'} onChange={() => setField('sexo', 'F')} />F</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="sexo" checked={dados.sexo === 'M'} onChange={() => setField('sexo', 'M')} />M</label>
                   </div>
                 </div>
-              ))}
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Cirurgião</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.cirurgiao} onChange={e => setField('cirurgiao', e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 mt-4 relative z-10">
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-2">Informações Prévias</div>
+              <div className="p-4 grid grid-cols-12 gap-3 bg-white">
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Cirurgias prévias</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.cirurgias_previas} onChange={e => setField('cirurgias_previas', e.target.value)} />
+                </div>
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Intercorrências anestésicas</label>
+                  <div className="flex items-center gap-4 px-2 py-1 border rounded">
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="interc" checked={dados.intercorrencias_anestesicas === 'Sim'} onChange={() => setField('intercorrencias_anestesicas', 'Sim')} />Sim</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="interc" checked={dados.intercorrencias_anestesicas === 'Não'} onChange={() => setField('intercorrencias_anestesicas', 'Não')} />Não</label>
+                  </div>
+                </div>
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Alergias</label>
+                  <div className="flex items-center gap-4 px-2 py-1 border rounded">
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="alergias" checked={dados.alergias === 'Sim'} onChange={() => setField('alergias', 'Sim')} />Sim</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="alergias" checked={dados.alergias === 'Não'} onChange={() => setField('alergias', 'Não')} />Não</label>
+                  </div>
+                </div>
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Tabagismo</label>
+                  <div className="flex items-center gap-4 px-2 py-1 border rounded">
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="tabagismo" checked={dados.tabagismo === 'Sim'} onChange={() => setField('tabagismo', 'Sim')} />Sim</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="tabagismo" checked={dados.tabagismo === 'Não'} onChange={() => setField('tabagismo', 'Não')} />Não</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="tabagismo" checked={dados.tabagismo === 'Ex-tabagista'} onChange={() => setField('tabagismo', 'Ex-tabagista')} />Ex-tabagista</label>
+                  </div>
+                </div>
+                <div className="col-span-6">
+                  <label className="text-xs text-slate-600">Etilismo</label>
+                  <div className="flex items-center gap-4 px-2 py-1 border rounded">
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="etilismo" checked={dados.etilismo === 'Sim'} onChange={() => setField('etilismo', 'Sim')} />Sim</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="etilismo" checked={dados.etilismo === 'Não'} onChange={() => setField('etilismo', 'Não')} />Não</label>
+                    <label className="flex items-center gap-1 text-sm"><input type="radio" name="etilismo" checked={dados.etilismo === 'Ex-etilista'} onChange={() => setField('etilismo', 'Ex-etilista')} />Ex-etilista</label>
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-slate-600">Peso (kg)</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.peso_kg} onChange={e => setField('peso_kg', e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-slate-600">Altura (cm)</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.altura_cm} onChange={e => setField('altura_cm', e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-slate-600">IMC (kg/m²)</label>
+                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.imc_kg_m2} onChange={e => setField('imc_kg_m2', e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 mt-4">
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-2">Comorbidades</div>
+              <div className="p-4 grid grid-cols-12 gap-3 bg-white">
+              {(() => {
+                const itens = [
+                  ['Hipertensão arterial','hipertensao_arterial'],
+                  ['Precordialgia','precordialgia'],
+                  ['Palpitação','palpitacao'],
+                  ['Dispneia','dispneia'],
+                  ['Doença renal','doenca_renal'],
+                  ['IAM prévio','iam_previo'],
+                  ['Cateterismo prévio','cateterismo_previo'],
+                  ['AVC prévio','avc_previo'],
+                  ['Hipotireoidismo','hipotireoidismo'],
+                  ['Hipertireoidismo','hipertireoidismo'],
+                  ['Diabetes melitus','diabetes_melitus'],
+                  ['Uso anticoagulante/antiagregante','uso_anticoagulante_antiagregante'],
+                ] as const;
+                return itens.map(([label,key]) => (
+                  <div key={key} className="col-span-4">
+                    <div className="text-xs text-slate-700">{label}</div>
+                    <div className="flex items-center gap-4 px-2 py-1 border rounded">
+                      <label className="flex items-center gap-1 text-sm"><input type="radio" name={String(key)} checked={(dados as any)[key] === 'Sim'} onChange={() => setField(key as keyof PreAnestesiaDados, 'Sim')} />Sim</label>
+                      <label className="flex items-center gap-1 text-sm"><input type="radio" name={String(key)} checked={(dados as any)[key] === 'Não'} onChange={() => setField(key as keyof PreAnestesiaDados, 'Não')} />Não</label>
+                    </div>
+                  </div>
+                ));
+              })()}
               <div className="col-span-6">
                 <div className="text-xs text-slate-700">Observações/Outras comorbidades</div>
                 <textarea className="w-full px-2 py-1 text-sm border rounded h-20" value={dados.observacoes_outras_comorbidades} onChange={e => setField('observacoes_outras_comorbidades', e.target.value)} />
@@ -550,6 +558,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
                 <div className="text-xs text-slate-700">Medicamentos de uso contínuo</div>
                 <textarea className="w-full px-2 py-1 text-sm border rounded h-20" value={dados.medicamentos_uso_continuo} onChange={e => setField('medicamentos_uso_continuo', e.target.value)} />
               </div>
+            </div>
             </div>
           </div>
 
@@ -609,7 +618,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
 
           {erro && <div className="px-6 py-2 text-sm text-red-600">{erro}</div>}
 
-          <div className="px-6 py-4 flex justify-end gap-2 bg-slate-50 border-t border-slate-200 rounded-b-2xl">
+          <div className="px-6 py-4 mt-4 flex justify-end gap-2 bg-slate-50 border-t border-slate-200 rounded-b-2xl">
             <button onClick={onClose} className="px-4 py-2 border rounded">Cancelar</button>
             <button onClick={save} disabled={salvando} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{salvando ? 'Salvando...' : 'Salvar'}</button>
           </div>
