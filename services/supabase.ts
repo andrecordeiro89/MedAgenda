@@ -704,6 +704,34 @@ export const triagemPreAnestesicaService = {
     if (error) throw new Error(error.message)
     return data
   }
+  ,
+  async saveOrUpdate(payload: Record<string, string>): Promise<any> {
+    const nome = payload['nome_paciente']
+    const nascimento = payload['data_nascimento']
+    if (!nome || !nascimento) {
+      return await this.create(payload)
+    }
+    const { data: existing, error: selectError } = await supabase
+      .from('triagem_pre_anestesica')
+      .select('id')
+      .eq('nome_paciente', nome)
+      .eq('data_nascimento', nascimento)
+      .limit(1)
+      .maybeSingle()
+    if (selectError) throw new Error(selectError.message)
+    if (existing?.id) {
+      const { data, error } = await supabase
+        .from('triagem_pre_anestesica')
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .single()
+      if (error) throw new Error(error.message)
+      return data
+    } else {
+      return await this.create(payload)
+    }
+  }
 }
 // ============================================
 // SERVIÇOS DE ESTATÍSTICAS

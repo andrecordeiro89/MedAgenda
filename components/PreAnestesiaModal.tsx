@@ -395,7 +395,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
     setErro(null);
     setSalvando(true);
     try {
-      await triagemPreAnestesicaService.create(dados);
+      await triagemPreAnestesicaService.saveOrUpdate(dados as any);
       onClose();
     } catch (e: any) {
       setErro(e.message || 'Erro ao salvar');
