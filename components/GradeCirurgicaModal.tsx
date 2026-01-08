@@ -278,6 +278,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                   medicoId?: string;
                   medicoNome?: string;
                   statusAih?: string | null;
+                  avaliacaoAnestesista?: 'aprovado' | 'reprovado' | 'complementares' | null;
                   paciente?: {
                     nome: string;
                     dataNascimento: string;
@@ -311,6 +312,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       especificacao: agendamento.procedimento_especificacao || undefined // Carregar especificação
                     };
                     procedimentoData.statusAih = agendamento.status_aih || 'Pendência Faturamento';
+                    procedimentoData.avaliacaoAnestesista = agendamento.avaliacao_anestesista || null;
                     
                     // Log para debug de especificação
                     if (agendamento.procedimento_especificacao) {
@@ -392,7 +394,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     agendamentoId: proc.agendamentoId,
                     ...(proc.medicoId && { medicoId: proc.medicoId }),
                     ...(proc.medicoNome && { medicoNome: proc.medicoNome }),
-                    ...(proc.statusAih !== undefined && { statusAih: proc.statusAih })
+                    ...(proc.statusAih !== undefined && { statusAih: proc.statusAih }),
+                    ...(proc.avaliacaoAnestesista !== undefined && { avaliacaoAnestesista: proc.avaliacaoAnestesista })
                   };
                   
                   // Sempre incluir especificação (mesmo que seja undefined)
@@ -586,6 +589,28 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       onConfirm: () => setModalConfirmacao(false)
     });
     setModalConfirmacao(true);
+  };
+  
+  // Atualizar avaliação do anestesista (sincroniza com tabela agendamentos)
+  const handleSetAvaliacaoAnestesista = async (gradeIndex: number, itemId: string, status: 'aprovado' | 'reprovado' | 'complementares') => {
+    const grade = grades[gradeIndex];
+    const item = grade.itens.find(i => i.id === itemId);
+    if (!item || item.tipo !== 'procedimento' || !item.agendamentoId) return;
+    // Atualizar UI local imediatamente
+    setGrades(prev => prev.map((g, gi) => gi === gradeIndex ? ({
+      ...g,
+      itens: g.itens.map(it => it.id === itemId ? ({ ...it, avaliacaoAnestesista: status }) : it)
+    }) : g));
+    // Persistir no banco
+    try {
+      await agendamentoService.update(item.agendamentoId, {
+        avaliacao_anestesista: status,
+        avaliacao_anestesista_data: new Date().toISOString()
+      } as any);
+    } catch (error) {
+      console.error('Erro ao atualizar avaliação anestesista:', error);
+      mostrarMensagem('❌ Erro', 'Falha ao salvar a avaliação. Tente novamente.', 'erro');
+    }
   };
 
   // Salvamento removido - dados são salvos automaticamente no Supabase ao adicionar
@@ -3474,7 +3499,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-36">Médico</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-28">Status AIH</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-40">Nº Prontuário</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-32">Nº Prontuário</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-44">Avaliação Anestesista</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-24">Ações</th>
           </tr>
@@ -3605,8 +3631,53 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                                 </div>
                                               </td>
                                               {/* Coluna Nº Prontuário */}
-                                              <td className="px-3 py-2 border-r border-slate-200 w-40 overflow-hidden">
+                                              <td className="px-3 py-2 border-r border-slate-200 w-32 overflow-hidden">
                                                 <span className="text-sm text-slate-700 truncate">{paciente.prontuario || '-'}</span>
+                                              </td>
+                                              
+                                              {/* Coluna Avaliação Anestesista */}
+                                              <td className="px-3 py-2 border-r border-slate-200 w-44 overflow-hidden">
+                                                {isFirstPaciente ? (
+                                                  <div className="flex items-center gap-1">
+                                                    <button
+                                                      onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'aprovado')}
+                                                      className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                                        proc.avaliacaoAnestesista === 'aprovado'
+                                                          ? 'bg-green-100 border-green-400 text-green-700'
+                                                          : 'bg-white border-slate-300 text-slate-700'
+                                                      }`}
+                                                      title="Aprovado"
+                                                    >
+                                                      Aprovado
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'reprovado')}
+                                                      className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                                        proc.avaliacaoAnestesista === 'reprovado'
+                                                          ? 'bg-red-100 border-red-400 text-red-700'
+                                                          : 'bg-white border-slate-300 text-slate-700'
+                                                      }`}
+                                                      title="Reprovado"
+                                                    >
+                                                      Reprovado
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'complementares')}
+                                                      className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                                        proc.avaliacaoAnestesista === 'complementares'
+                                                          ? 'bg-amber-100 border-amber-400 text-amber-700'
+                                                          : 'bg-white border-slate-300 text-slate-700'
+                                                      }`}
+                                                      title="Complementares"
+                                                    >
+                                                      Compl.
+                                                    </button>
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-xs text-slate-500">
+                                                    {proc.avaliacaoAnestesista ? proc.avaliacaoAnestesista : '-'}
+                                                  </span>
+                                                )}
                                               </td>
                                               
                                               {/* Coluna Idade */}

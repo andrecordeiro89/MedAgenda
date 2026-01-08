@@ -169,6 +169,7 @@ export interface GradeCirurgicaItem {
     medicoNome?: string; // Nome do médico associado ao procedimento (para exibição)
     especificacao?: string; // Especificação editável do procedimento (ex: "meniscectomia medial à esquerda")
     statusAih?: string | null; // Status AIH do procedimento/agendamento
+    avaliacaoAnestesista?: 'aprovado' | 'reprovado' | 'complementares' | null; // Status da avaliação do anestesista (triagem visual)
 }
 
 export interface GradeCirurgicaDia {
