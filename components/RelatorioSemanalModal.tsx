@@ -71,13 +71,13 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
     year: 'numeric' 
   });
 
-  // Filtrar médicos que têm procedimentos nos dias selecionados
+  // Filtrar médicos que têm procedimentos nos dias selecionados (sem exigir paciente)
   const medicosDisponiveis = useMemo(() => {
     if (diasSelecionados.size === 0) {
       return []; // Se nenhum dia selecionado, não mostrar médicos
     }
 
-    // Buscar médicos únicos que têm procedimentos COM PACIENTE nos dias selecionados
+    // Buscar médicos únicos com registros nos dias selecionados (independente de paciente)
     const nomeMedicosSet = new Set<string>();
     
     agendamentosCarregados.forEach(ag => {
@@ -88,14 +88,10 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       
       // Verificar se é um dos dias selecionados
       if (diasSelecionados.has(dataNormalizada)) {
-        // Verificar se tem paciente
-        const nomePaciente = ag.nome_paciente || ag.nome || '';
-        const temPaciente = nomePaciente.trim() !== '';
-        
         // Verificar se tem médico
         const medicoNome = ag.medico || '';
         
-        if (temPaciente && medicoNome.trim() !== '') {
+        if (medicoNome.trim() !== '') {
           nomeMedicosSet.add(medicoNome.trim());
         }
       }

@@ -94,10 +94,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         return 'bg-green-50 border-green-400 text-green-800';
       case 'pendência hospital':
       case 'pendencia hospital':
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-orange-50 border-orange-400 text-orange-800';
       case 'pendência faturamento':
       case 'pendencia faturamento':
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-rose-50 border-rose-400 text-rose-800';
       case 'auditor externo':
         return 'bg-indigo-50 border-indigo-400 text-indigo-800';
       case 'aguardando ciência sms':
@@ -124,10 +124,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         return 'bg-green-500';
       case 'pendência hospital':
       case 'pendencia hospital':
-        return 'bg-amber-500';
+        return 'bg-orange-500';
       case 'pendência faturamento':
       case 'pendencia faturamento':
-        return 'bg-amber-500';
+        return 'bg-rose-500';
       case 'auditor externo':
         return 'bg-indigo-500';
       case 'aguardando ciência sms':
@@ -395,7 +395,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     ...(proc.medicoId && { medicoId: proc.medicoId }),
                     ...(proc.medicoNome && { medicoNome: proc.medicoNome }),
                     ...(proc.statusAih !== undefined && { statusAih: proc.statusAih }),
-                    ...(proc.avaliacaoAnestesista !== undefined && { avaliacaoAnestesista: proc.avaliacaoAnestesista })
+                    ...(proc.avaliacaoAnestesista !== undefined && { avaliacaoAnestesista: proc.avaliacaoAnestesista }),
+                    ...(proc.paciente && proc.paciente.prontuario !== undefined && { n_prontuario: proc.paciente.prontuario })
                   };
                   
                   // Sempre incluir especificação (mesmo que seja undefined)
@@ -897,6 +898,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       });
       
       setGrades(updatedGrades);
+      // Recarregar do banco para garantir persistência (inclui n_prontuario)
+      try {
+        await recarregarGradesDoSupabase();
+      } catch (e) {
+        console.warn('⚠️ Falha ao recarregar grades após salvar paciente, mantendo estado local', e);
+      }
       
       // Limpar estados mas MANTER o formulário aberto para adicionar mais especialidades
       // IMPORTANTE: Limpar apenas após salvar com sucesso
@@ -2194,14 +2201,14 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       
       console.log(`✅ Paciente ${modoEdicao ? 'atualizado' : 'cadastrado'} com sucesso!`);
       
-      const novoPaciente = {
-        nome: pacienteNome,
-        dataNascimento: pacienteDataNascimento,
-        cidade: pacienteCidade || null,
-        telefone: pacienteTelefone || null,
-        dataConsulta: pacienteDataConsulta || null,
-        prontuario: pacienteProntuario || null
-      };
+        const novoPaciente = {
+          nome: pacienteNome,
+          dataNascimento: pacienteDataNascimento,
+          cidade: pacienteCidade || null,
+          telefone: pacienteTelefone || null,
+          dataConsulta: pacienteDataConsulta || null,
+          prontuario: pacienteProntuario || null
+        };
       
       // Atualizar UI
       const updatedGrades = grades.map((grade, i) => {
@@ -3632,7 +3639,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </td>
                                               {/* Coluna Nº Prontuário */}
                                               <td className="px-3 py-2 border-r border-slate-200 w-32 overflow-hidden">
-                                                <span className="text-sm text-slate-700 truncate">{paciente.prontuario || '-'}</span>
+                                                <span className="text-sm text-slate-700 truncate">{paciente.prontuario ?? (proc as any).n_prontuario ?? '-'}</span>
                                               </td>
                                               
                                               {/* Coluna Avaliação Anestesista */}

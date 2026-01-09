@@ -446,6 +446,8 @@ export const agendamentoService = {
       documentos_meta: item.documentos_meta ?? null,
       observacao_agendamento: item.observacao_agendamento ?? null,
       n_prontuario: item.n_prontuario ?? null,
+      // Alias para compatibilidade em locais que usam 'prontuario'
+      prontuario: item.n_prontuario ?? null,
       especialidade: item.especialidade || null,
       procedimentos: item.procedimentos || null,
       procedimento_especificacao: item.procedimento_especificacao || null,
