@@ -30,6 +30,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
   const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
   const [filtroObservacao, setFiltroObservacao] = useState<string>('');
+  const [filtroDataInsercao, setFiltroDataInsercao] = useState<string>('');
   const [cancelInfoOpen, setCancelInfoOpen] = useState<{ [id: string]: boolean }>({});
   const [aihDropdownOpen, setAihDropdownOpen] = useState<{ [id: string]: boolean }>({});
   
@@ -67,7 +68,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     'Solicitar',
     'Emitida',
     'AIH Represada',
-    'AG Ciência SMS'
+    'AG Ciência SMS',
+    'N/A - Urgência'
   ];
   
   // Estado para controlar visualização de pendências
@@ -199,6 +201,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         return 'bg-red-50 border-red-400 text-red-800';
       case 'ag ciência sms':
         return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'n/a - urgência':
+        return 'bg-purple-50 border-purple-400 text-purple-800';
       default:
         return 'bg-white border-gray-300 text-gray-600';
     }
@@ -229,6 +233,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         return 'bg-red-500';
       case 'ag ciência sms':
         return 'bg-blue-500';
+      case 'n/a - urgência':
+        return 'bg-purple-500';
       default:
         return 'bg-gray-300';
     }
@@ -512,6 +518,13 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         if (filtroObservacao === 'sem_observacao' && temObservacao) return false;
       }
       
+      // Filtro por Data de Inserção (created_at, formato YYYY-MM-DD)
+      if (filtroDataInsercao) {
+        const created = (ag.created_at || '').toString();
+        const datePart = created.includes('T') ? created.split('T')[0] : created.substring(0, 10);
+        if (!datePart || datePart !== filtroDataInsercao) return false;
+      }
+      
       return true;
     });
   };
@@ -532,6 +545,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setFiltroStatusInterno('');
     setFiltroConfirmado('');
     setFiltroObservacao('');
+    setFiltroDataInsercao('');
   };
 
   const handleAbrirModalRelatorio = () => {
@@ -795,7 +809,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     doc.save(nomeArquivo);
   };
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao;
+  const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroDataInsercao;
   
   // Alternar ordenação ao clicar no cabeçalho
   const handleOrdenacao = (coluna: 'data_consulta' | 'data_cirurgia') => {
@@ -864,7 +878,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatusExames, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao]);
+  }, [filtroStatusExames, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroDataInsercao]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -1532,6 +1546,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       'Pendência Faturamento',
                       'Auditor Externo',
                       'Aguardando Ciência SMS',
+                      'N/A - Urgência',
                     ].map(op => (
                       <button
                         key={op}
@@ -1746,6 +1761,22 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Procedimento</div>
                   <div className="text-sm text-gray-900">{ag.procedimentos || '-'}</div>
                 </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Inserido em</div>
+                  <div className="text-sm text-gray-900">
+                    {ag.created_at
+                      ? `${formatarData(ag.created_at.split('T')[0])} às ${new Date(ag.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                      : '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Última modificação</div>
+                  <div className="text-sm text-gray-900">
+                    {ag.updated_at
+                      ? `${formatarData(ag.updated_at.split('T')[0])} às ${new Date(ag.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                      : '-'}
+                  </div>
+                </div>
               </div>
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
@@ -1900,7 +1931,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 <option value="Pendência Faturamento">Pendência Faturamento</option>
                 <option value="Auditor Externo">Auditor Externo</option>
                 <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+                <option value="N/A - Urgência">N/A - Urgência</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">📄 Data Inserção</label>
+              <input
+                type="date"
+                value={filtroDataInsercao}
+                onChange={(e) => setFiltroDataInsercao(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white"
+              />
             </div>
           </div>
           

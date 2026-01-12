@@ -295,6 +295,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return 'bg-red-50 border-red-400 text-red-800';
       case 'ag ciência sms':
         return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'n/a - urgência':
+        return 'bg-purple-50 border-purple-400 text-purple-800';
       default:
         return 'bg-white border-gray-300 text-gray-600';
     }
@@ -326,6 +328,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return 'bg-red-500';
       case 'ag ciência sms':
         return 'bg-blue-500';
+      case 'n/a - urgência':
+        return 'bg-purple-500';
       default:
         return 'bg-gray-300';
     }
@@ -2338,33 +2342,34 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           </div>
           
           {/* Filtro Status AIH */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              🧾 Status AIH
-            </label>
-            <select
-              value={filtroAih}
-              onChange={(e) => setFiltroAih(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
-                filtroAih 
-                  ? 'border-amber-500 bg-amber-50' 
-                  : 'border-gray-300'
-              }`}
-            >
-              <option value="">📊 Todos</option>
-              <option value="Autorizado">Autorizado</option>
-              <option value="Pendência Hospital">Pendência Hospital</option>
-              <option value="Pendência Faturamento">Pendência Faturamento</option>
-              <option value="Auditor Externo">Auditor Externo</option>
-              <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
-              <option value="Agendado">Agendado</option>
-              <option value="AG Regulação">AG Regulação</option>
-              <option value="Solicitar">Solicitar</option>
-              <option value="Emitida">Emitida</option>
-              <option value="AIH Represada">AIH Represada</option>
-              <option value="AG Ciência SMS">AG Ciência SMS</option>
-            </select>
-          </div>
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        🧾 Status AIH
+      </label>
+      <select
+        value={filtroAih}
+        onChange={(e) => setFiltroAih(e.target.value)}
+        className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
+          filtroAih 
+            ? 'border-amber-500 bg-amber-50' 
+            : 'border-gray-300'
+        }`}
+      >
+        <option value="">📊 Todos</option>
+        <option value="Autorizado">Autorizado</option>
+        <option value="Pendência Hospital">Pendência Hospital</option>
+        <option value="Pendência Faturamento">Pendência Faturamento</option>
+        <option value="Auditor Externo">Auditor Externo</option>
+        <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+        <option value="Agendado">Agendado</option>
+        <option value="AG Regulação">AG Regulação</option>
+        <option value="Solicitar">Solicitar</option>
+        <option value="Emitida">Emitida</option>
+        <option value="AIH Represada">AIH Represada</option>
+        <option value="AG Ciência SMS">AG Ciência SMS</option>
+        <option value="N/A - Urgência">N/A - Urgência</option>
+      </select>
+    </div>
           
           {/* Filtro Confirmado */}
           <div>
