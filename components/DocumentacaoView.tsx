@@ -1889,6 +1889,38 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   </div>
                 </div>
               </div>
+              
+              {ag.avaliacao_anestesista && (
+                <div className={`mt-4 p-3 rounded-lg border-l-4 ${
+                  ag.avaliacao_anestesista === 'aprovado'
+                    ? 'bg-green-50 border-green-500'
+                    : ag.avaliacao_anestesista === 'reprovado'
+                    ? 'bg-red-50 border-red-500'
+                    : 'bg-amber-50 border-amber-500'
+                }`}>
+                  <div className={`text-sm font-bold mb-1 ${
+                    ag.avaliacao_anestesista === 'aprovado'
+                      ? 'text-green-800'
+                      : ag.avaliacao_anestesista === 'reprovado'
+                      ? 'text-red-800'
+                      : 'text-amber-800'
+                  }`}>
+                    {ag.avaliacao_anestesista === 'aprovado' && '✅ AVALIAÇÃO ANESTESISTA: APROVADO'}
+                    {ag.avaliacao_anestesista === 'reprovado' && '❌ AVALIAÇÃO ANESTESISTA: REPROVADO'}
+                    {ag.avaliacao_anestesista === 'complementares' && 'ℹ️ AVALIAÇÃO ANESTESISTA: COMPLEMENTARES'}
+                  </div>
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {ag.avaliacao_anestesista === 'aprovado' && (ag.avaliacao_anestesista_observacao || '-')}
+                    {ag.avaliacao_anestesista === 'reprovado' && (ag.avaliacao_anestesista_motivo_reprovacao || '-')}
+                    {ag.avaliacao_anestesista === 'complementares' && (ag.avaliacao_anestesista_complementares || '-')}
+                  </div>
+                  {ag.avaliacao_anestesista_data && (
+                    <div className="text-xs text-gray-500 mt-2">
+                      Marcado em: {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  )}
+                </div>
+              )}
             </td>
           </tr>
         )}
