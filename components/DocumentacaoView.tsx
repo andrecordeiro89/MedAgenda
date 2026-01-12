@@ -35,6 +35,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
   const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
   const [filtroAvaliacaoAnestesista, setFiltroAvaliacaoAnestesista] = useState<string>('');
+  const [filtroDataInsercao, setFiltroDataInsercao] = useState<string>('');
   
   // Estados para ordenação por data
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
@@ -558,6 +559,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       if (filtroObservacao === 'sem_observacao' && temObs) return false;
     }
     
+    if (filtroDataInsercao) {
+      const created = (ag.created_at || '').toString();
+      const datePart = created.includes('T') ? created.split('T')[0] : created.substring(0, 10);
+      if (!datePart || datePart !== filtroDataInsercao) return false;
+    }
+    
     if (filtroConfirmado) {
       const c = (ag.confirmacao || '').toString().toLowerCase();
       if (filtroConfirmado.toLowerCase() === 'confirmado') {
@@ -658,7 +665,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao]);
+  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroAvaliacaoAnestesista, filtroDataInsercao]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -688,10 +695,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setFiltroStatusInterno('');
     setFiltroConfirmado('');
     setFiltroObservacao('');
+    setFiltroAvaliacaoAnestesista('');
+    setFiltroDataInsercao('');
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroAvaliacaoAnestesista;
+  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroAvaliacaoAnestesista || filtroDataInsercao;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -1785,6 +1794,30 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     {ag.procedimentos || '-'}
                   </div>
                 </div>
+                
+                {/* Inserido em */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Inserido em
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {ag.created_at
+                      ? `${formatarData(ag.created_at.split('T')[0])} às ${new Date(ag.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                      : '-'}
+                  </div>
+                </div>
+                
+                {/* Última modificação */}
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                    Última modificação
+                  </div>
+                  <div className="text-sm text-gray-900">
+                    {ag.updated_at
+                      ? `${formatarData(ag.updated_at.split('T')[0])} às ${new Date(ag.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                      : '-'}
+                  </div>
+                </div>
                 </div>
               
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -2406,6 +2439,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <option value="2026-11">Novembro/2026</option>
               <option value="2026-12">Dezembro/2026</option>
             </select>
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              📄 Data Inserção
+            </label>
+            <input
+              type="date"
+              value={filtroDataInsercao}
+              onChange={(e) => setFiltroDataInsercao(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white"
+            />
           </div>
           
           {/* Filtro Médico (removido input; usar dropdown acima) */}
