@@ -48,7 +48,7 @@ const simpleMetaEspecialidadeService = mockServices.metaEspecialidade;
 // ============================================================================
 const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
-    const { hospitalSelecionado, addHospitalFilter, hasAccessToView } = useHospitalFilter();
+    const { hospitalSelecionado, addHospitalFilter, hasAccessToView, userRole } = useHospitalFilter();
     
     // PERSISTÊNCIA: Carregar tela atual do localStorage
     const [currentView, setCurrentView] = useState<View>(() => {
@@ -140,7 +140,7 @@ const AppContent: React.FC = () => {
         }
     }, [isAuthenticated, hospitalSelecionado]);
     
-    // Sempre iniciar no Dashboard após login
+    // Sempre iniciar no Dashboard após login (incluindo anestesista)
     useEffect(() => {
         if (isAuthenticated) {
             changeView('dashboard');

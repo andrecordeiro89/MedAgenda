@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { agendamentoService, supabase } from '../services/supabase';
-import { Agendamento } from '../types';
+import { agendamentoService, supabase, medicoService } from '../services/supabase';
+import { Agendamento, Medico } from '../types';
 import { Modal } from './ui';
 import { ToastContainer, ToastType } from './Toast';
 import { useToast } from '../contexts/ToastContext';
@@ -34,7 +34,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>('');
-  const [filtroMedico, setFiltroMedico] = useState<string>('');
+  const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
+  const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
+  const [filtroAvaliacaoAnestesista, setFiltroAvaliacaoAnestesista] = useState<string>('');
   
   // Estados para ordenação por data
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
@@ -71,6 +73,15 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   // Carregar agendamentos
   useEffect(() => {
     carregarAgendamentos();
+  }, [hospitalId]);
+  useEffect(() => {
+    const carregarMedicos = async () => {
+      try {
+        const medicos = await medicoService.getAll(hospitalId);
+        setMedicosDisponiveis(medicos || []);
+      } catch {}
+    };
+    if (hospitalId) carregarMedicos();
   }, [hospitalId]);
 
   const carregarAgendamentos = async () => {
@@ -229,9 +240,23 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       if (mesCirurgia !== filtroMesCirurgia) return false;
     }
     
-    if (filtroMedico) {
-      const medico = (ag.medico || '').toLowerCase();
-      if (!medico.includes(filtroMedico.toLowerCase())) return false;
+    if (filtroMedicoId) {
+      const sel = medicosDisponiveis.find(m => m.id === filtroMedicoId);
+      if (!sel) return false;
+      const agMedicoNome = (ag.medico || '').toString().trim();
+      const agMedicoId = (ag.medico_id || ag.medicoId || '').toString().trim();
+      const matchById = agMedicoId !== '' && agMedicoId === filtroMedicoId;
+      const matchByName = agMedicoNome !== '' && agMedicoNome.toLowerCase() === sel.nome.toLowerCase();
+      if (!matchById && !matchByName) return false;
+    }
+    if (filtroAvaliacaoAnestesista) {
+      const val = (ag.avaliacao_anestesista || '').toString().toLowerCase();
+      const f = filtroAvaliacaoAnestesista.toLowerCase();
+      if (f === 'sem_avaliacao') {
+        if (val) return false;
+      } else {
+        if (val !== f) return false;
+      }
     }
     
     return true;
@@ -276,7 +301,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroPaciente, filtroDataCirurgia, filtroMesCirurgia, filtroMedico, filtroStatus]);
+  }, [filtroPaciente, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAvaliacaoAnestesista, filtroStatus]);
   
   useEffect(() => {
     if (tabelaRef.current && paginaAtual > 1) {
@@ -293,10 +318,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setFiltroPaciente('');
     setFiltroDataCirurgia('');
     setFiltroMesCirurgia('');
-    setFiltroMedico('');
+    setFiltroMedicoId('');
+    setFiltroAvaliacaoAnestesista('');
   };
   
-  const temFiltrosAtivos = filtroStatus !== 'todos' || filtroPaciente || filtroDataCirurgia || filtroMesCirurgia || filtroMedico;
+  const temFiltrosAtivos = filtroStatus !== 'todos' || filtroPaciente || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAvaliacaoAnestesista;
 
   // Toggle expandir linha
   const toggleExpandirLinha = (agendamentoId: string | undefined) => {
@@ -1063,13 +1089,33 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Médico</label>
-            <input
-              type="text"
-              value={filtroMedico}
-              onChange={(e) => setFiltroMedico(e.target.value)}
-              placeholder="Nome do médico..."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
+            <select
+              value={filtroMedicoId}
+              onChange={(e) => setFiltroMedicoId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white"
+            >
+              <option value="">Todos</option>
+              {medicosDisponiveis
+                .slice()
+                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                .map(m => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Avaliação Anestesista</label>
+            <select
+              value={filtroAvaliacaoAnestesista}
+              onChange={(e) => setFiltroAvaliacaoAnestesista(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors bg-white"
+            >
+              <option value="">Todos</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="reprovado">Reprovado</option>
+              <option value="complementares">Complementares</option>
+              <option value="sem_avaliacao">Sem avaliação</option>
+            </select>
           </div>
         </div>
         

@@ -34,6 +34,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>(''); // Filtro por mês da cirurgia
   const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
   const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
+  const [filtroAvaliacaoAnestesista, setFiltroAvaliacaoAnestesista] = useState<string>('');
   
   // Estados para ordenação por data
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
@@ -539,6 +540,17 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
     }
     
+    // Filtro Avaliação Anestesista
+    if (filtroAvaliacaoAnestesista) {
+      const val = (ag.avaliacao_anestesista || '').toString().toLowerCase();
+      const f = filtroAvaliacaoAnestesista.toLowerCase();
+      if (f === 'sem_avaliacao') {
+        if (val) return false;
+      } else {
+        if (val !== f) return false;
+      }
+    }
+    
     // Filtro Observação (ag.observacao_agendamento)
     if (filtroObservacao) {
       const temObs = !!(ag.observacao_agendamento && ag.observacao_agendamento.trim() !== '');
@@ -679,7 +691,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao;
+  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroAvaliacaoAnestesista;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -2338,6 +2350,28 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <option value="">📊 Todos</option>
               <option value="Confirmado">Confirmado</option>
               <option value="Aguardando">Aguardando</option>
+            </select>
+          </div>
+          
+          {/* Filtro Avaliação Anestesista */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Avaliação Anestesista
+            </label>
+            <select
+              value={filtroAvaliacaoAnestesista}
+              onChange={(e) => setFiltroAvaliacaoAnestesista(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition-colors bg-white font-medium ${
+                filtroAvaliacaoAnestesista 
+                  ? 'border-violet-500 bg-violet-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="reprovado">Reprovado</option>
+              <option value="complementares">Complementares</option>
+              <option value="sem_avaliacao">Sem avaliação</option>
             </select>
           </div>
           

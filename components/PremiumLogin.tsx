@@ -5,7 +5,7 @@ import { Button, Input, Card } from './ui';
 // ============================================================================
 // TIPOS E INTERFACES
 // ============================================================================
-export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'faturamento_local' | 'coordenacao' | 'diretoria' | 'diretriz';
+export type UserRole = 'admin' | 'recepcao' | 'triagem' | 'faturamento' | 'faturamento_local' | 'coordenacao' | 'diretoria' | 'diretriz' | 'anestesista';
 
 interface Hospital {
   id: string;
@@ -151,6 +151,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cidade: 'Foz do Iguaçu',
           cnpj: '14.736.446/0009-40',
           role: 'admin'
+        },
+        'douglas.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'anestesista'
+        },
+        'willer.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'anestesista'
+        },
+        'lianara.foz@medagenda.com': {
+          id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
+          nome: 'Hospital Nossa Senhora Aparecida',
+          cidade: 'Foz do Iguaçu',
+          cnpj: '14.736.446/0009-40',
+          role: 'anestesista'
         },
         'recepcao.foz@medagenda.com': {
           id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
@@ -568,6 +589,10 @@ export const useHospitalFilter = () => {
     // Recepcao e Triagem têm acesso apenas a Dashboard e Documentação
     if (userRole === 'recepcao' || userRole === 'triagem') {
       return viewName === 'dashboard' || viewName === 'documentacao';
+    }
+    // Anestesista: acesso a Dashboard e Anestesista
+    if (userRole === 'anestesista') {
+      return viewName === 'dashboard' || viewName === 'anestesista';
     }
     
     // Demais perfis
