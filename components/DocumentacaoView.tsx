@@ -374,6 +374,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return 'bg-gray-300';
     }
   };
+  const getAvaliacaoBadgeClass = (val?: string | null) => {
+    const v = (val || '').toLowerCase();
+    if (v === 'aprovado') return 'bg-green-100 text-green-800 border border-green-200';
+    if (v === 'reprovado') return 'bg-red-100 text-red-800 border border-red-200';
+    if (v === 'complementares') return 'bg-amber-100 text-amber-800 border border-amber-200';
+    return 'bg-gray-100 text-gray-700 border border-gray-200';
+  };
   // Formatar data
   const formatarData = (data: string | null | undefined) => {
     if (!data || data === '2000-01-01') return '-';
@@ -1613,6 +1620,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </div>
           </td>
           
+          {/* Avaliação Anestesista */}
+          <td className="px-3 py-3 w-36 whitespace-nowrap">
+            {(() => {
+              const val = (ag.avaliacao_anestesista || '').toLowerCase();
+              const texto = val === 'aprovado' ? 'Aprovado' : val === 'reprovado' ? 'Reprovado' : val === 'complementares' ? 'Complementares' : '-';
+              return (
+                <span className={`px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${getAvaliacaoBadgeClass(val)}`}>
+                  {texto}
+                </span>
+              );
+            })()}
+          </td>
+
           {/* Confirmado */}
           <td className="px-3 py-3 w-28 whitespace-nowrap">
             {(() => {
@@ -2598,6 +2618,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-36 md:w-40 lg:w-44 xl:w-52">
                       Status Interno
                     </th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-36 md:w-40 lg:w-44">
+                      Avaliação Anestesista
+                    </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">
                       Confirmado
                     </th>
@@ -2619,7 +2642,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       if (lista.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={11} className="px-4 py-8 text-center">
+                            <td colSpan={13} className="px-4 py-8 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2655,7 +2678,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         <React.Fragment key={grupoInfo.chave}>
                           {/* Cabeçalho do grupo */}
                           <tr className={`${grupoInfo.cor} border-t-2 border-b-2`}>
-                            <td colSpan={9} className="px-4 py-3">
+                            <td colSpan={10} className="px-4 py-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-gray-800">{grupoInfo.titulo}</span>
