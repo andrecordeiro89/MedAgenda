@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { agendamentoService, supabase, medicoService } from '../services/supabase';
 import { Agendamento, Medico } from '../types';
 import { Modal } from './ui';
@@ -44,6 +47,28 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [itensPorPagina, setItensPorPagina] = useState(20);
   const tabelaRef = useRef<HTMLDivElement>(null);
+  const [reportModalAberto, setReportModalAberto] = useState(false);
+  const [reportAihStatus, setReportAihStatus] = useState<string>('');
+  const [reportStartDate, setReportStartDate] = useState<string>('');
+  const [reportEndDate, setReportEndDate] = useState<string>('');
+  const [reportConfirmModalAberto, setReportConfirmModalAberto] = useState(false);
+  const [reportConfirmStatus, setReportConfirmStatus] = useState<string>('');
+  const [reportConfirmStartDate, setReportConfirmStartDate] = useState<string>('');
+  const [reportConfirmEndDate, setReportConfirmEndDate] = useState<string>('');
+  const confirmStatusOptions = ['Confirmado', 'Aguardando'];
+  const aihStatusOptions = [
+    'Autorizado',
+    'Pendência Hospital',
+    'Pendência Faturamento',
+    'Auditor Externo',
+    'Aguardando Ciência SMS',
+    'Agendado',
+    'AG Regulação',
+    'Solicitar',
+    'Emitida',
+    'AIH Represada',
+    'AG Ciência SMS'
+  ];
   
   // Estado para controlar visualização de pendências
   const [mostrarPendencias, setMostrarPendencias] = useState(false);
@@ -320,6 +345,37 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     return `${base} - ${especificacao}`;
   };
 
+  const ageFromISO = (iso?: string | null): number | null => {
+    if (!iso) return null;
+    const parts = String(iso).split('-');
+    if (parts.length !== 3) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const mDiff = (today.getMonth() + 1) - month;
+    if (mDiff < 0 || (mDiff === 0 && today.getDate() < day)) age--;
+    return isNaN(age) ? null : age;
+  };
+  const imageToBase64 = (url: string) => {
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('no canvas ctx'));
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg'));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
   // Helper: Contar pacientes únicos em uma lista de agendamentos
   const getPacientesUnicos = (agendamentosList: Agendamento[]): number => {
     const pacientes = new Set<string>();
@@ -477,7 +533,267 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setFiltroConfirmado('');
     setFiltroObservacao('');
   };
-  
+
+  const handleAbrirModalRelatorio = () => {
+    setReportAihStatus(filtroAih || '');
+    setReportStartDate('');
+    setReportEndDate('');
+    setReportModalAberto(true);
+  };
+
+  const handleEmitirRelatorio = () => {
+    const statusSelecionado = (reportAihStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o Status AIH para emitir o relatório');
+      return;
+    }
+    const start = reportStartDate ? new Date(reportStartDate) : null;
+    const end = reportEndDate ? new Date(reportEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const s = (ag.status_aih || '').toString().trim();
+      if (s !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const rows = lista.map(ag => ({
+      Paciente: ag.nome_paciente || ag.nome || '',
+      Prontuario: ag.n_prontuario || '',
+      Procedimento: formatarProcedimento(ag),
+      Medico: ag.medico || '',
+      DataConsulta: formatarData(ag.data_consulta),
+      DataCirurgia: formatarData(ag.data_agendamento || ag.dataAgendamento),
+      StatusInterno: ag.status_de_liberacao || '',
+      Confirmado: ag.confirmacao || '',
+      StatusAIH: ag.status_aih || '',
+      ExamesOK: ag.documentos_ok ? 'Sim' : 'Não',
+      FichaPreOpOK: ag.ficha_pre_anestesica_ok ? 'Sim' : 'Não'
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, statusSelecionado.slice(0, 30));
+    const now = new Date();
+    const nomeArquivo = `Relatorio_AIH_${statusSelecionado}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setReportModalAberto(false);
+    success('Relatório gerado');
+  };
+
+  const handleAbrirModalRelatorioConfirmado = () => {
+    setReportConfirmStatus(filtroConfirmado || '');
+    setReportConfirmStartDate('');
+    setReportConfirmEndDate('');
+    setReportConfirmModalAberto(true);
+  };
+
+  const gerarPDFRelatorioConfirmado = async () => {
+    const statusSelecionado = (reportConfirmStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o status Confirmado para emitir o relatório');
+      return;
+    }
+    const start = reportConfirmStartDate ? new Date(reportConfirmStartDate) : null;
+    const end = reportConfirmEndDate ? new Date(reportConfirmEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const c = (ag.confirmacao || '').toString().trim();
+      if (c !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    try {
+      const logoPath = '/CIS Sem fundo.jpg';
+      const logoBase64 = await imageToBase64(logoPath);
+      const logoWidth = 25;
+      const logoHeight = 15;
+      doc.addImage(logoBase64, 'JPEG', 14, 8, logoWidth, logoHeight, undefined, 'FAST');
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleY = 8 + (logoHeight / 2) - 3;
+      doc.text(`Relatório - Confirmado: ${statusSelecionado}`, 14 + logoWidth + 5, titleY);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportConfirmStartDate ? new Date(reportConfirmStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportConfirmEndDate ? new Date(reportConfirmEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Total de registros: ${lista.length}`, 14 + logoWidth + 5, titleY + 12);
+    } catch {
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Relatório - Confirmado: ${statusSelecionado}`, 14, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportConfirmStartDate ? new Date(reportConfirmStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportConfirmEndDate ? new Date(reportConfirmEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14, 22);
+      doc.text(`Total de registros: ${lista.length}`, 14, 27);
+    }
+    const tableData = lista.map(ag => [
+      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      ag.especialidade || '-',
+      formatarProcedimento(ag) || '-',
+      ag.procedimento_especificacao || '-',
+      ag.medico || '-',
+      ag.nome_paciente || ag.nome || '-',
+      ag.n_prontuario || '-',
+      ageFromISO(ag.data_nascimento || ag.dataNascimento) !== null ? String(ageFromISO(ag.data_nascimento || ag.dataNascimento)) : '-',
+      ag.cidade_natal || ag.cidadeNatal || '-',
+      ag.telefone || '-',
+      formatarData(ag.data_consulta),
+      formatarData(ag.data_nascimento || ag.dataNascimento),
+      ag.confirmacao || '-'
+    ]);
+    autoTable(doc, {
+      head: [['Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento', 'Confirmado']],
+      body: tableData,
+      startY: 28,
+      styles: { fontSize: 6, cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 }, overflow: 'linebreak', halign: 'left', valign: 'middle' },
+      headStyles: { fillColor: [128, 128, 128], textColor: 255, fontStyle: 'bold', fontSize: 6, valign: 'middle' },
+      columnStyles: {
+        0: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
+        1: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
+        2: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        3: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        4: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
+        5: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
+        6: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
+        7: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
+        8: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        10: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        12: { cellWidth: 24, halign: 'left', overflow: 'linebreak' }
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: function (data: any) {
+        doc.setFontSize(8);
+        doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+    });
+    const nomeArquivo = `Relatorio_Confirmado_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(nomeArquivo);
+  };
+  const gerarPDFRelatorioAIH = async () => {
+    const statusSelecionado = (reportAihStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o Status AIH para emitir o relatório');
+      return;
+    }
+    const start = reportStartDate ? new Date(reportStartDate) : null;
+    const end = reportEndDate ? new Date(reportEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const s = (ag.status_aih || '').toString().trim();
+      if (s !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    try {
+      const logoPath = '/CIS Sem fundo.jpg';
+      const logoBase64 = await imageToBase64(logoPath);
+      const logoWidth = 25;
+      const logoHeight = 15;
+      doc.addImage(logoBase64, 'JPEG', 14, 8, logoWidth, logoHeight, undefined, 'FAST');
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleY = 8 + (logoHeight / 2) - 3;
+      doc.text(`Relatório - Status AIH: ${statusSelecionado}`, 14 + logoWidth + 5, titleY);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportStartDate ? new Date(reportStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportEndDate ? new Date(reportEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Total de registros: ${lista.length}`, 14 + logoWidth + 5, titleY + 12);
+    } catch {
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Relatório - Status AIH: ${statusSelecionado}`, 14, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportStartDate ? new Date(reportStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportEndDate ? new Date(reportEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14, 22);
+      doc.text(`Total de registros: ${lista.length}`, 14, 27);
+    }
+    const tableData = lista.map(ag => [
+      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      ag.especialidade || '-',
+      formatarProcedimento(ag) || '-',
+      ag.procedimento_especificacao || '-',
+      ag.medico || '-',
+      ag.nome_paciente || ag.nome || '-',
+      ag.n_prontuario || '-',
+      ageFromISO(ag.data_nascimento || ag.dataNascimento) !== null ? String(ageFromISO(ag.data_nascimento || ag.dataNascimento)) : '-',
+      ag.cidade_natal || ag.cidadeNatal || '-',
+      ag.telefone || '-',
+      formatarData(ag.data_consulta),
+      formatarData(ag.data_nascimento || ag.dataNascimento),
+      ag.status_aih || '-'
+    ]);
+    autoTable(doc, {
+      head: [['Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento', 'Status AIH']],
+      body: tableData,
+      startY: 28,
+      styles: { fontSize: 6, cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 }, overflow: 'linebreak', halign: 'left', valign: 'middle' },
+      headStyles: { fillColor: [128, 128, 128], textColor: 255, fontStyle: 'bold', fontSize: 6, valign: 'middle' },
+      columnStyles: {
+        0: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
+        1: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
+        2: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        3: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        4: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
+        5: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
+        6: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
+        7: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
+        8: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        10: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        12: { cellWidth: 24, halign: 'left', overflow: 'linebreak' }
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: function (data: any) {
+        doc.setFontSize(8);
+        doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+    });
+    const nomeArquivo = `Relatorio_AIH_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(nomeArquivo);
+  };
   // Verificar se há filtros ativos
   const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao;
   
@@ -1786,14 +2102,28 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       >
                         <option value="">Todos</option>
                         <option value="com_observacao">📝 Com observação</option>
-                        <option value="sem_observacao">Sem observação</option>
-                      </select>
-                    </div>
+                      <option value="sem_observacao">Sem observação</option>
+                    </select>
+                    <button
+                      onClick={handleAbrirModalRelatorio}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                      title="Emitir relatório por Status AIH"
+                    >
+                      Relatório Status AIH
+                    </button>
+                    <button
+                      onClick={handleAbrirModalRelatorioConfirmado}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                      title="Emitir relatório por Confirmado"
+                    >
+                      Relatório Confirmado
+                    </button>
                   </div>
                 </div>
+                </div>
 
-                {/* Navegação de páginas */}
-                <div className="flex items-center gap-2">
+      {/* Navegação de páginas */}
+      <div className="flex items-center gap-2">
                   {/* Botão Anterior */}
                   <button
                     onClick={() => setPaginaAtual(prev => Math.max(1, prev - 1))}
@@ -1876,11 +2206,128 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   >
                     Próxima
                   </button>
-                </div>
-              </div>
-            </div>
-          )}
-          
+      </div>
+    </div>
+  </div>
+)}
+
+<Modal
+  isOpen={reportModalAberto}
+  onClose={() => {
+    setReportModalAberto(false);
+  }}
+  title="Emitir Relatório por Status AIH"
+  size="small"
+>
+  <div className="space-y-3">
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">Status AIH</label>
+      <select
+        value={reportAihStatus}
+        onChange={(e) => setReportAihStatus(e.target.value)}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+      >
+        <option value="">Selecione</option>
+        {aihStatusOptions.map(op => (
+          <option key={op} value={op}>{op}</option>
+        ))}
+      </select>
+    </div>
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+        <input
+          type="date"
+          value={reportStartDate}
+          onChange={(e) => setReportStartDate(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+        <input
+          type="date"
+          value={reportEndDate}
+          onChange={(e) => setReportEndDate(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+        />
+      </div>
+    </div>
+    <div className="flex justify-end gap-2 pt-2">
+      <button
+        onClick={() => setReportModalAberto(false)}
+        className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+      >
+        Fechar
+      </button>
+      <button
+        onClick={gerarPDFRelatorioAIH}
+        className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+      >
+        Gerar PDF
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<Modal
+  isOpen={reportConfirmModalAberto}
+  onClose={() => {
+    setReportConfirmModalAberto(false);
+  }}
+  title="Emitir Relatório por Confirmado"
+  size="small"
+>
+  <div className="space-y-3">
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
+      <select
+        value={reportConfirmStatus}
+        onChange={(e) => setReportConfirmStatus(e.target.value)}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+      >
+        <option value="">Selecione</option>
+        {confirmStatusOptions.map(op => (
+          <option key={op} value={op}>{op}</option>
+        ))}
+      </select>
+    </div>
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+        <input
+          type="date"
+          value={reportConfirmStartDate}
+          onChange={(e) => setReportConfirmStartDate(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+        <input
+          type="date"
+          value={reportConfirmEndDate}
+          onChange={(e) => setReportConfirmEndDate(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+        />
+      </div>
+    </div>
+    <div className="flex justify-end gap-2 pt-2">
+      <button
+        onClick={() => setReportConfirmModalAberto(false)}
+        className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+      >
+        Fechar
+      </button>
+      <button
+        onClick={gerarPDFRelatorioConfirmado}
+        className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+      >
+        Gerar PDF
+      </button>
+    </div>
+  </div>
+</Modal>
           {/* Tabela igual à Documentação + coluna de Download */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">

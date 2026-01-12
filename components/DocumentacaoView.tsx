@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { agendamentoService, supabase, medicoService } from '../services/supabase';
 import { Agendamento, StatusLiberacao, Medico } from '../types';
 import { Button, Modal } from './ui';
@@ -79,6 +82,24 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [itensPorPagina, setItensPorPagina] = useState(20);
   const tabelaRef = useRef<HTMLDivElement>(null);
+  const [reportInternoModalAberto, setReportInternoModalAberto] = useState(false);
+  const [reportInternoStatus, setReportInternoStatus] = useState<string>('');
+  const [reportInternoStartDate, setReportInternoStartDate] = useState<string>('');
+  const [reportInternoEndDate, setReportInternoEndDate] = useState<string>('');
+  const internoStatusOptions = [
+    'Anestesista',
+    'Cardio',
+    'Exames',
+    'Liberado para Cirurgia',
+    'Não Liberado para Cirurgia',
+    'Confirmado com Paciente',
+    'Cirurgia Cancelada'
+  ];
+  const [reportConfirmModalAberto, setReportConfirmModalAberto] = useState(false);
+  const [reportConfirmStatus, setReportConfirmStatus] = useState<string>('');
+  const [reportConfirmStartDate, setReportConfirmStartDate] = useState<string>('');
+  const [reportConfirmEndDate, setReportConfirmEndDate] = useState<string>('');
+  const confirmStatusOptions = ['Confirmado', 'Aguardando'];
 
   // Carregar agendamentos
   useEffect(() => {
@@ -365,6 +386,36 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       return `${d}/${m}/${y}`;
     }
     return dataStr;
+  };
+  const ageFromISO = (iso?: string | null): number | null => {
+    if (!iso) return null;
+    const parts = String(iso).split('-');
+    if (parts.length !== 3) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const mDiff = (today.getMonth() + 1) - month;
+    if (mDiff < 0 || (mDiff === 0 && today.getDate() < day)) age--;
+    return isNaN(age) ? null : age;
+  };
+  const imageToBase64 = (url: string) => {
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('no canvas ctx'));
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg'));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
   };
 
   // AGRUPAR POR PACIENTES ÚNICOS
@@ -765,6 +816,324 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     } else {
       setComplementaresAnexados([]);
     }
+  };
+
+
+  const handleAbrirModalRelatorioInterno = () => {
+    setReportInternoStatus(filtroStatusInterno || '');
+    setReportInternoStartDate('');
+    setReportInternoEndDate('');
+    setReportInternoModalAberto(true);
+  };
+
+  const handleEmitirRelatorioInterno = () => {
+    const statusSelecionado = (reportInternoStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o Status Interno para emitir o relatório');
+      return;
+    }
+    const start = reportInternoStartDate ? new Date(reportInternoStartDate) : null;
+    const end = reportInternoEndDate ? new Date(reportInternoEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const s = (ag.status_de_liberacao || ag.status_liberacao || '').toString().trim();
+      if (s !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const rows = lista.map(ag => ({
+      Paciente: ag.nome_paciente || ag.nome || '',
+      Prontuario: ag.n_prontuario || '',
+      Procedimento: ag.procedimentos || '',
+      Medico: ag.medico || '',
+      DataConsulta: formatarData(ag.data_consulta),
+      DataCirurgia: formatarData(ag.data_agendamento || ag.dataAgendamento),
+      StatusInterno: ag.status_de_liberacao || '',
+      Confirmado: ag.confirmacao || '',
+      StatusAIH: ag.status_aih || '',
+      ExamesOK: ag.documentos_ok ? 'Sim' : 'Não',
+      FichaPreOpOK: ag.ficha_pre_anestesica_ok ? 'Sim' : 'Não'
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, statusSelecionado.slice(0, 30));
+    const now = new Date();
+    const nomeArquivo = `Relatorio_StatusInterno_${statusSelecionado}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setReportInternoModalAberto(false);
+    success('Relatório gerado');
+  };
+  const gerarPDFRelatorioInterno = async () => {
+    const statusSelecionado = (reportInternoStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o Status Interno para emitir o relatório');
+      return;
+    }
+    const start = reportInternoStartDate ? new Date(reportInternoStartDate) : null;
+    const end = reportInternoEndDate ? new Date(reportInternoEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const s = (ag.status_de_liberacao || ag.status_liberacao || '').toString().trim();
+      if (s !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    try {
+      const logoPath = '/CIS Sem fundo.jpg';
+      const logoBase64 = await imageToBase64(logoPath);
+      const logoWidth = 25;
+      const logoHeight = 15;
+      doc.addImage(logoBase64, 'JPEG', 14, 8, logoWidth, logoHeight, undefined, 'FAST');
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleY = 8 + (logoHeight / 2) - 3;
+      doc.text(`Relatório - Status Interno: ${statusSelecionado}`, 14 + logoWidth + 5, titleY);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportInternoStartDate ? new Date(reportInternoStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportInternoEndDate ? new Date(reportInternoEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Total de registros: ${lista.length}`, 14 + logoWidth + 5, titleY + 12);
+    } catch {
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Relatório - Status Interno: ${statusSelecionado}`, 14, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportInternoStartDate ? new Date(reportInternoStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportInternoEndDate ? new Date(reportInternoEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14, 22);
+      doc.text(`Total de registros: ${lista.length}`, 14, 27);
+    }
+    const tableData = lista.map(ag => [
+      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      ag.especialidade || '-',
+      ag.procedimentos || '-',
+      ag.procedimento_especificacao || '-',
+      ag.medico || '-',
+      ag.nome_paciente || ag.nome || '-',
+      ag.n_prontuario || '-',
+      ageFromISO(ag.data_nascimento || ag.dataNascimento) !== null ? String(ageFromISO(ag.data_nascimento || ag.dataNascimento)) : '-',
+      ag.cidade_natal || ag.cidadeNatal || '-',
+      ag.telefone || '-',
+      formatarData(ag.data_consulta),
+      formatarData(ag.data_nascimento || ag.dataNascimento),
+      ag.status_de_liberacao || ag.status_liberacao || '-'
+    ]);
+    autoTable(doc, {
+      head: [['Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento', 'Status Interno']],
+      body: tableData,
+      startY: 28,
+      styles: { fontSize: 6, cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 }, overflow: 'linebreak', halign: 'left', valign: 'middle' },
+      headStyles: { fillColor: [128, 128, 128], textColor: 255, fontStyle: 'bold', fontSize: 6, valign: 'middle' },
+      columnStyles: {
+        0: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
+        1: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
+        2: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        3: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        4: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
+        5: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
+        6: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
+        7: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
+        8: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        10: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        12: { cellWidth: 24, halign: 'left', overflow: 'linebreak' }
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: function (data: any) {
+        doc.setFontSize(8);
+        doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+    });
+    const nomeArquivo = `Relatorio_StatusInterno_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(nomeArquivo);
+  };
+
+  const gerarPDFRelatorioConfirmado = async () => {
+    const statusSelecionado = (reportConfirmStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o status Confirmado para emitir o relatório');
+      return;
+    }
+    const start = reportConfirmStartDate ? new Date(reportConfirmStartDate) : null;
+    const end = reportConfirmEndDate ? new Date(reportConfirmEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const c = (ag.confirmacao || '').toString().trim();
+      if (c !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    try {
+      const logoPath = '/CIS Sem fundo.jpg';
+      const logoBase64 = await imageToBase64(logoPath);
+      const logoWidth = 25;
+      const logoHeight = 15;
+      doc.addImage(logoBase64, 'JPEG', 14, 8, logoWidth, logoHeight, undefined, 'FAST');
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleY = 8 + (logoHeight / 2) - 3;
+      doc.text(`Relatório - Confirmado: ${statusSelecionado}`, 14 + logoWidth + 5, titleY);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportConfirmStartDate ? new Date(reportConfirmStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportConfirmEndDate ? new Date(reportConfirmEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Total de registros: ${lista.length}`, 14 + logoWidth + 5, titleY + 12);
+    } catch {
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Relatório - Confirmado: ${statusSelecionado}`, 14, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportConfirmStartDate ? new Date(reportConfirmStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportConfirmEndDate ? new Date(reportConfirmEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14, 22);
+      doc.text(`Total de registros: ${lista.length}`, 14, 27);
+    }
+    const tableData = lista.map(ag => [
+      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      ag.especialidade || '-',
+      ag.procedimentos || '-',
+      ag.procedimento_especificacao || '-',
+      ag.medico || '-',
+      ag.nome_paciente || ag.nome || '-',
+      ag.n_prontuario || '-',
+      ageFromISO(ag.data_nascimento || ag.dataNascimento) !== null ? String(ageFromISO(ag.data_nascimento || ag.dataNascimento)) : '-',
+      ag.cidade_natal || ag.cidadeNatal || '-',
+      ag.telefone || '-',
+      formatarData(ag.data_consulta),
+      formatarData(ag.data_nascimento || ag.dataNascimento),
+      ag.confirmacao || '-'
+    ]);
+    autoTable(doc, {
+      head: [['Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento', 'Confirmado']],
+      body: tableData,
+      startY: 28,
+      styles: { fontSize: 6, cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 }, overflow: 'linebreak', halign: 'left', valign: 'middle' },
+      headStyles: { fillColor: [128, 128, 128], textColor: 255, fontStyle: 'bold', fontSize: 6, valign: 'middle' },
+      columnStyles: {
+        0: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
+        1: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
+        2: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        3: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        4: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
+        5: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
+        6: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
+        7: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
+        8: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        10: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        12: { cellWidth: 24, halign: 'left', overflow: 'linebreak' }
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: function (data: any) {
+        doc.setFontSize(8);
+        doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+    });
+    const nomeArquivo = `Relatorio_Confirmado_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(nomeArquivo);
+  };
+
+  const handleAbrirModalRelatorioConfirmado = () => {
+    setReportConfirmStatus(filtroConfirmado || '');
+    setReportConfirmStartDate('');
+    setReportConfirmEndDate('');
+    setReportConfirmModalAberto(true);
+  };
+
+  const handleEmitirRelatorioConfirmado = () => {
+    const statusSelecionado = (reportConfirmStatus || '').trim();
+    if (!statusSelecionado) {
+      toastError('Selecione o status Confirmado para emitir o relatório');
+      return;
+    }
+    const start = reportConfirmStartDate ? new Date(reportConfirmStartDate) : null;
+    const end = reportConfirmEndDate ? new Date(reportConfirmEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const c = (ag.confirmacao || '').toString().trim();
+      if (c !== statusSelecionado) return false;
+      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para o status selecionado');
+      return;
+    }
+    const rows = lista.map(ag => ({
+      Paciente: ag.nome_paciente || ag.nome || '',
+      Prontuario: ag.n_prontuario || '',
+      Procedimento: ag.procedimentos || '',
+      Medico: ag.medico || '',
+      DataConsulta: formatarData(ag.data_consulta),
+      DataCirurgia: formatarData(ag.data_agendamento || ag.dataAgendamento),
+      StatusInterno: ag.status_de_liberacao || '',
+      Confirmado: ag.confirmacao || '',
+      StatusAIH: ag.status_aih || '',
+      ExamesOK: ag.documentos_ok ? 'Sim' : 'Não',
+      FichaPreOpOK: ag.ficha_pre_anestesica_ok ? 'Sim' : 'Não'
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, statusSelecionado.slice(0, 30));
+    const now = new Date();
+    const nomeArquivo = `Relatorio_Confirmado_${statusSelecionado}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setReportConfirmModalAberto(false);
+    success('Relatório gerado');
   };
 
   // Abrir modal para visualizar documentos
@@ -2044,19 +2413,33 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       <option value="50">50</option>
                       <option value="100">100</option>
                     </select>
-                    <div className="hidden sm:flex items-center gap-2 ml-4">
-                      <label className="text-sm text-gray-600">Observação:</label>
-                      <select
-                        value={filtroObservacao}
-                        onChange={(e) => setFiltroObservacao(e.target.value)}
-                        className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
-                        title="Filtrar por observação"
-                      >
-                        <option value="">Todos</option>
-                        <option value="com_observacao">📝 Com observação</option>
-                        <option value="sem_observacao">Sem observação</option>
-                      </select>
-                    </div>
+                  <div className="hidden sm:flex items-center gap-2 ml-4">
+                    <label className="text-sm text-gray-600">Observação:</label>
+                    <select
+                      value={filtroObservacao}
+                      onChange={(e) => setFiltroObservacao(e.target.value)}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                      title="Filtrar por observação"
+                    >
+                      <option value="">Todos</option>
+                      <option value="com_observacao">📝 Com observação</option>
+                      <option value="sem_observacao">Sem observação</option>
+                    </select>
+                    <button
+                      onClick={handleAbrirModalRelatorioInterno}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                      title="Emitir relatório por Status Interno"
+                    >
+                      Relatório Status Interno
+                    </button>
+                    <button
+                      onClick={handleAbrirModalRelatorioConfirmado}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                      title="Emitir relatório por Confirmado"
+                    >
+                      Relatório Confirmado
+                    </button>
+                  </div>
                   </div>
                 </div>
 
@@ -2793,7 +3176,127 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           {/* Conteúdo da aba de complementares removido */}
         </div>
       </Modal>
+
       
+
+      <Modal
+        isOpen={reportInternoModalAberto}
+        onClose={() => {
+          setReportInternoModalAberto(false);
+        }}
+        title="Emitir Relatório por Status Interno"
+        size="small"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Status Interno</label>
+            <select
+              value={reportInternoStatus}
+              onChange={(e) => setReportInternoStatus(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+            >
+              <option value="">Selecione</option>
+              {internoStatusOptions.map(op => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+              <input
+                type="date"
+                value={reportInternoStartDate}
+                onChange={(e) => setReportInternoStartDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+              <input
+                type="date"
+                value={reportInternoEndDate}
+                onChange={(e) => setReportInternoEndDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setReportInternoModalAberto(false)}
+              className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+            >
+              Fechar
+            </button>
+            <button
+              onClick={gerarPDFRelatorioInterno}
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+            >
+              Gerar PDF
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={reportConfirmModalAberto}
+        onClose={() => {
+          setReportConfirmModalAberto(false);
+        }}
+        title="Emitir Relatório por Confirmado"
+        size="small"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
+            <select
+              value={reportConfirmStatus}
+              onChange={(e) => setReportConfirmStatus(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+            >
+              <option value="">Selecione</option>
+              {confirmStatusOptions.map(op => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+              <input
+                type="date"
+                value={reportConfirmStartDate}
+                onChange={(e) => setReportConfirmStartDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+              <input
+                type="date"
+                value={reportConfirmEndDate}
+                onChange={(e) => setReportConfirmEndDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setReportConfirmModalAberto(false)}
+              className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+            >
+              Fechar
+            </button>
+            <button
+              onClick={gerarPDFRelatorioConfirmado}
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+            >
+              Gerar PDF
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Modal de Motivo do Cancelamento */}
       <Modal
         isOpen={modalCancelAberto}
