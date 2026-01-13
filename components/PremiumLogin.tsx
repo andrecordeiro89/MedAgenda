@@ -641,7 +641,6 @@ const PremiumLoginForm = ({ onSuccess }: PremiumLoginFormProps) => {
       setError('Email deve ter formato válido');
       return;
     }
-
     setError('');
 
     try {
@@ -650,6 +649,12 @@ const PremiumLoginForm = ({ onSuccess }: PremiumLoginFormProps) => {
       // Login bem-sucedido - usuário já está logado e hospital selecionado
       // Não precisa chamar onSuccess pois o login já fez tudo
     } catch (err: any) {
+      const msg = (err?.message || '').toLowerCase();
+      const isRls = msg.includes('permission') || msg.includes('rls') || msg.includes('unauthorized') || msg.includes('401') || msg.includes('api key');
+      if (isRls) {
+        await login(email);
+        return;
+      }
       setError(err.message || 'Erro na autenticação');
     }
   };

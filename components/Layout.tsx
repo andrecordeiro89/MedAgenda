@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ReactNode } from 'react';
 import { View, Agendamento } from '../types';
-import { HomeIcon, CalendarIcon, ListIcon, XIcon } from './ui';
+import { HomeIcon, CalendarIcon, ListIcon, XIcon, Modal } from './ui';
 import { useAuth, useHospitalFilter } from './PremiumLogin';
 import { agendamentoService } from '../services/supabase';
 
@@ -12,7 +12,35 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) => {
     const { usuario, hospitalSelecionado, hospitaisDisponiveis, selecionarHospital, logout } = useAuth();
+    const [pwdOpen, setPwdOpen] = useState(false);
+    const [pwdCurrent, setPwdCurrent] = useState('');
+    const [pwdNew, setPwdNew] = useState('');
+    const [pwdConfirm, setPwdConfirm] = useState('');
+    const [pwdError, setPwdError] = useState('');
+    const [pwdSaving, setPwdSaving] = useState(false);
+    const handleChangePassword = async () => {
+        setPwdError('');
+        if (!usuario?.email) { setPwdError('Email inválido'); return; }
+        if (!pwdCurrent.trim() || !pwdNew.trim() || !pwdConfirm.trim()) { setPwdError('Preencha todas as senhas'); return; }
+        if (pwdNew.trim().length < 6) { setPwdError('Nova senha deve ter ao menos 6 caracteres'); return; }
+        if (pwdNew.trim() !== pwdConfirm.trim()) { setPwdError('Confirmação não confere'); return; }
+        try {
+            const u = await import('../services/supabase').then(m => m.usuarioService.getByEmail(usuario.email!.toLowerCase()));
+            if (!u || u.senha !== pwdCurrent.trim()) { setPwdError('Senha atual inválida'); return; }
+            setPwdSaving(true);
+            await import('../services/supabase').then(m => m.usuarioService.updateSenhaByEmail(usuario.email!.toLowerCase(), pwdNew.trim()));
+            setPwdSaving(false);
+            setPwdOpen(false);
+            setPwdCurrent('');
+            setPwdNew('');
+            setPwdConfirm('');
+        } catch (e: any) {
+            setPwdSaving(false);
+            setPwdError(e?.message || 'Erro ao alterar senha');
+        }
+    };
     const { hasAccessToView } = useHospitalFilter();
+    const senhaFeatureEnabled = false;
     const [isMenuOpen, setMenuOpen] = useState(false);
     
     // Estados para alertas de pendências
@@ -316,6 +344,17 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                             >
                                 Sair
                             </button>
+                            {senhaFeatureEnabled && (
+                              <button
+                                  onClick={() => setPwdOpen(true)}
+                                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white border border-white/20 hover:border-white/30 transition-colors"
+                                  title="Alterar senha"
+                              >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317a1 1 0 011.35-.436l8.66 4.33a1 1 0 010 1.79l-8.66 4.33a1 1 0 01-1.35-.435L9 12l1.325-7.683zM4 6h4M4 10h4M4 14h4M4 18h4" />
+                                  </svg>
+                              </button>
+                            )}
                         </div>
 
                         {/* Botão mobile */}
@@ -399,6 +438,57 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
             }`}>
                 {children}
             </main>
+
+            {senhaFeatureEnabled && (
+              <Modal
+                isOpen={pwdOpen}
+                onClose={() => { setPwdOpen(false); setPwdError(''); }}
+                title="Alterar senha"
+                size="small"
+              >
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="password"
+                      value={pwdCurrent}
+                      onChange={(e) => setPwdCurrent(e.target.value)}
+                      placeholder="Senha atual"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                    />
+                    <input
+                      type="password"
+                      value={pwdNew}
+                      onChange={(e) => setPwdNew(e.target.value)}
+                      placeholder="Nova senha"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                    />
+                    <input
+                      type="password"
+                      value={pwdConfirm}
+                      onChange={(e) => setPwdConfirm(e.target.value)}
+                      placeholder="Confirmar nova senha"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                    />
+                  </div>
+                  {pwdError && <div className="text-sm text-red-600">{pwdError}</div>}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setPwdOpen(false); setPwdError(''); }}
+                      className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={pwdSaving}
+                      className={`px-4 py-2 text-sm rounded ${pwdSaving ? 'bg-gray-400 text-white' : 'bg-gray-800 text-white hover:bg-black'}`}
+                    >
+                      {pwdSaving ? 'Salvando...' : 'Alterar senha'}
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+            )}
         </div>
     );
 };

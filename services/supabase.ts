@@ -696,6 +696,28 @@ export const agendamentoService = {
   }
 }
 
+export const usuarioService = {
+  async getByEmail(email: string) {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id,email,senha')
+      .eq('email', email)
+      .limit(1)
+    if (error) throw new Error(error.message)
+    return Array.isArray(data) && data.length > 0 ? data[0] : null
+  },
+  async updateSenhaByEmail(email: string, novaSenha: string) {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .update({ senha: novaSenha })
+      .eq('email', email)
+      .select('id')
+      .limit(1)
+    if (error) throw new Error(error.message)
+    return Array.isArray(data) && data.length > 0 ? data[0] : null
+  }
+}
+
 export const triagemPreAnestesicaService = {
   async create(payload: Record<string, string>): Promise<any> {
     const { data, error } = await supabase
