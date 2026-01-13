@@ -5,12 +5,15 @@ import * as XLSX from 'xlsx';
 import { agendamentoService, supabase, medicoService } from '../services/supabase';
 import { Agendamento, StatusLiberacao, Medico } from '../types';
 import { Button, Modal } from './ui';
+import PreAnestesiaModal from './PreAnestesiaModal';
+import { useAuth } from './PremiumLogin';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
 
 export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const { hospitalSelecionado } = useAuth();
   
   // Estado para controlar linhas expandidas
   const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
@@ -50,6 +53,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [salvandoCancel, setSalvandoCancel] = useState<boolean>(false);
   const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'complementares'>('documentos');
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
+  const [preModalOpen, setPreModalOpen] = useState(false);
+  const [preModalInitial, setPreModalInitial] = useState<any>({});
   
   // Estados para Exames (Recepção)
   const [arquivosDocumentosSelecionados, setArquivosDocumentosSelecionados] = useState<File[]>([]);
@@ -1645,17 +1650,40 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </div>
           </td>
           
-          {/* Avaliação Anestesista */}
-          <td className="px-3 py-3 w-36 whitespace-nowrap">
-            {(() => {
-              const val = (ag.avaliacao_anestesista || '').toLowerCase();
-              const texto = val === 'aprovado' ? 'Aprovado' : val === 'reprovado' ? 'Reprovado' : val === 'complementares' ? 'Complementares' : '-';
-              return (
-                <span className={`px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${getAvaliacaoBadgeClass(val)}`}>
-                  {texto}
-                </span>
-              );
-            })()}
+          {/* Avaliação Anestesista + Triagem Pré-Anestésica */}
+          <td className="px-3 py-3 w-40">
+            <div className="mx-auto flex items-center justify-between w-32">
+              {(() => {
+                const val = (ag.avaliacao_anestesista || '').toLowerCase();
+                const texto = val === 'aprovado' ? 'Aprovado' : val === 'reprovado' ? 'Reprovado' : val === 'complementares' ? 'Complementares' : '-';
+                return (
+                  <span className={`inline-block w-20 text-center px-2 py-1 text-xs font-semibold rounded ${getAvaliacaoBadgeClass(val)}`}>
+                    {texto}
+                  </span>
+                );
+              })()}
+              <button
+                onClick={() => {
+                  setPreModalInitial({
+                    municipio: ag.cidade_natal || ag.cidadeNatal || '',
+                    unidade_hospitalar: hospitalSelecionado?.nome || '',
+                    nome_paciente: ag.nome_paciente || ag.nome || '',
+                    data_nascimento: ag.data_nascimento || ag.dataNascimento || '',
+                    idade: '',
+                    sexo: '',
+                    procedimento_s: ag.procedimentos || '',
+                    cirurgiao: ag.medico || ''
+                  });
+                  setPreModalOpen(true);
+                }}
+                className="w-6 h-6 flex items-center justify-center text-teal-600 hover:bg-teal-100 rounded transition-all"
+                title="Ficha Pré-Anestésica"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zm0 10c-4.418 0-8-2.239-8-5V7a2 2 0 012-2h12a2 2 0 012 2v6c0 2.761-3.582 5-8 5z" />
+                </svg>
+              </button>
+            </div>
           </td>
 
           {/* Confirmado */}
@@ -2813,6 +2841,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               </table>
             </div>
           </div>
+
+          <PreAnestesiaModal
+            isOpen={preModalOpen}
+            onClose={() => setPreModalOpen(false)}
+            initial={preModalInitial}
+          />
 
           {/* Paginação */}
           {!agruparPorStatus && totalRegistros > 0 && (

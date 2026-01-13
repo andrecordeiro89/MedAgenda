@@ -3507,7 +3507,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-72">Nome do Paciente</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-28">Status AIH</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-32">Nº Prontuário</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 border-r border-slate-300 w-44">Avaliação Anestesista</th>
+            <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-28">Avaliação Anestesista</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300 w-20">Idade</th>
             <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 w-32 min-w-32">Ações</th>
           </tr>
@@ -3629,7 +3629,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </div>
                                               </td>
                                               {/* Coluna Status AIH */}
-                                              <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden">
+                                              <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden text-center">
                                                 <div className="flex items-center gap-1.5">
                                                   <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(proc.statusAih)}`} />
                                                   <span className={`px-2 py-1 text-[10px] font-semibold rounded border ${getAihStatusStyle(proc.statusAih)}`}>
@@ -3643,48 +3643,28 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                               </td>
                                               
                                               {/* Coluna Avaliação Anestesista */}
-                                              <td className="px-3 py-2 border-r border-slate-200 w-44 overflow-hidden">
-                                                {isFirstPaciente ? (
-                                                  <div className="flex items-center gap-1">
-                                                    <button
-                                                      onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'aprovado')}
-                                                      className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
-                                                        proc.avaliacaoAnestesista === 'aprovado'
-                                                          ? 'bg-green-100 border-green-400 text-green-700'
-                                                          : 'bg-white border-slate-300 text-slate-700'
-                                                      }`}
-                                                      title="Aprovado"
-                                                    >
-                                                      Aprovado
-                                                    </button>
-                                                    <button
-                                                      onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'reprovado')}
-                                                      className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
-                                                        proc.avaliacaoAnestesista === 'reprovado'
-                                                          ? 'bg-red-100 border-red-400 text-red-700'
-                                                          : 'bg-white border-slate-300 text-slate-700'
-                                                      }`}
-                                                      title="Reprovado"
-                                                    >
-                                                      Reprovado
-                                                    </button>
-                                                    <button
-                                                      onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'complementares')}
-                                                      className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
-                                                        proc.avaliacaoAnestesista === 'complementares'
-                                                          ? 'bg-amber-100 border-amber-400 text-amber-700'
-                                                          : 'bg-white border-slate-300 text-slate-700'
-                                                      }`}
-                                                      title="Complementares"
-                                                    >
-                                                      Compl.
-                                                    </button>
-                                                  </div>
-                                                ) : (
-                                                  <span className="text-xs text-slate-500">
-                                                    {proc.avaliacaoAnestesista ? proc.avaliacaoAnestesista : '-'}
-                                                  </span>
-                                                )}
+                                              <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden">
+                                                {(() => {
+                                                  const val = proc.avaliacaoAnestesista;
+                                                  if (!val) {
+                                                    return <div className="flex justify-center"><span className="text-xs text-slate-500">-</span></div>;
+                                                  }
+                                                  const style =
+                                                    val === 'aprovado'
+                                                      ? 'bg-green-100 border-green-400 text-green-700'
+                                                      : val === 'reprovado'
+                                                      ? 'bg-red-100 border-red-400 text-red-700'
+                                                      : 'bg-amber-100 border-amber-400 text-amber-700';
+                                                  const label =
+                                                    val === 'complementares' ? 'Complementares' : val.charAt(0).toUpperCase() + val.slice(1);
+                                                  return (
+                                                    <div className="flex justify-center">
+                                                      <span className={`px-2 py-0.5 text-[10px] rounded border inline-block ${style}`}>
+                                                        {label}
+                                                      </span>
+                                                    </div>
+                                                  );
+                                                })()}
                                               </td>
                                               
                                               {/* Coluna Idade */}
@@ -3905,7 +3885,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             </td>
                                             
                                             {/* Coluna Status AIH */}
-                                            <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden">
+                                            <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden text-center">
                                               <span className="text-sm text-slate-400">-</span>
                                             </td>
                                             
@@ -3915,42 +3895,28 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                             </td>
                                             
                                             {/* Coluna Avaliação Anestesista */}
-                                            <td className="px-3 py-2 border-r border-slate-200 w-44 overflow-hidden">
-                                              <div className="flex items-center gap-1">
-                                                <button
-                                                  onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'aprovado')}
-                                                  className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
-                                                    proc.avaliacaoAnestesista === 'aprovado'
-                                                      ? 'bg-green-100 border-green-400 text-green-700'
-                                                      : 'bg-white border-slate-300 text-slate-700'
-                                                  }`}
-                                                  title="Aprovado"
-                                                >
-                                                  Aprovado
-                                                </button>
-                                                <button
-                                                  onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'reprovado')}
-                                                  className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
-                                                    proc.avaliacaoAnestesista === 'reprovado'
-                                                      ? 'bg-red-100 border-red-400 text-red-700'
-                                                      : 'bg-white border-slate-300 text-slate-700'
-                                                  }`}
-                                                  title="Reprovado"
-                                                >
-                                                  Reprovado
-                                                </button>
-                                                <button
-                                                  onClick={() => handleSetAvaliacaoAnestesista(index, proc.id, 'complementares')}
-                                                  className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
-                                                    proc.avaliacaoAnestesista === 'complementares'
-                                                      ? 'bg-amber-100 border-amber-400 text-amber-700'
-                                                      : 'bg-white border-slate-300 text-slate-700'
-                                                  }`}
-                                                  title="Complementares"
-                                                >
-                                                  Compl.
-                                                </button>
-                                              </div>
+                                            <td className="px-3 py-2 border-r border-slate-200 w-28 overflow-hidden">
+                                              {(() => {
+                                                const val = proc.avaliacaoAnestesista;
+                                                if (!val) {
+                                                  return <div className="flex justify-center"><span className="text-xs text-slate-500">-</span></div>;
+                                                }
+                                                const style =
+                                                  val === 'aprovado'
+                                                    ? 'bg-green-100 border-green-400 text-green-700'
+                                                    : val === 'reprovado'
+                                                    ? 'bg-red-100 border-red-400 text-red-700'
+                                                    : 'bg-amber-100 border-amber-400 text-amber-700';
+                                                const label =
+                                                  val === 'complementares' ? 'Complementares' : val.charAt(0).toUpperCase() + val.slice(1);
+                                                return (
+                                                  <div className="flex justify-center">
+                                                    <span className={`px-2 py-0.5 text-[10px] rounded border inline-block ${style}`}>
+                                                      {label}
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })()}
                                             </td>
                                             
                                             {/* Coluna Idade */}
