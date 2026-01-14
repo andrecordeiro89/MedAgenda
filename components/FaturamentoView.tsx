@@ -77,7 +77,23 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const { success, error: toastError, warning } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
+  const [filtroJustificativa, setFiltroJustificativa] = useState<string>('');
+  const [justificadosHoje, setJustificadosHoje] = useState<number>(0);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [justificadosHojeLista, setJustificadosHojeLista] = useState<Agendamento[]>([]);
+  const [bellDate, setBellDate] = useState<string>('');
   const confirmActionRef = useRef<(() => void) | null>(null);
+  
+  const hojeLocalStr = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  useEffect(() => {
+    setBellDate(hojeLocalStr());
+  }, []);
 
   // Carregar agendamentos
   useEffect(() => {
@@ -167,12 +183,60 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       console.log('   - Pendentes:', pendentes);
       
       setAgendamentos(agendamentosFiltrados);
+      const hoje = hojeLocalStr();
+      const countHoje = agendamentosFiltrados.filter(a => {
+        const hora = a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '';
+        const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+        const temJust = !!((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim());
+        return temJust && d === hoje;
+      }).length;
+      setJustificadosHoje(countHoje);
+      const listaHoje = agendamentosFiltrados.filter(a => {
+        const hora = a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '';
+        const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+        const temJust = !!((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim());
+        return temJust && d === hoje;
+      });
+      setJustificadosHojeLista(listaHoje);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
       setLoading(false);
     }
   };
+  
+  useEffect(() => {
+    const channel = supabase
+      .channel(`fat-just-${hospitalId || 'all'}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'agendamentos' }, (payload: any) => {
+        const novo = payload?.new;
+        if (!novo) return;
+        if (hospitalId && novo.hospital_id && novo.hospital_id !== hospitalId) return;
+        setAgendamentos(prev => {
+          const atualizados = prev.map(a => a.id === novo.id ? { ...a, justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento, justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome, justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora, updated_at: novo.updated_at } : a);
+          const hoje = hojeLocalStr();
+          const countHoje = atualizados.filter(ax => {
+            const hora = ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '';
+            const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+            const temJust = !!((ax.justificativa_alteracao_agendamento || '').trim() || (ax.justificativa_alteracao_agendamento_nome || '').trim());
+            return temJust && d === hoje;
+          }).length;
+          setJustificadosHoje(countHoje);
+          const listaHoje = atualizados.filter(ax => {
+            const hora = ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '';
+            const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+            const temJust = !!((ax.justificativa_alteracao_agendamento || '').trim() || (ax.justificativa_alteracao_agendamento_nome || '').trim());
+            return temJust && d === hoje;
+          });
+          setJustificadosHojeLista(listaHoje);
+          return atualizados;
+        });
+      });
+    channel.subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [hospitalId]);
 
   // Status e estilos iguais aos da Documentação
   const getAihStatusStyle = (status: string | null | undefined) => {
@@ -511,11 +575,22 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         }
       }
       
-      // Filtro por observação
+      // Filtro por observação (Agendamento e Faturamento)
       if (filtroObservacao) {
-        const temObservacao = ag.observacao_faturamento && ag.observacao_faturamento.trim() !== '';
-        if (filtroObservacao === 'com_observacao' && !temObservacao) return false;
-        if (filtroObservacao === 'sem_observacao' && temObservacao) return false;
+        const obsAg = (ag.observacao_agendamento || '').trim();
+        const obsFat = (ag.faturamento_observacao || ag.observacao_faturamento || '').trim();
+        const hasAg = !!obsAg;
+        const hasFat = !!obsFat;
+        if (filtroObservacao === 'obs_agendamento' && !(hasAg && !hasFat)) return false;
+        if (filtroObservacao === 'obs_faturamento' && !(hasFat && !hasAg)) return false;
+        if (filtroObservacao === 'obs_ambos' && !(hasAg && hasFat)) return false;
+        if (filtroObservacao === 'sem_observacao' && (hasAg || hasFat)) return false;
+      }
+      
+      if (filtroJustificativa) {
+        const hasJust = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
+        if (filtroJustificativa === 'com_justificativa' && !hasJust) return false;
+        if (filtroJustificativa === 'sem_justificativa' && hasJust) return false;
       }
       
       // Filtro por Data de Inserção (created_at, formato YYYY-MM-DD)
@@ -545,6 +620,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setFiltroStatusInterno('');
     setFiltroConfirmado('');
     setFiltroObservacao('');
+    setFiltroJustificativa('');
     setFiltroDataInsercao('');
   };
 
@@ -809,7 +885,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     doc.save(nomeArquivo);
   };
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroDataInsercao;
+  const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroJustificativa || filtroDataInsercao;
   
   // Alternar ordenação ao clicar no cabeçalho
   const handleOrdenacao = (coluna: 'data_consulta' | 'data_cirurgia') => {
@@ -878,7 +954,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatusExames, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroDataInsercao]);
+  }, [filtroStatusExames, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroJustificativa, filtroDataInsercao]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -1363,6 +1439,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Estado para controlar observação em edição
   const [observacaoEmEdicao, setObservacaoEmEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoObservacao, setSalvandoObservacao] = useState<string | null>(null);
+  const [justificativaEdicao, setJustificativaEdicao] = useState<{ [id: string]: string }>({});
+  const [justificativaNomeEdicao, setJustificativaNomeEdicao] = useState<{ [id: string]: string }>({});
+  const [salvandoJustificativaId, setSalvandoJustificativaId] = useState<string | null>(null);
   
   // Salvar observação do faturamento
   const handleSalvarObservacao = async (ag: Agendamento) => {
@@ -1408,6 +1487,28 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const editada = observacaoEmEdicao[ag.id];
     if (editada === undefined) return false;
     return editada !== original;
+  };
+  
+  const handleSalvarJustificativa = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    const texto = (justificativaEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento ?? '').trim();
+    const nome = (justificativaNomeEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    const payload: Partial<Agendamento> = {
+      justificativa_alteracao_agendamento: texto || null,
+      justificativa_alteracao_agendamento_nome: nome || null,
+      justificativa_alteracao_agendamento_nome_hora: new Date().toISOString()
+    };
+    try {
+      setSalvandoJustificativaId(ag.id);
+      await agendamentoService.update(ag.id, payload);
+      setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
+      success('Justificativa salva');
+    } catch (error) {
+      console.error('Erro ao salvar justificativa:', error);
+      toastError('Erro ao salvar justificativa. Tente novamente');
+    } finally {
+      setSalvandoJustificativaId(null);
+    }
   };
 
   // Verificar se linha está expandida
@@ -1589,8 +1690,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             <div className="text-sm font-medium text-gray-900 whitespace-normal break-words leading-tight sm:text-xs" title={ag.nome_paciente || ag.nome || '-'}>
               <div className="flex items-center gap-1">
                 <span className="truncate">{ag.nome_paciente || ag.nome || '-'}</span>
-                {(((observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? '') as string).trim() !== '') && (
-                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" title="Possui observação do faturamento" />
+                {(((ag.observacao_agendamento || '') as string).trim() !== '') && (
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-purple-500" title="Observação de Agendamento" />
+                )}
+                {(((observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ag.faturamento_observacao ?? '') as string).trim() !== '') && (
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-orange-500" title="Observação de Faturamento" />
                 )}
               </div>
             </div>
@@ -1693,9 +1797,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <button
                     onClick={() => { setAbaAtiva('documentos'); handleAbrirModalUpload(ag); }}
                     className="text-[11px] font-semibold text-blue-700 hover:underline"
-                    title="Anexar ou visualizar documentação (exames e pré-op)"
+                    title="Anexar ou visualizar documentos (exames e pré-op)"
                   >
-                    Documentação
+                    Agendamento
                   </button>
                 </div>
               );
@@ -1778,36 +1882,129 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   </div>
                 </div>
               </div>
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
-                <textarea
-                  value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ''}
-                  onChange={(e) => setObservacaoEmEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
-                  placeholder="Digite uma observação sobre este paciente..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
-                  rows={2}
-                  disabled={salvandoObservacao === ag.id}
-                />
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-gray-500">{ag.observacao_faturamento ? 'Observação salva' : 'Nenhuma observação salva'}</span>
-                  <button
-                    onClick={() => handleSalvarObservacao(ag)}
-                    disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${observacaoModificada(ag) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
-                  >
-                    {salvandoObservacao === ag.id ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        Salvar Observação
-                      </>
-                    )}
-                  </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
+                  <textarea
+                    value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ''}
+                    onChange={(e) => setObservacaoEmEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                    placeholder="Digite uma observação sobre este paciente..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
+                    rows={2}
+                    disabled={salvandoObservacao === ag.id}
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-gray-500">{ag.observacao_faturamento ? 'Observação salva' : 'Nenhuma observação salva'}</span>
+                    <button
+                      onClick={() => handleSalvarObservacao(ag)}
+                      disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${observacaoModificada(ag) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                    >
+                      {salvandoObservacao === ag.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          Salvar Observação
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
+                {(() => {
+                  const justificativaSalva = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
+                  return (
+                    <div className={`p-3 border rounded-lg ${justificativaSalva ? 'bg-violet-50/70 border-violet-200 opacity-80' : 'bg-violet-50 border-violet-200'}`}>
+                      <div className="flex items-center gap-2 mb-2"><span className="text-violet-600">✍️</span><label className="text-sm font-semibold text-gray-700">Justificativa de Alteração</label></div>
+                      <div className="space-y-2">
+                        <textarea
+                          value={justificativaEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento ?? ''}
+                          onChange={(e) => setJustificativaEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                          placeholder="Descreva a justificativa da alteração..."
+                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
+                          rows={2}
+                          readOnly={justificativaSalva}
+                          disabled={salvandoJustificativaId === ag.id}
+                        />
+                        <input
+                          type="text"
+                          value={justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? ''}
+                          onChange={(e) => setJustificativaNomeEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                          placeholder="Nome do colaborador"
+                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
+                          readOnly={justificativaSalva}
+                          disabled={salvandoJustificativaId === ag.id}
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">{justificativaSalva ? 'Justificativa salva' : 'Nenhuma justificativa registrada'}</span>
+                          <button
+                            onClick={() => handleSalvarJustificativa(ag)}
+                            disabled={salvandoJustificativaId === ag.id}
+                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${salvandoJustificativaId === ag.id ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-violet-600 text-white hover:bg-violet-700'}`}
+                          >
+                            {salvandoJustificativaId === ag.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                                Salvando...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                Salvar
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {(ag.justificativa_alteracao_agendamento_nome || ag.justificativa_alteracao_agendamento_nome_hora) && (
+                          <div className="text-xs text-gray-500">
+                            {ag.justificativa_alteracao_agendamento_nome && <>Por: {ag.justificativa_alteracao_agendamento_nome}</>}
+                            {ag.justificativa_alteracao_agendamento_nome_hora && (
+                              <> • {new Date(ag.justificativa_alteracao_agendamento_nome_hora).toLocaleDateString('pt-BR')} às {new Date(ag.justificativa_alteracao_agendamento_nome_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-blue-600">📄</span>
+                  <label className="text-sm font-semibold text-gray-700">Observação (Documentação)</label>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {(ag.observacao_agendamento || '').trim() || '-'}
+                </div>
+              </div>
+              <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-indigo-600">🩺</span>
+                  <label className="text-sm font-semibold text-gray-700">Observação (Anestesista)</label>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {(() => {
+                    const status = (ag.avaliacao_anestesista || '').toLowerCase();
+                    if (status === 'aprovado') {
+                      return (ag.avaliacao_anestesista_observacao || '').trim() || '-';
+                    }
+                    if (status === 'reprovado') {
+                      return (ag.avaliacao_anestesista_motivo_reprovacao || '').trim() || '-';
+                    }
+                    if (status === 'complementares') {
+                      return (ag.avaliacao_anestesista_complementares || '').trim() || '-';
+                    }
+                    return '-';
+                  })()}
+                </div>
+                {ag.avaliacao_anestesista_data && (
+                  <div className="text-xs text-gray-500 mt-2">
+                    Marcado em: {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
               </div>
               {ag.faturamento_liberado === false && ag.faturamento_observacao && (
                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded">
@@ -1867,7 +2064,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             Liberação de pacientes e download de documentos para entrada no sistema G-SUS
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <button className="flex items-center gap-2 px-3 py-2 bg-violet-50 text-violet-700 rounded-lg border border-violet-200"
+            onClick={() => setBellOpen(true)}
+            title="Ver pacientes justificados hoje">
+            <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span className="text-sm font-semibold">Justificados hoje:</span>
+            <span className="text-sm font-bold">{justificadosHoje}</span>
+          </button>
           <button
             onClick={carregarAgendamentos}
             disabled={loading}
@@ -1905,171 +2111,184 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">📄 Status dos Exames</label>
-              <select
-                value={filtroStatusExames}
-                onChange={(e) => setFiltroStatusExames(e.target.value)}
-                className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusExames ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-              >
-                <option value="">📊 Todos</option>
-                <option value="COM EXAMES">✅ Com Exames</option>
-                <option value="SEM EXAMES">⚠️ Sem Exames</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">🧾 Status AIH</label>
-              <select
-                value={filtroAih}
-                onChange={(e) => setFiltroAih(e.target.value)}
-                className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${filtroAih ? 'border-amber-500 bg-amber-50' : 'border-gray-300'}`}
-              >
-                <option value="">📊 Todos</option>
-                <option value="Autorizado">Autorizado</option>
-                <option value="Pendência Hospital">Pendência Hospital</option>
-                <option value="Pendência Faturamento">Pendência Faturamento</option>
-                <option value="Auditor Externo">Auditor Externo</option>
-                <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
-                <option value="N/A - Urgência">N/A - Urgência</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">📄 Data Inserção</label>
-              <input
-                type="date"
-                value={filtroDataInsercao}
-                onChange={(e) => setFiltroDataInsercao(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">📄 Status dos Exames</label>
+            <select
+              value={filtroStatusExames}
+              onChange={(e) => setFiltroStatusExames(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusExames ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="COM EXAMES">✅ Com Exames</option>
+              <option value="SEM EXAMES">⚠️ Sem Exames</option>
+            </select>
           </div>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Status Interno</label>
-              <select
-                value={filtroStatusInterno}
-                onChange={(e) => setFiltroStatusInterno(e.target.value)}
-                className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusInterno ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-              >
-                <option value="">📊 Todos</option>
-                <option value="Anestesista">Anestesista</option>
-                <option value="Cardio">Cardio</option>
-                <option value="Exames">Exames</option>
-                <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
-                <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
-                <option value="Confirmado com Paciente">Confirmado com Paciente</option>
-                <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
-              <select
-                value={filtroConfirmado}
-                onChange={(e) => setFiltroConfirmado(e.target.value)}
-                className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroConfirmado ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-              >
-                <option value="">📊 Todos</option>
-                <option value="Confirmado">Confirmado</option>
-                <option value="Aguardando">Aguardando</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">🧾 Status AIH</label>
+            <select
+              value={filtroAih}
+              onChange={(e) => setFiltroAih(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${filtroAih ? 'border-amber-500 bg-amber-50' : 'border-gray-300'}`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="Autorizado">Autorizado</option>
+              <option value="Pendência Hospital">Pendência Hospital</option>
+              <option value="Pendência Faturamento">Pendência Faturamento</option>
+              <option value="Auditor Externo">Auditor Externo</option>
+              <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+              <option value="N/A - Urgência">N/A - Urgência</option>
+            </select>
           </div>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
-              <input
-                type="text"
-                value={filtroPaciente}
-                onChange={(e) => setFiltroPaciente(e.target.value)}
-                placeholder="Nome do paciente..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Nº Prontuário</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={filtroProntuario}
-                onChange={(e) => setFiltroProntuario(e.target.value)}
-                placeholder="Digite números do prontuário..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                title="Filtrar por números do prontuário"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">📄 Data Inserção</label>
+            <input
+              type="date"
+              value={filtroDataInsercao}
+              onChange={(e) => setFiltroDataInsercao(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white"
+            />
           </div>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Médico</label>
-              <select
-                value={filtroMedicoId}
-                onChange={(e) => setFiltroMedicoId(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-              >
-                <option value="">Todos</option>
-                {medicosDisponiveis
-                  .slice()
-                  .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-                  .map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.nome}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Data Consulta</label>
-              <input
-                type="text"
-                value={filtroDataConsulta}
-                onChange={(e) => setFiltroDataConsulta(e.target.value)}
-                placeholder="DD/MM/AAAA"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Status Interno</label>
+            <select
+              value={filtroStatusInterno}
+              onChange={(e) => setFiltroStatusInterno(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusInterno ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="Anestesista">Anestesista</option>
+              <option value="Cardio">Cardio</option>
+              <option value="Exames">Exames</option>
+              <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
+              <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
+              <option value="Confirmado com Paciente">Confirmado com Paciente</option>
+              <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
+            </select>
           </div>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Data Cirurgia</label>
-              <input
-                type="text"
-                value={filtroDataCirurgia}
-                onChange={(e) => setFiltroDataCirurgia(e.target.value)}
-                placeholder="DD/MM/AAAA"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">📅 Mês Cirurgia</label>
-              <select
-                value={filtroMesCirurgia}
-                onChange={(e) => setFiltroMesCirurgia(e.target.value)}
-                className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${filtroMesCirurgia ? 'border-teal-500 bg-teal-50' : 'border-gray-300'}`}
-              >
-                <option value="">Todos os meses</option>
-                <option value="2025-10">Outubro/2025</option>
-                <option value="2025-11">Novembro/2025</option>
-                <option value="2025-12">Dezembro/2025</option>
-                <option value="2026-01">Janeiro/2026</option>
-                <option value="2026-02">Fevereiro/2026</option>
-                <option value="2026-03">Março/2026</option>
-                <option value="2026-04">Abril/2026</option>
-                <option value="2026-05">Maio/2026</option>
-                <option value="2026-06">Junho/2026</option>
-                <option value="2026-07">Julho/2026</option>
-                <option value="2026-08">Agosto/2026</option>
-                <option value="2026-09">Setembro/2026</option>
-                <option value="2026-10">Outubro/2026</option>
-                <option value="2026-11">Novembro/2026</option>
-                <option value="2026-12">Dezembro/2026</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
+            <select
+              value={filtroConfirmado}
+              onChange={(e) => setFiltroConfirmado(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroConfirmado ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="Confirmado">Confirmado</option>
+              <option value="Aguardando">Aguardando</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Justificativa</label>
+            <select
+              value={filtroJustificativa}
+              onChange={(e) => setFiltroJustificativa(e.target.value)}
+              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition-colors bg-white font-medium"
+            >
+              <option value="">📊 Todos</option>
+              <option value="com_justificativa">🟣 Justificado</option>
+              <option value="sem_justificativa">Sem justificativa</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Observação</label>
+            <select
+              value={filtroObservacao}
+              onChange={(e) => setFiltroObservacao(e.target.value)}
+              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium"
+              title="Filtrar por observação"
+            >
+              <option value="">📊 Todos</option>
+              <option value="sem_observacao">Sem observação</option>
+              <option value="obs_agendamento">🟣 Observação de Agendamento</option>
+              <option value="obs_faturamento">🟠 Observação de Faturamento</option>
+              <option value="obs_ambos">🟣+🟠 Ambas</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
+            <input
+              type="text"
+              value={filtroPaciente}
+              onChange={(e) => setFiltroPaciente(e.target.value)}
+              placeholder="Nome do paciente..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nº Prontuário</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={filtroProntuario}
+              onChange={(e) => setFiltroProntuario(e.target.value)}
+              placeholder="Digite números do prontuário..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+              title="Filtrar por números do prontuário"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Médico</label>
+            <select
+              value={filtroMedicoId}
+              onChange={(e) => setFiltroMedicoId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            >
+              <option value="">Todos</option>
+              {medicosDisponiveis
+                .slice()
+                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                .map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.nome}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data Consulta</label>
+            <input
+              type="text"
+              value={filtroDataConsulta}
+              onChange={(e) => setFiltroDataConsulta(e.target.value)}
+              placeholder="DD/MM/AAAA"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data Cirurgia</label>
+            <input
+              type="text"
+              value={filtroDataCirurgia}
+              onChange={(e) => setFiltroDataCirurgia(e.target.value)}
+              placeholder="DD/MM/AAAA"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">📅 Mês Cirurgia</label>
+            <select
+              value={filtroMesCirurgia}
+              onChange={(e) => setFiltroMesCirurgia(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${filtroMesCirurgia ? 'border-teal-500 bg-teal-50' : 'border-gray-300'}`}
+            >
+              <option value="">Todos os meses</option>
+              <option value="2025-10">Outubro/2025</option>
+              <option value="2025-11">Novembro/2025</option>
+              <option value="2025-12">Dezembro/2025</option>
+              <option value="2026-01">Janeiro/2026</option>
+              <option value="2026-02">Fevereiro/2026</option>
+              <option value="2026-03">Março/2026</option>
+              <option value="2026-04">Abril/2026</option>
+              <option value="2026-05">Maio/2026</option>
+              <option value="2026-06">Junho/2026</option>
+              <option value="2026-07">Julho/2026</option>
+              <option value="2026-08">Agosto/2026</option>
+              <option value="2026-09">Setembro/2026</option>
+              <option value="2026-10">Outubro/2026</option>
+              <option value="2026-11">Novembro/2026</option>
+              <option value="2026-12">Dezembro/2026</option>
+            </select>
           </div>
         </div>
         
@@ -2134,17 +2353,6 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       <option value="100">100</option>
                     </select>
                     <div className="hidden sm:flex items-center gap-2 ml-4">
-                      <label className="text-sm text-gray-600">Observação:</label>
-                      <select
-                        value={filtroObservacao}
-                        onChange={(e) => setFiltroObservacao(e.target.value)}
-                        className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
-                        title="Filtrar por observação"
-                      >
-                        <option value="">Todos</option>
-                        <option value="com_observacao">📝 Com observação</option>
-                      <option value="sem_observacao">Sem observação</option>
-                    </select>
                     <button
                       onClick={handleAbrirModalRelatorio}
                       className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
@@ -2411,7 +2619,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors sm:w-28 md:w-32 lg:w-36" title="Agrupar por exames">Exames</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-36 md:w-40 lg:w-44 xl:w-52">Status Interno</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">Confirmado</th>
-                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">Documentação</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">Agendamento</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">Download</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10"></th>
                   </tr>
@@ -2668,7 +2876,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               setAgendamentoSelecionado(null);
               setTipoDeExame('');
             }}
-            title={`Documentação - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+            title={`Agendamento - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
             size="large"
           >
             <div className="space-y-4">
@@ -2890,7 +3098,87 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           </Modal>
         </>
       )}
-      
+
+      <Modal
+        isOpen={bellOpen}
+        onClose={() => setBellOpen(false)}
+        title="Pacientes Justificados Hoje"
+        size="full"
+        headerActions={
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={bellDate}
+              onChange={(e) => setBellDate(e.target.value)}
+              className="px-2 py-1 text-sm border border-gray-300 rounded"
+              title="Selecionar data"
+            />
+            <button
+              onClick={() => setBellDate(hojeLocalStr())}
+              className="px-2 py-1 text-xs font-medium rounded bg-violet-600 text-white hover:bg-violet-700"
+              title="Hoje"
+            >
+              Hoje
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          {(() => {
+            const temJust = (agendamentos || []).some(a => ((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim()));
+            const rows = (agendamentos || []).filter(a => {
+              const tem = ((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim());
+              if (!tem) return false;
+              const hora = a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '';
+              const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+              return bellDate ? d === bellDate : true;
+            });
+            if (rows.length === 0) {
+              return <p className="text-sm text-gray-600">Nenhum paciente justificado na data selecionada.</p>;
+            }
+            return (
+              <div className="rounded-lg border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between px-3 py-2 bg-violet-50 border-b border-gray-200 rounded-t-lg">
+                  <div className="text-sm font-semibold text-violet-700">Data: {bellDate || '-'}</div>
+                  <div className="px-2 py-1 text-xs font-semibold rounded bg-violet-100 text-violet-700">{rows.length} registro(s)</div>
+                </div>
+                <div className="max-h-[70vh] overflow-y-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Paciente</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Procedimento</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Data Cirurgia</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Observação Faturamento</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Justificativa</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Autor</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Hora</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {rows.map((ag) => (
+                      <tr key={ag.id} className="align-top odd:bg-white even:bg-gray-50 hover:bg-violet-50/50 transition-colors">
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900">{ag.nome_paciente || '-'}</td>
+                        <td className="px-3 py-2 text-sm text-gray-700">{ag.procedimentos || '-'}</td>
+                        <td className="px-3 py-2 text-sm text-gray-700">{formatarData(ag.data_agendamento || ag.dataAgendamento)}</td>
+                        <td className="px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">{(ag.faturamento_observacao || ag.observacao_faturamento || '-')}</td>
+                        <td className="px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">{ag.justificativa_alteracao_agendamento || '-'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{ag.justificativa_alteracao_agendamento_nome || '-'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">
+                          {(ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at)
+                            ? `${new Date((ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at) as string).toLocaleDateString('pt-BR')} ${new Date((ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at) as string).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                            : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </Modal>
       {/* Modal para NÃO LIBERADO */}
       <Modal
         isOpen={modalNaoLiberadoAberto}

@@ -445,6 +445,11 @@ export const agendamentoService = {
       tipo_de_exame: item.tipo_de_exame ?? null,
       documentos_meta: item.documentos_meta ?? null,
       observacao_agendamento: item.observacao_agendamento ?? null,
+      observacao_faturamento: item.observacao_faturamento ?? null,
+      faturamento_observacao: item.faturamento_observacao ?? null,
+      justificativa_alteracao_agendamento: item.justificativa_alteracao_agendamento ?? null,
+      justificativa_alteracao_agendamento_nome: item.justificativa_alteracao_agendamento_nome ?? null,
+      justificativa_alteracao_agendamento_nome_hora: item.justificativa_alteracao_agendamento_nome_hora ?? null,
       n_prontuario: item.n_prontuario ?? null,
       // Alias para compatibilidade em locais que usam 'prontuario'
       prontuario: item.n_prontuario ?? null,
@@ -588,6 +593,11 @@ export const agendamentoService = {
     if (agendamento.faturamento_data !== undefined) updateData.faturamento_data = agendamento.faturamento_data
     if (agendamento.faturamento_status !== undefined) updateData.faturamento_status = agendamento.faturamento_status
     if (agendamento.observacao_faturamento !== undefined) updateData.observacao_faturamento = agendamento.observacao_faturamento
+    
+    // Justificativa de alteração no Agendamento (campos de auditoria)
+    if (agendamento.justificativa_alteracao_agendamento !== undefined) updateData.justificativa_alteracao_agendamento = agendamento.justificativa_alteracao_agendamento
+    if (agendamento.justificativa_alteracao_agendamento_nome !== undefined) updateData.justificativa_alteracao_agendamento_nome = agendamento.justificativa_alteracao_agendamento_nome
+    if (agendamento.justificativa_alteracao_agendamento_nome_hora !== undefined) updateData.justificativa_alteracao_agendamento_nome_hora = agendamento.justificativa_alteracao_agendamento_nome_hora
 
     try {
       console.log('📝 Dados que serão enviados ao banco:', updateData);
@@ -649,6 +659,33 @@ export const agendamentoService = {
       // Se chegou aqui, algo estranho aconteceu
       throw new Error(`Status inesperado: ${status} - ${statusText}`);
     } catch (error: any) {
+      // Fallback: coluna de hora não existe no schema (migrar depois)
+      if (error.message?.includes('justificativa_alteracao_agendamento_nome_hora')) {
+        console.warn('⚠️ Coluna justificativa_alteracao_agendamento_nome_hora ausente. Tentando UPDATE sem ela...');
+        try {
+          if (updateData.justificativa_alteracao_agendamento_nome_hora !== undefined) {
+            delete updateData.justificativa_alteracao_agendamento_nome_hora;
+          }
+          const { error: errorRetry, status: statusRetry } = await supabase
+            .from('agendamentos')
+            .update(updateData)
+            .eq('id', id);
+          if (errorRetry) throw new Error(errorRetry.message);
+          if (statusRetry >= 200 && statusRetry < 300) {
+            const { data: agendamentoAtualizado, error: selectError } = await supabase
+              .from('agendamentos')
+              .select('*')
+              .eq('id', id)
+              .single();
+            if (selectError) {
+              return { id, ...updateData } as Agendamento;
+            }
+            return agendamentoAtualizado as Agendamento;
+          }
+        } catch (e: any) {
+          throw e;
+        }
+      }
       // Se o erro for sobre updated_at, tentar sem trigger
       if (error.message?.includes('updated_at')) {
         console.warn('⚠️ Tentando UPDATE sem updated_at...');

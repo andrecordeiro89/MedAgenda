@@ -565,7 +565,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         <div className="bg-white p-4 rounded-lg shadow-md">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
-                <h2 className="text-lg font-bold text-slate-800">Calendário de Agendamentos</h2>
+                <h2 className="text-lg font-bold text-slate-800">Grade</h2>
                 <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-slate-100"><ChevronLeftIcon /></button>
                 <h3 className="text-base font-semibold capitalize">
                     {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}

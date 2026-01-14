@@ -80,7 +80,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [examesMeta, setExamesMeta] = useState<Array<{ url: string; tipo: string }>>([]);
   const [obsAgendamentoEdicao, setObsAgendamentoEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoObsAgendamento, setSalvandoObsAgendamento] = useState<string | null>(null);
+  const [obsFaturamentoEdicao, setObsFaturamentoEdicao] = useState<{ [id: string]: string }>({});
+  const [salvandoObsFaturamento, setSalvandoObsFaturamento] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<{ [id: string]: boolean }>({});
+  const [justificativaEdicao, setJustificativaEdicao] = useState<{ [id: string]: string }>({});
+  const [justificativaNomeEdicao, setJustificativaNomeEdicao] = useState<{ [id: string]: string }>({});
+  const [salvandoJustificativaId, setSalvandoJustificativaId] = useState<string | null>(null);
   
   const [salvandoAIH, setSalvandoAIH] = useState<Set<string>>(new Set());
   const [salvandoLiberacao, setSalvandoLiberacao] = useState<Set<string>>(new Set());
@@ -561,11 +566,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
     }
     
-    // Filtro Observação (ag.observacao_agendamento)
+    // Filtro Observação (Agendamento e Faturamento)
     if (filtroObservacao) {
-      const temObs = !!(ag.observacao_agendamento && ag.observacao_agendamento.trim() !== '');
-      if (filtroObservacao === 'com_observacao' && !temObs) return false;
-      if (filtroObservacao === 'sem_observacao' && temObs) return false;
+      const obsAg = (ag.observacao_agendamento || '').trim();
+      const obsFat = (ag.faturamento_observacao || ag.observacao_faturamento || '').trim();
+      const hasAg = !!obsAg;
+      const hasFat = !!obsFat;
+      if (filtroObservacao === 'obs_agendamento' && !(hasAg && !hasFat)) return false;
+      if (filtroObservacao === 'obs_faturamento' && !(hasFat && !hasAg)) return false;
+      if (filtroObservacao === 'obs_ambos' && !(hasAg && hasFat)) return false;
+      if (filtroObservacao === 'sem_observacao' && (hasAg || hasFat)) return false;
     }
     
     if (filtroDataInsercao) {
@@ -793,6 +803,77 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setSalvandoObsAgendamento(null);
       setConfirmOpen(false);
       confirmActionRef.current = null;
+    }
+  };
+
+  const handleSalvarObservacaoFaturamento = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    const nova = (obsFaturamentoEdicao[ag.id] ?? ag.faturamento_observacao ?? ag.observacao_faturamento ?? '').trim();
+    setSalvandoObsFaturamento(ag.id);
+    try {
+      const updateData: Partial<Agendamento> = {
+        faturamento_observacao: nova || null,
+        observacao_faturamento: nova || null
+      };
+      await agendamentoService.update(ag.id, updateData);
+      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      setObsFaturamentoEdicao(prev => {
+        const next = { ...prev };
+        delete next[ag.id!];
+        return next;
+      });
+      success('Observação de faturamento salva');
+    } catch (error: any) {
+      console.error('Erro ao salvar observação de faturamento:', error);
+      toastError('Erro ao salvar observação de faturamento. Tente novamente');
+    } finally {
+      setSalvandoObsFaturamento(null);
+    }
+  };
+
+  const handleApagarObservacaoFaturamento = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    setSalvandoObsFaturamento(ag.id);
+    try {
+      const updateData: Partial<Agendamento> = {
+        faturamento_observacao: null,
+        observacao_faturamento: null
+      };
+      await agendamentoService.update(ag.id, updateData);
+      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      setObsFaturamentoEdicao(prev => {
+        const next = { ...prev };
+        delete next[ag.id!];
+        return next;
+      });
+      success('Observação de faturamento apagada');
+    } catch (error: any) {
+      console.error('Erro ao apagar observação de faturamento:', error);
+      toastError('Erro ao apagar observação de faturamento. Tente novamente');
+    } finally {
+      setSalvandoObsFaturamento(null);
+    }
+  };
+  
+  const handleSalvarJustificativa = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    const texto = (justificativaEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento ?? '').trim();
+    const nome = (justificativaNomeEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    const payload: Partial<Agendamento> = {
+      justificativa_alteracao_agendamento: texto || null,
+      justificativa_alteracao_agendamento_nome: nome || null,
+      justificativa_alteracao_agendamento_nome_hora: new Date().toISOString()
+    };
+    try {
+      setSalvandoJustificativaId(ag.id);
+      const atualizado = await agendamentoService.update(ag.id, payload);
+      setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
+      success('Justificativa salva');
+    } catch (error) {
+      console.error('Erro ao salvar justificativa:', error);
+      toastError('Erro ao salvar justificativa. Tente novamente');
+    } finally {
+      setSalvandoJustificativaId(null);
     }
   };
   
@@ -1546,11 +1627,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <div className="flex items-center gap-1">
                 <span className="truncate">{ag.nome_paciente || ag.nome || '-'}</span>
                 {(((obsAgendamentoEdicao[ag.id!] ?? ag.observacao_agendamento ?? '') as string).trim() !== '') && (
-                  <span
-                    className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-500"
-                    title="Possui observação do agendamento"
-                  />
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-purple-500" title="Observação de Agendamento" />
                 )}
+                {((((ag.faturamento_observacao || ag.observacao_faturamento || '') as string).trim() !== '')) && (
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-orange-500" title="Observação de Faturamento" />
+                )}
+                
               </div>
             </div>
           </td>
@@ -1743,9 +1825,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       handleAbrirModalUpload(ag);
                     }}
                     className="text-[11px] font-semibold text-blue-700 hover:underline"
-                    title="Anexar ou visualizar documentação (exames e pré-op)"
+                    title="Anexar ou visualizar documentos (exames e pré-op)"
                   >
-                    Documentação
+                    Agendamento
                   </button>
                 </div>
               );
@@ -1915,9 +1997,92 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       Apagar
                     </button>
                   </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-600">💳</span>
+                  <label className="text-sm font-semibold text-gray-700">
+                    Observação de Faturamento
+                  </label>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {(ag.faturamento_observacao || ag.observacao_faturamento || '').trim() || '-'}
                 </div>
               </div>
-              
+              {(() => {
+                const justificativaSalva = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
+                return (
+                  <div className={`p-3 border rounded-lg ${justificativaSalva ? 'bg-violet-50/70 border-violet-200 opacity-80' : 'bg-violet-50 border-violet-200'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-violet-600">✍️</span>
+                      <label className="text-sm font-semibold text-gray-700">
+                        Justificativa de Alteração
+                      </label>
+                    </div>
+                    <div className="space-y-2">
+                      <textarea
+                        value={justificativaEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento ?? ''}
+                        onChange={(e) => setJustificativaEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                        placeholder="Descreva a justificativa da alteração..."
+                        className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
+                        rows={2}
+                        readOnly={justificativaSalva}
+                        disabled={salvandoJustificativaId === ag.id}
+                      />
+                      <input
+                        type="text"
+                        value={justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? ''}
+                        onChange={(e) => setJustificativaNomeEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                        placeholder="Nome do colaborador"
+                        className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
+                        readOnly={justificativaSalva}
+                        disabled={salvandoJustificativaId === ag.id}
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">
+                          {justificativaSalva ? 'Justificativa salva' : 'Nenhuma justificativa registrada'}
+                        </span>
+                        <button
+                          onClick={() => handleSalvarJustificativa(ag)}
+                          disabled={salvandoJustificativaId === ag.id}
+                          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
+                            salvandoJustificativaId === ag.id
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : 'bg-violet-600 text-white hover:bg-violet-700'
+                          }`}
+                        >
+                          {salvandoJustificativaId === ag.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                              Salvando...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Salvar
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {(ag.justificativa_alteracao_agendamento_nome || ag.justificativa_alteracao_agendamento_nome_hora) && (
+                        <div className="text-xs text-gray-500">
+                          {ag.justificativa_alteracao_agendamento_nome && <>Por: {ag.justificativa_alteracao_agendamento_nome}</>}
+                          {ag.justificativa_alteracao_agendamento_nome_hora && (
+                            <> • {new Date(ag.justificativa_alteracao_agendamento_nome_hora).toLocaleDateString('pt-BR')} às {new Date(ag.justificativa_alteracao_agendamento_nome_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
               {ag.avaliacao_anestesista && (
                 <div className={`mt-4 p-3 rounded-lg border-l-4 ${
                   ag.avaliacao_anestesista === 'aprovado'
@@ -1949,6 +2114,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   )}
                 </div>
               )}
+              
             </td>
           </tr>
         )}
@@ -2228,7 +2394,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       {/* Cabeçalho */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">📋 Documentação Pré-Cirúrgica</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">📋 Agendamento Pré-Cirúrgico</h1>
           <p className="text-gray-600">
             Gerenciamento de documentos dos pacientes
           </p>
@@ -2451,6 +2617,25 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </select>
           </div>
           
+          {/* Filtro Observação */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Observação
+            </label>
+            <select
+              value={filtroObservacao}
+              onChange={(e) => setFiltroObservacao(e.target.value)}
+              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium"
+              title="Filtrar por observação"
+            >
+              <option value="">📊 Todos</option>
+              <option value="sem_observacao">Sem observação</option>
+              <option value="obs_agendamento">🟣 Observação de Agendamento</option>
+              <option value="obs_faturamento">🟠 Observação de Faturamento</option>
+              <option value="obs_ambos">🟣+🟠 Ambas</option>
+            </select>
+          </div>
+          
           {/* Filtro Avaliação Anestesista */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2578,17 +2763,6 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       <option value="100">100</option>
                     </select>
                   <div className="hidden sm:flex items-center gap-2 ml-4">
-                    <label className="text-sm text-gray-600">Observação:</label>
-                    <select
-                      value={filtroObservacao}
-                      onChange={(e) => setFiltroObservacao(e.target.value)}
-                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
-                      title="Filtrar por observação"
-                    >
-                      <option value="">Todos</option>
-                      <option value="com_observacao">📝 Com observação</option>
-                      <option value="sem_observacao">Sem observação</option>
-                    </select>
                     <button
                       onClick={handleAbrirModalRelatorioInterno}
                       className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
@@ -2769,7 +2943,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       Confirmado
                     </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">
-                      Documentação
+                      Agendamento
                     </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
                       {/* Botão expandir */}
@@ -2979,7 +3153,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           {/* Legenda */}
           <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 to-blue-100/50 rounded-lg border-l-4 border-blue-500 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <span className="text-blue-600">📌</span> Sistema de Documentação Visual
+              <span className="text-blue-600">📌</span> Sistema de Agendamento Visual
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
               <div className="flex items-start gap-2 bg-white p-2 rounded">
@@ -3008,7 +3182,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Clique nos itens da coluna <strong>DOCUMENTAÇÃO</strong> para anexar ou visualizar arquivos
+              Clique nos itens da coluna <strong>AGENDAMENTO</strong> para anexar ou visualizar arquivos
             </p>
           </div>
         </>
@@ -3024,7 +3198,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           setAgendamentoSelecionado(null);
           setTipoDeExame('');
         }}
-        title={`Documentação - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+        title={`Agendamento - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
         size="large"
       >
         <div className="space-y-4">
@@ -3349,6 +3523,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           {/* Conteúdo da aba de complementares removido */}
         </div>
       </Modal>
+      
+      
 
       
 

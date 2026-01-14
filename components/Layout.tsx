@@ -149,8 +149,8 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
     // Todas as opções de navegação possíveis
     const allNavLinks = [
         { view: 'dashboard' as View, label: 'Dashboard', icon: <HomeIcon className="w-5 h-5"/> },
-        { view: 'calendar' as View, label: 'Agenda', icon: <CalendarIcon className="w-5 h-5"/> },
-        { view: 'documentacao' as View, label: 'Documentação', icon: <ListIcon className="w-5 h-5"/> },
+        { view: 'calendar' as View, label: 'Grade', icon: <CalendarIcon className="w-5 h-5"/> },
+        { view: 'documentacao' as View, label: 'Agendamento', icon: <ListIcon className="w-5 h-5"/> },
         { view: 'anestesista' as View, label: 'Anestesista', icon: <ListIcon className="w-5 h-5"/> },
         { view: 'faturamento' as View, label: 'Faturamento', icon: <ListIcon className="w-5 h-5"/> }
     ];
@@ -305,7 +305,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                                     }}
                                                     className="w-full text-center text-sm text-amber-600 hover:text-amber-700 font-medium py-1"
                                                 >
-                                                    Ver todos na Documentação →
+                                                    Ver todos em Agendamento →
                                                 </button>
                                             </div>
                                         )}

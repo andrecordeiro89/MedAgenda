@@ -54,6 +54,11 @@ export interface Agendamento {
   faturamento_status?: 'pendente' | 'auditor' | 'autorizado' | null; // Status do processo: pendente, auditor, autorizado
   observacao_faturamento?: string | null; // Observação livre do faturamento
   
+  // Justificativa de alteração em Agendamento (auditoria)
+  justificativa_alteracao_agendamento?: string | null;
+  justificativa_alteracao_agendamento_nome?: string | null;
+  justificativa_alteracao_agendamento_nome_hora?: string | null;
+  
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;
   procedimento_id?: string;

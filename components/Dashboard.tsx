@@ -204,11 +204,11 @@ const Dashboard: React.FC<DashboardProps> = ({ agendamentos: agendamentosProps, 
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
-                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Agenda</h4>
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Grade</h4>
                                 <p className="text-slate-700 text-sm">Monte e replique grades por especialidade e dia.</p>
                             </div>
                             <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
-                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Documentação</h4>
+                                <h4 className="text-lg font-semibold text-slate-900 mb-2">Agendamento</h4>
                                 <p className="text-slate-700 text-sm">Indicadores de completude e padronização pré‑operatória.</p>
                             </div>
                             <div className="border border-slate-200 rounded-2xl p-5 hover:shadow-sm">
