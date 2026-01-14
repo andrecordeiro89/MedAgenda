@@ -3139,7 +3139,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             return (
               <div className="rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between px-3 py-2 bg-violet-50 border-b border-gray-200 rounded-t-lg">
-                  <div className="text-sm font-semibold text-violet-700">Data: {bellDate || '-'}</div>
+                  <div className="text-sm font-semibold text-violet-700">Data: {bellDate ? formatarData(bellDate) : '-'}</div>
                   <div className="px-2 py-1 text-xs font-semibold rounded bg-violet-100 text-violet-700">{rows.length} registro(s)</div>
                 </div>
                 <div className="max-h-[70vh] overflow-y-auto">

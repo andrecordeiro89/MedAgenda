@@ -134,7 +134,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         const novo = payload?.new;
         if (!novo) return;
         if (hospitalId && novo.hospital_id && novo.hospital_id !== hospitalId) return;
-        setAgendamentos(prev => prev.map(a => a.id === novo.id ? { ...a, status_aih: novo.status_aih } : a));
+        setAgendamentos(prev => prev.map(a => 
+          a.id === novo.id 
+            ? { 
+                ...a, 
+                status_aih: novo.status_aih,
+                justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento,
+                justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome,
+                justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora,
+                observacao_faturamento: novo.observacao_faturamento,
+                faturamento_observacao: novo.faturamento_observacao
+              } 
+            : a
+        ));
       });
     channel.subscribe();
     return () => {
@@ -857,6 +869,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   const handleSalvarJustificativa = async (ag: Agendamento) => {
     if (!ag.id) return;
+    if ((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim()) {
+      warning('Justificativa já registrada; altere pela tela de Faturamento');
+      return;
+    }
     const texto = (justificativaEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento ?? '').trim();
     const nome = (justificativaNomeEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
     const payload: Partial<Agendamento> = {
@@ -2047,9 +2063,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         </span>
                         <button
                           onClick={() => handleSalvarJustificativa(ag)}
-                          disabled={salvandoJustificativaId === ag.id}
+                          disabled={justificativaSalva || salvandoJustificativaId === ag.id}
                           className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                            salvandoJustificativaId === ag.id
+                            justificativaSalva || salvandoJustificativaId === ag.id
                               ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                               : 'bg-violet-600 text-white hover:bg-violet-700'
                           }`}
