@@ -1696,6 +1696,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 {(((observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ag.faturamento_observacao ?? '') as string).trim() !== '') && (
                   <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-orange-500" title="Observação de Faturamento" />
                 )}
+                {(((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim())) && (
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-fuchsia-500" title="Justificativa registrada" />
+                )}
               </div>
             </div>
           </td>
@@ -1926,7 +1929,6 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           placeholder="Descreva a justificativa da alteração..."
                           className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
                           rows={2}
-                          readOnly={justificativaSalva}
                           disabled={salvandoJustificativaId === ag.id}
                         />
                         <input
@@ -1935,7 +1937,6 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           onChange={(e) => setJustificativaNomeEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
                           placeholder="Nome do colaborador"
                           className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
-                          readOnly={justificativaSalva}
                           disabled={salvandoJustificativaId === ag.id}
                         />
                         <div className="flex items-center justify-between">
@@ -2352,6 +2353,20 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       <option value="50">50</option>
                       <option value="100">100</option>
                     </select>
+                    <div className="hidden md:flex items-center gap-3 ml-4 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-purple-500" />
+                        Agendamento
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                        Faturamento
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-fuchsia-500" />
+                        Justificativa
+                      </span>
+                    </div>
                     <div className="hidden sm:flex items-center gap-2 ml-4">
                     <button
                       onClick={handleAbrirModalRelatorio}

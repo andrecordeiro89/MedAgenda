@@ -32,6 +32,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroProntuario, setFiltroProntuario] = useState<string>('');
   const [filtroConfirmado, setFiltroConfirmado] = useState<string>('');
   const [filtroObservacao, setFiltroObservacao] = useState<string>('');
+  const [filtroJustificativa, setFiltroJustificativa] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>(''); // Filtro por mês da cirurgia
@@ -590,6 +591,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       if (filtroObservacao === 'sem_observacao' && (hasAg || hasFat)) return false;
     }
     
+    // Filtro Justificativa
+    if (filtroJustificativa) {
+      const hasJust = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
+      if (filtroJustificativa === 'com_justificativa' && !hasJust) return false;
+      if (filtroJustificativa === 'sem_justificativa' && hasJust) return false;
+    }
+    
     if (filtroDataInsercao) {
       const created = (ag.created_at || '').toString();
       const datePart = created.includes('T') ? created.split('T')[0] : created.substring(0, 10);
@@ -696,7 +704,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroAvaliacaoAnestesista, filtroDataInsercao]);
+  }, [filtroStatus, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroJustificativa, filtroAvaliacaoAnestesista, filtroDataInsercao]);
   
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
@@ -1648,7 +1656,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 {((((ag.faturamento_observacao || ag.observacao_faturamento || '') as string).trim() !== '')) && (
                   <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-orange-500" title="Observação de Faturamento" />
                 )}
-                
+                {(((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim())) && (
+                  <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-fuchsia-500" title="Justificativa registrada" />
+                )}
               </div>
             </div>
           </td>
@@ -2652,6 +2662,23 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </select>
           </div>
           
+          {/* Filtro Justificativa */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Justificativa
+            </label>
+            <select
+              value={filtroJustificativa}
+              onChange={(e) => setFiltroJustificativa(e.target.value)}
+              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none transition-colors bg-white font-medium"
+              title="Filtrar por justificativa"
+            >
+              <option value="">📊 Todos</option>
+              <option value="com_justificativa">🟣 Justificado</option>
+              <option value="sem_justificativa">Sem justificativa</option>
+            </select>
+          </div>
+          
           {/* Filtro Avaliação Anestesista */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2778,6 +2805,20 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       <option value="50">50</option>
                       <option value="100">100</option>
                     </select>
+                    <div className="hidden md:flex items-center gap-3 ml-4 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-purple-500" />
+                        Agendamento
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                        Faturamento
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-fuchsia-500" />
+                        Justificativa
+                      </span>
+                    </div>
                   <div className="hidden sm:flex items-center gap-2 ml-4">
                     <button
                       onClick={handleAbrirModalRelatorioInterno}
