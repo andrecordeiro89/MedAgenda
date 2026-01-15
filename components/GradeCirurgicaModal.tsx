@@ -2987,6 +2987,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   
   const gerarExcelRelatorio = async () => {
     try {
+      const titulo = (() => {
+        if (reportDayIso) {
+          const d = new Date(reportDayIso + 'T00:00:00');
+          const dataStr = d.toLocaleDateString('pt-BR');
+          const semanaStr = DAY_NUMBER_NAMES[d.getDay()];
+          return `Relatório - ${dataStr} (${semanaStr})`;
+        }
+        return `Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`;
+      })();
       const rows = dadosRelatorioFiltrados.map(l => ([
         l.statusAih || '-',
         l.prontuario || '-',
@@ -2999,8 +3008,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         ''
       ]));
       const headers = ['STATUS AIH', 'PRONTUARIO', 'NOME', 'DATA DE NASCIMENTO', 'IDADE', 'PROCEDIMENTO', 'CIRURGIÃO', 'CIDADE', 'RETORNO'];
-      const aoa = [headers, ...rows];
+      const aoa = [[titulo], headers, ...rows];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: 0 } }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
