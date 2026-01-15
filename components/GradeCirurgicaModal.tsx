@@ -3640,11 +3640,17 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                                   {(() => {
                                     const expanded = grupo.especialidade ? isExpanded(index, grupo.especialidade.id) : true;
                                     const procedimentosVisiveis = expanded ? grupo.procedimentos : grupo.procedimentos.slice(0, 5);
+                                    const procedimentosOrdenados = [...procedimentosVisiveis].sort((a: any, b: any) => {
+                                      const aHas = !!(a.pacientes && a.pacientes.length > 0);
+                                      const bHas = !!(b.pacientes && b.pacientes.length > 0);
+                                      if (aHas !== bHas) return aHas ? -1 : 1;
+                                      return 0;
+                                    });
                                     
                                     // Preparar linhas da tabela
                                     const linhas: ReactElement[] = [];
                                     
-                                    procedimentosVisiveis.forEach((proc) => {
+                                    procedimentosOrdenados.forEach((proc) => {
                                       // Se tem pacientes, criar uma linha para cada paciente
                                       if (proc.pacientes && proc.pacientes.length > 0) {
                                         proc.pacientes.forEach((paciente, pIdx) => {
