@@ -2849,7 +2849,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       const titleY = 8 + (logoHeight / 2) - 3; // Centralizado verticalmente com o logo
-      doc.text(`Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`, 14 + logoWidth + 5, titleY);
+      const titleText = (() => {
+        if (reportDayIso) {
+          const d = new Date(reportDayIso + 'T00:00:00');
+          const dataStr = d.toLocaleDateString('pt-BR');
+          const semanaStr = DAY_NUMBER_NAMES[d.getDay()];
+          return `Relatório - ${dataStr} (${semanaStr})`;
+        }
+        return `Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`;
+      })();
+      doc.text(titleText, 14 + logoWidth + 5, titleY);
 
       // Informações adicionais (abaixo do título)
       doc.setFontSize(10);
@@ -2861,7 +2870,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       // Se não conseguir carregar o logo, continua sem ele
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`, 14, 15);
+      const titleText = (() => {
+        if (reportDayIso) {
+          const d = new Date(reportDayIso + 'T00:00:00');
+          const dataStr = d.toLocaleDateString('pt-BR');
+          const semanaStr = DAY_NUMBER_NAMES[d.getDay()];
+          return `Relatório - ${dataStr} (${semanaStr})`;
+        }
+        return `Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`;
+      })();
+      doc.text(titleText, 14, 15);
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -2947,7 +2965,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     });
 
     // Nome do arquivo
-    const nomeArquivo = `Relatorio_${nomeDiaClicado}_${mesExibidoNome.replace(/\s+/g, '_')}.pdf`;
+    const nomeArquivo = (() => {
+      if (reportDayIso) {
+        const d = new Date(reportDayIso + 'T00:00:00');
+        const dataStr = d.toLocaleDateString('pt-BR').replace(/\//g, '-');
+        const semanaStr = DAY_NUMBER_NAMES[d.getDay()].replace(/\s+/g, '_');
+        return `Relatorio_${dataStr}_${semanaStr}.pdf`;
+      }
+      return `Relatorio_${nomeDiaClicado}_${mesExibidoNome.replace(/\s+/g, '_')}.pdf`;
+    })();
     
     // Baixar PDF
     doc.save(nomeArquivo);
@@ -2979,7 +3005,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const nomeArquivo = `Relatorio_Grade_${nomeDiaClicado}_${mesExibidoNome}_${reportScope === 'consolidado' ? 'Consolidado' : 'Geral'}.xlsx`;
+      const nomeArquivo = (() => {
+        const scopeStr = reportScope === 'consolidado' ? 'Consolidado' : 'Geral';
+        if (reportDayIso) {
+          const d = new Date(reportDayIso + 'T00:00:00');
+          const dataStr = d.toLocaleDateString('pt-BR').replace(/\//g, '-');
+          const semanaStr = DAY_NUMBER_NAMES[d.getDay()].replace(/\s+/g, '_');
+          return `Relatorio_Grade_${dataStr}_${semanaStr}_${scopeStr}.xlsx`;
+        }
+        return `Relatorio_Grade_${nomeDiaClicado}_${mesExibidoNome.replace(/\s+/g, '_')}_${scopeStr}.xlsx`;
+      })();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

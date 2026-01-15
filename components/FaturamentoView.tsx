@@ -591,6 +591,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         const hasJust = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
         if (filtroJustificativa === 'com_justificativa' && !hasJust) return false;
         if (filtroJustificativa === 'sem_justificativa' && hasJust) return false;
+        if (filtroJustificativa === 'com_justificativa') {
+          const aihRaw = (ag.status_aih || '').toString().trim().toLowerCase();
+          if (aihRaw === 'autorizado' || aihRaw === 'n/a - urgência' || aihRaw === 'n/a - urgencia') return false;
+        }
       }
       
       // Filtro por Data de Inserção (created_at, formato YYYY-MM-DD)
