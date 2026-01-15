@@ -3,6 +3,7 @@ import { Modal, Button, Input, PlusIcon, TrashIcon, CopyIcon } from './ui';
 import { SelectCidade } from './SelectCidade';
 import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from '../types';
 import jsPDF from 'jspdf';
+import * as XLSX from 'xlsx';
 import autoTable from 'jspdf-autotable';
 import { formatDate, formatDateLocal } from '../utils';
 // MODO MOCK
@@ -2688,10 +2689,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     return grupos;
   };
 
+  const [reportScope, setReportScope] = useState<'geral' | 'consolidado'>('geral');
+  const [reportFormat, setReportFormat] = useState<'pdf' | 'excel'>('pdf');
+  const [reportDayIso, setReportDayIso] = useState<string>('');
+  const [modalTipoRelatorioAberto, setModalTipoRelatorioAberto] = useState(false);
   // Função para gerar dados do relatório
   const dadosRelatorio = useMemo(() => {
     const dados: Array<{
       data: string;
+      dataISO: string;
+      gradeIndex: number;
       especialidade: string;
       procedimento: string;
       procedimentoEspecificacao: string | null;
@@ -2703,6 +2710,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       telefone: string | null;
       dataConsulta: string | null;
       dataNascimento: string | null;
+      temPaciente: boolean;
+      statusAih?: string | null;
     }> = [];
 
     grades.forEach((grade, gradeIndex) => {
@@ -2733,6 +2742,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
               dados.push({
                 data: formatDate(formatDateLocal(data)),
+                dataISO: data.toISOString().split('T')[0],
+                gradeIndex,
                 especialidade: especialidadeNome,
                 procedimento: procedimentoNome,
                 procedimentoEspecificacao,
@@ -2744,12 +2755,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 telefone: paciente.telefone || null,
                 dataConsulta: paciente.dataConsulta ? formatDate(paciente.dataConsulta) : null,
                 dataNascimento: paciente.dataNascimento ? formatDate(paciente.dataNascimento) : null,
+                temPaciente: true,
+                statusAih: (proc as any).statusAih || null
               });
             });
           } else {
             // Procedimento sem paciente - mostrar nome do procedimento
             dados.push({
               data: formatDate(formatDateLocal(data)),
+              dataISO: data.toISOString().split('T')[0],
+              gradeIndex,
               especialidade: especialidadeNome,
               procedimento: procedimentoNome,
               procedimentoEspecificacao,
@@ -2761,6 +2776,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
               telefone: null,
               dataConsulta: null,
               dataNascimento: null,
+              temPaciente: false,
+              statusAih: (proc as any).statusAih || null
             });
           }
         });
@@ -2769,6 +2786,11 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
     return dados;
   }, [grades, proximasDatas, viewMode, reportSelectedIndexes]);
+  const dadosRelatorioFiltrados = useMemo(() => {
+    const base = reportScope === 'geral' ? dadosRelatorio : dadosRelatorio.filter(d => d.temPaciente);
+    if (reportDayIso) return base.filter(d => d.dataISO === reportDayIso);
+    return base;
+  }, [dadosRelatorio, reportScope, reportDayIso]);
 
   // Função para converter imagem em base64
   const imageToBase64 = (url: string): Promise<string> => {
@@ -2822,7 +2844,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       // Informações adicionais (abaixo do título)
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Total de registros: ${dadosRelatorio.length}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Total de registros: ${dadosRelatorioFiltrados.length}`, 14 + logoWidth + 5, titleY + 7);
       doc.text(`Data de geração: ${new Date().toLocaleDateString('pt-BR')}`, 14 + logoWidth + 5, titleY + 12);
     } catch (error) {
       console.warn('Erro ao carregar logo, continuando sem logo:', error);
@@ -2833,12 +2855,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Total de registros: ${dadosRelatorio.length}`, 14, 22);
+      doc.text(`Total de registros: ${dadosRelatorioFiltrados.length}`, 14, 22);
       doc.text(`Data de geração: ${new Date().toLocaleDateString('pt-BR')}`, 14, 27);
     }
 
     // Preparar dados da tabela
-    const tableData = dadosRelatorio.map(linha => [
+    const tableData = dadosRelatorioFiltrados.map(linha => [
       linha.data,
       linha.especialidade,
       linha.procedimento,
@@ -2926,6 +2948,39 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       setGerandoPDF(false);
     }
   };
+  
+  const gerarExcelRelatorio = async () => {
+    try {
+      const rows = dadosRelatorioFiltrados.map(l => ([
+        l.statusAih || '-',
+        l.prontuario || '-',
+        l.paciente || '-',
+        l.dataNascimento || '-',
+        l.idade !== null ? l.idade : '-',
+        l.procedimento || '-',
+        l.medico || '-',
+        l.cidade || '-'
+      ]));
+      const headers = ['STATUS AIH', 'PRONTUARIO', 'NOME', 'DATA DE NASCIMENTO', 'IDADE', 'PROCEDIMENTO', 'CIRURGIÃO', 'CIDADE'];
+      const aoa = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const nomeArquivo = `Relatorio_Grade_${nomeDiaClicado}_${mesExibidoNome}_${reportScope === 'consolidado' ? 'Consolidado' : 'Geral'}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeArquivo;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao gerar Excel:', error);
+    }
+  };
 
   return (
     <>
@@ -2963,15 +3018,15 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         <div className="flex items-center gap-2 flex-1 justify-end">
           {/* Botão Emitir Relatório - Download direto do PDF */}
           <button
-            onClick={gerarPDFRelatorio}
-            disabled={viewMode === 'weeklySequence' ? (gerandoPDF || reportSelectedIndexes.length === 0) : (gerandoPDF || dadosRelatorio.length === 0)}
+            onClick={() => setModalTipoRelatorioAberto(true)}
+            disabled={viewMode === 'weeklySequence' ? (gerandoPDF || reportSelectedIndexes.length === 0) : (gerandoPDF || dadosRelatorioFiltrados.length === 0)}
             className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg border border-gray-300 transition-colors font-medium disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed text-[12px] whitespace-nowrap"
             title={
               gerandoPDF
                 ? "Gerando PDF..."
                 : viewMode === 'weeklySequence'
                   ? (reportSelectedIndexes.length === 0 ? "Selecione os dias da sequência" : "Emitir Relatório dos dias selecionados")
-                  : (dadosRelatorio.length === 0 ? "Nenhum registro para gerar relatório" : "Emitir Relatório PDF")
+                  : (dadosRelatorioFiltrados.length === 0 ? "Nenhum registro para gerar relatório" : "Emitir Relatório PDF")
             }
           >
             {gerandoPDF ? (
@@ -4275,13 +4330,13 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
           <div className="mt-4 flex justify-between items-center">
             <p className="text-sm text-gray-600">
-              Total de registros: <strong>{dadosRelatorio.length}</strong>
+              Total de registros: <strong>{dadosRelatorioFiltrados.length}</strong>
             </p>
             <div className="flex gap-2">
               <Button
                 onClick={gerarPDFRelatorio}
                 className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
-                disabled={dadosRelatorio.length === 0}
+                disabled={dadosRelatorioFiltrados.length === 0}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -4446,6 +4501,94 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
             >
               {movendoPaciente ? 'Movendo...' : 'Confirmar Mudança'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    
+    {/* Modal Tipo de Relatório */}
+    {modalTipoRelatorioAberto && (
+      <Modal
+        isOpen={modalTipoRelatorioAberto}
+        onClose={() => setModalTipoRelatorioAberto(false)}
+        title="Emitir Relatório"
+        size="small"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Dia</label>
+              <select
+                value={reportDayIso}
+                onChange={(e) => setReportDayIso(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+              >
+                <option value="">Todos os dias</option>
+                {proximasDatas.map((d, idx) => {
+                  const iso = d.toISOString().split('T')[0];
+                  const label = d.toLocaleDateString('pt-BR');
+                  return (
+                    <option key={iso} value={iso}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setReportScope('geral')}
+              className={`p-3 border rounded-lg text-left ${reportScope === 'geral' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+            >
+              <div className="text-sm font-semibold text-gray-800">Geral</div>
+              <div className="text-xs text-gray-600">Inclui todos os registros</div>
+              <div className="mt-1 text-xs text-gray-700">Total: {dadosRelatorio.length}</div>
+            </button>
+            <button
+              onClick={() => setReportScope('consolidado')}
+              className={`p-3 border rounded-lg text-left ${reportScope === 'consolidado' ? 'border-violet-500 bg-violet-50' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+            >
+              <div className="text-sm font-semibold text-gray-800">Consolidado</div>
+              <div className="text-xs text-gray-600">Somente linhas com paciente</div>
+              <div className="mt-1 text-xs text-gray-700">Total: {dadosRelatorio.filter(d => d.temPaciente).length}</div>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setReportFormat('pdf')}
+              className={`p-3 border rounded-lg text-left ${reportFormat === 'pdf' ? 'border-gray-700 bg-gray-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+            >
+              <div className="text-sm font-semibold text-gray-800">PDF</div>
+            </button>
+            <button
+              onClick={() => setReportFormat('excel')}
+              className={`p-3 border rounded-lg text-left ${reportFormat === 'excel' ? 'border-green-600 bg-green-50' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+            >
+              <div className="text-sm font-semibold text-gray-800">Excel</div>
+            </button>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setModalTipoRelatorioAberto(false)}
+              className="px-3 py-1.5 text-sm font-medium rounded bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                setModalTipoRelatorioAberto(false);
+                if (reportFormat === 'pdf') {
+                  gerarPDFRelatorio();
+                } else {
+                  gerarExcelRelatorio();
+                }
+              }}
+              disabled={(viewMode === 'weeklySequence' && reportSelectedIndexes.length === 0) || dadosRelatorioFiltrados.length === 0}
+              className={`px-3 py-1.5 text-sm font-medium rounded ${dadosRelatorioFiltrados.length === 0 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : (reportFormat === 'pdf' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-green-600 text-white hover:bg-green-700')}`}
+            >
+              {reportFormat === 'pdf' ? 'Gerar PDF' : 'Gerar Excel'}
+            </button>
           </div>
         </div>
       </Modal>
