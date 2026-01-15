@@ -2692,6 +2692,16 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [reportScope, setReportScope] = useState<'geral' | 'consolidado'>('geral');
   const [reportFormat, setReportFormat] = useState<'pdf' | 'excel'>('pdf');
   const [reportDayIso, setReportDayIso] = useState<string>('');
+  const [collapsedGrades, setCollapsedGrades] = useState<{ [index: number]: boolean }>({});
+  useEffect(() => {
+    const todayIso = new Date().toISOString().split('T')[0];
+    const initial: { [index: number]: boolean } = {};
+    proximasDatas.forEach((d, idx) => {
+      const iso = d.toISOString().split('T')[0];
+      initial[idx] = iso < todayIso;
+    });
+    setCollapsedGrades(initial);
+  }, [proximasDatas]);
   const [modalTipoRelatorioAberto, setModalTipoRelatorioAberto] = useState(false);
   // Função para gerar dados do relatório
   const dadosRelatorio = useMemo(() => {
@@ -2959,9 +2969,10 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         l.idade !== null ? l.idade : '-',
         l.procedimento || '-',
         l.medico || '-',
-        l.cidade || '-'
+        (l.cidade ? String(l.cidade).toUpperCase() : '-'),
+        ''
       ]));
-      const headers = ['STATUS AIH', 'PRONTUARIO', 'NOME', 'DATA DE NASCIMENTO', 'IDADE', 'PROCEDIMENTO', 'CIRURGIÃO', 'CIDADE'];
+      const headers = ['STATUS AIH', 'PRONTUARIO', 'NOME', 'DATA DE NASCIMENTO', 'IDADE', 'PROCEDIMENTO', 'CIRURGIÃO', 'CIDADE', 'RETORNO'];
       const aoa = [headers, ...rows];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       const wb = XLSX.utils.book_new();
@@ -3198,22 +3209,45 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                       )}
                     </div>
 
-                    {viewMode === 'weeklySequence' && (
-                      <label className="absolute right-0 flex items-center gap-2 text-xs text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={reportSelectedIndexes.includes(index)}
-                          onChange={() => toggleReportSelection(index)}
-                          className="w-4 h-4 accent-gray-700 border-gray-300"
-                        />
-                        Incluir no relatório
-                      </label>
-                    )}
+                    <div className="absolute right-3 top-1 flex items-center gap-2">
+                      {viewMode === 'weeklySequence' && (
+                        <label className="flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={reportSelectedIndexes.includes(index)}
+                            onChange={() => toggleReportSelection(index)}
+                            className="w-4 h-4 accent-gray-700 border-gray-300"
+                          />
+                          Incluir no relatório
+                        </label>
+                      )}
+                      <button
+                        onClick={() => setCollapsedGrades(prev => ({ ...prev, [index]: !prev[index] }))}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border ${collapsedGrades[index] ? 'border-blue-600 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200'} focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 transition-colors`}
+                        title={collapsedGrades[index] ? 'Maximizar' : 'Minimizar'}
+                      >
+                        {collapsedGrades[index] ? (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <rect x="5" y="5" width="14" height="14" rx="2" />
+                            </svg>
+                            <span>Maximizar</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
+                            </svg>
+                            <span>Minimizar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* NOVO FLUXO EM 3 ETAPAS: Especialidade → Médico → Procedimentos */}
-                {addingEspecialidade === index && (
+                {!collapsedGrades[index] && addingEspecialidade === index && (
                   <div className="p-3 bg-blue-50 border-b-2 border-blue-200">
                     {/* Indicador de progresso das etapas */}
                     <div className="flex items-center justify-center mb-3 gap-2">
@@ -3278,8 +3312,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                     )}
 
                     {/* ETAPA 2: Digitar Nome do Médico */}
-                    {etapaAtual === 2 && (
-                      <div className="space-y-2">
+                {!collapsedGrades[index] && etapaAtual === 2 && (
+                  <div className="space-y-2">
                         {/* Mostrar especialidade selecionada */}
                         <div className="flex items-center gap-2 pb-2 border-b border-blue-300">
                           <span className="text-xs text-blue-900">
@@ -3476,7 +3510,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 )}
 
                 {/* Tabela de Itens Agrupados por Especialidade - Formato Excel */}
-                <div className="flex-1 p-0">
+                <div className={`flex-1 p-0 ${collapsedGrades[index] ? 'hidden' : ''}`}>
                   {grade.itens.length === 0 ? (
                     <div className="text-center py-4 text-slate-500">
                       <p className="text-xs">Vazio</p>
@@ -4677,7 +4711,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           )}
 
           {/* Campo para Especificação (Editável) */}
-          {!modoCriacaoProc && (
+          {!(collapsedGrades[procedimentoEmEdicao.gradeIndex] ?? false) && !modoCriacaoProc && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 ✏️ Especificação do Procedimento
