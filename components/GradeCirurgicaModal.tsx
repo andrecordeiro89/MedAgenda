@@ -2759,7 +2759,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                 procedimentoEspecificacao,
                 medico: medicoNome,
                 paciente: paciente.nome || 'Sem nome',
-                prontuario: paciente.prontuario || null,
+                prontuario: (paciente.prontuario ?? (proc as any).n_prontuario ?? null),
                 idade,
                 cidade: paciente.cidade || null,
                 telefone: paciente.telefone || null,
