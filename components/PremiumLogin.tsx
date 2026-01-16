@@ -597,7 +597,7 @@ export const useHospitalFilter = () => {
     }
     // Faturamento local: acesso apenas a Dashboard e Faturamento
     if (userRole === 'faturamento_local') {
-      return viewName === 'dashboard' || viewName === 'faturamento';
+      return viewName === 'dashboard' || viewName === 'faturamento' || viewName === 'calendar';
     }
     // Agendamento local: Dashboard, Grade e Agendamento
     if (userRole === 'agendamento_local') {
