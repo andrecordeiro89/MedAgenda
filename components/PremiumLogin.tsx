@@ -306,6 +306,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cnpj: '14.736.446/0010-84',
           role: 'admin'
         },
+        'faturamento.frg@medagenda.com': {
+          id: '933de4fb-ebfd-4838-bb43-153a7354d333',
+          nome: 'Hospital Maternidade Nossa Senhora Aparecida',
+          cidade: 'Fazenda Rio Grande',
+          cnpj: '14.736.446/0010-84',
+          role: 'faturamento_local'
+        },
         'coordenacao.car@medagenda.com': {
           id: 'bbe11a40-2689-48af-9aa8-5c6e7f2e48da',
           nome: 'Hospital Municipal São José',
@@ -917,4 +924,3 @@ export const PremiumHospitalHeader = () => {
     </div>
   );
 };
-
