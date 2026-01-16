@@ -663,21 +663,57 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       toastError('Nenhum registro encontrado para o status selecionado');
       return;
     }
-    const rows = lista.map(ag => ({
-      Paciente: ag.nome_paciente || ag.nome || '',
-      Prontuario: ag.n_prontuario || '',
-      Procedimento: formatarProcedimento(ag),
-      Medico: ag.medico || '',
-      DataConsulta: formatarData(ag.data_consulta),
-      DataCirurgia: formatarData(ag.data_agendamento || ag.dataAgendamento),
-      StatusInterno: ag.status_de_liberacao || '',
-      Confirmado: ag.confirmacao || '',
-      StatusAIH: ag.status_aih || '',
-      ExamesOK: ag.documentos_ok ? 'Sim' : 'Não',
-      FichaPreOpOK: ag.ficha_pre_anestesica_ok ? 'Sim' : 'Não'
-    }));
+    const periodoTxt = `${reportStartDate ? new Date(reportStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportEndDate ? new Date(reportEndDate).toLocaleDateString('pt-BR') : '-'}`;
+    const headers = [
+      'Paciente','Prontuario','Município','Telefone',
+      'Data Nascimento','Idade',
+      'Procedimento','Esp. Procedimento','Cirurgião',
+      'Data Consulta','Data Cirurgia',
+      'Status AIH','Status Interno','Confirmado',
+      'Obs. Agendamento','Obs. Faturamento',
+      'Justificativa','Justificativa por','Justificativa data/hora',
+      'Exames OK','Pré-Op OK','Complementares OK',
+      'Complementares URLs','Ficha Pré-Op URL'
+    ];
+    const aoaRows = lista.map(ag => {
+      const idade = ageFromISO(ag.data_nascimento || ag.dataNascimento);
+      let complUrls = '';
+      try {
+        if (ag.complementares_urls) {
+          const arr = JSON.parse(ag.complementares_urls);
+          if (Array.isArray(arr)) complUrls = arr.join('; ');
+        }
+      } catch {}
+      return [
+        ag.nome_paciente || ag.nome || '',
+        ag.n_prontuario || '',
+        ag.cidade_natal || ag.cidadeNatal || '',
+        ag.telefone || '',
+        formatarData(ag.data_nascimento || ag.dataNascimento),
+        idade !== null ? String(idade) : '',
+        formatarProcedimento(ag) || '',
+        ag.procedimento_especificacao || '',
+        ag.medico || '',
+        formatarData(ag.data_consulta),
+        formatarData(ag.data_agendamento || ag.dataAgendamento),
+        ag.status_aih || '',
+        ag.status_de_liberacao || '',
+        ag.confirmacao || '',
+        ag.observacao_agendamento || '',
+        (ag.observacao_faturamento || ag.faturamento_observacao || ''),
+        ag.justificativa_alteracao_agendamento || '',
+        ag.justificativa_alteracao_agendamento_nome || '',
+        ag.justificativa_alteracao_agendamento_nome_hora || '',
+        ag.documentos_ok ? 'Sim' : 'Não',
+        ag.ficha_pre_anestesica_ok ? 'Sim' : 'Não',
+        ag.complementares_ok ? 'Sim' : 'Não',
+        complUrls,
+        ag.ficha_pre_anestesica_url || ''
+      ];
+    });
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const ws = XLSX.utils.aoa_to_sheet([[`Relatório Status AIH: ${statusSelecionado} • Período: ${periodoTxt} • Total: ${lista.length}`], headers, ...aoaRows]);
+    ws['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: 0 } }];
     XLSX.utils.book_append_sheet(wb, ws, statusSelecionado.slice(0, 30));
     const now = new Date();
     const nomeArquivo = `Relatorio_AIH_${statusSelecionado}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
@@ -692,7 +728,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setReportModalAberto(false);
-    success('Relatório gerado');
+    success('Relatório Excel gerado');
   };
 
   const handleAbrirModalRelatorioConfirmado = () => {
@@ -2532,6 +2568,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
       >
         Fechar
+      </button>
+      <button
+        onClick={handleEmitirRelatorio}
+        className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+      >
+        Gerar Excel
       </button>
       <button
         onClick={gerarPDFRelatorioAIH}
