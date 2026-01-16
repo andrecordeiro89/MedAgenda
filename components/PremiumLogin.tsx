@@ -507,7 +507,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email,
           hospital_id: hospitais[0].id,
           hospital: hospitais[0],
-          role: 'admin'
+          role: 'diretoria'
         };
         setUsuario(usuarioMulti);
         setHospitalSelecionado(hospitais[0]);
