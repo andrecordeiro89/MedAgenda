@@ -645,8 +645,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       toastError('Selecione o Status AIH para emitir o relatório');
       return;
     }
-    const start = reportStartDate ? new Date(reportStartDate) : null;
-    const end = reportEndDate ? new Date(reportEndDate) : null;
+    const start = parseInputDate(reportStartDate);
+    const end = parseInputDate(reportEndDate);
     if (start && end && start > end) {
       toastError('Período inválido: data inicial maior que a final');
       return;
@@ -663,52 +663,33 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       toastError('Nenhum registro encontrado para o status selecionado');
       return;
     }
-    const periodoTxt = `${reportStartDate ? new Date(reportStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportEndDate ? new Date(reportEndDate).toLocaleDateString('pt-BR') : '-'}`;
+    const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
     const headers = [
-      'Paciente','Prontuario','Município','Telefone',
-      'Data Nascimento','Idade',
-      'Procedimento','Esp. Procedimento','Cirurgião',
-      'Data Consulta','Data Cirurgia',
-      'Status AIH','Status Interno','Confirmado',
-      'Obs. Agendamento','Obs. Faturamento',
-      'Justificativa','Justificativa por','Justificativa data/hora',
-      'Exames OK','Pré-Op OK','Complementares OK',
-      'Complementares URLs','Ficha Pré-Op URL'
+      'PRONTUÁRIO','PACIENTE','DATA NASCIMENTO','PROCEDIMENTO','CIRURGIÃO','MUNICÍPIO',
+      'DATA CONSULTA','DATA CIRURGIA','STATUS INTERNO','CONFIRMADO',
+      'OBS AGENDAMENTO','OBS FATURAMENTO','JUSTIFICATIVA','JUSTIFICATIVA POR','JUSTIFICATIVA DATA/HORA',
+      'EXAMES OK','PRÉ-OP OK','COMPLEMENTAR OK'
     ];
     const aoaRows = lista.map(ag => {
-      const idade = ageFromISO(ag.data_nascimento || ag.dataNascimento);
-      let complUrls = '';
-      try {
-        if (ag.complementares_urls) {
-          const arr = JSON.parse(ag.complementares_urls);
-          if (Array.isArray(arr)) complUrls = arr.join('; ');
-        }
-      } catch {}
       return [
-        ag.nome_paciente || ag.nome || '',
         ag.n_prontuario || '',
-        ag.cidade_natal || ag.cidadeNatal || '',
-        ag.telefone || '',
+        (ag.nome_paciente || ag.nome || '').toUpperCase(),
         formatarData(ag.data_nascimento || ag.dataNascimento),
-        idade !== null ? String(idade) : '',
-        formatarProcedimento(ag) || '',
-        ag.procedimento_especificacao || '',
-        ag.medico || '',
+        (formatarProcedimento(ag) || '').toUpperCase(),
+        (ag.medico || '').toUpperCase(),
+        ((ag.cidade_natal || ag.cidadeNatal || '') as string).toUpperCase(),
         formatarData(ag.data_consulta),
         formatarData(ag.data_agendamento || ag.dataAgendamento),
-        ag.status_aih || '',
-        ag.status_de_liberacao || '',
-        ag.confirmacao || '',
-        ag.observacao_agendamento || '',
-        (ag.observacao_faturamento || ag.faturamento_observacao || ''),
-        ag.justificativa_alteracao_agendamento || '',
-        ag.justificativa_alteracao_agendamento_nome || '',
+        (ag.status_de_liberacao || '').toUpperCase(),
+        (ag.confirmacao || '').toUpperCase(),
+        (ag.observacao_agendamento || '').toUpperCase(),
+        ((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).toUpperCase(),
+        (ag.justificativa_alteracao_agendamento || '').toUpperCase(),
+        (ag.justificativa_alteracao_agendamento_nome || '').toUpperCase(),
         ag.justificativa_alteracao_agendamento_nome_hora || '',
-        ag.documentos_ok ? 'Sim' : 'Não',
-        ag.ficha_pre_anestesica_ok ? 'Sim' : 'Não',
-        ag.complementares_ok ? 'Sim' : 'Não',
-        complUrls,
-        ag.ficha_pre_anestesica_url || ''
+        ag.documentos_ok ? 'SIM' : 'NÃO',
+        ag.ficha_pre_anestesica_ok ? 'SIM' : 'NÃO',
+        ag.complementares_ok ? 'SIM' : 'NÃO'
       ];
     });
     const wb = XLSX.utils.book_new();
@@ -881,8 +862,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       toastError('Selecione o Status AIH para emitir o relatório');
       return;
     }
-    const start = reportStartDate ? new Date(reportStartDate) : null;
-    const end = reportEndDate ? new Date(reportEndDate) : null;
+    const start = parseInputDate(reportStartDate);
+    const end = parseInputDate(reportEndDate);
     if (start && end && start > end) {
       toastError('Período inválido: data inicial maior que a final');
       return;
@@ -912,7 +893,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       doc.text(`Relatório - Status AIH: ${statusSelecionado}`, 14 + logoWidth + 5, titleY);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      const periodoTxt = `${reportStartDate ? new Date(reportStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportEndDate ? new Date(reportEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
       doc.text(`Período: ${periodoTxt}`, 14 + logoWidth + 5, titleY + 7);
       doc.text(`Total de registros: ${lista.length}`, 14 + logoWidth + 5, titleY + 12);
     } catch {
@@ -921,7 +902,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       doc.text(`Relatório - Status AIH: ${statusSelecionado}`, 14, 15);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      const periodoTxt = `${reportStartDate ? new Date(reportStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportEndDate ? new Date(reportEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
       doc.text(`Período: ${periodoTxt}`, 14, 22);
       doc.text(`Total de registros: ${lista.length}`, 14, 27);
     }
@@ -987,8 +968,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   
   const parseDateStr = (s?: string | null) => {
     if (!s || s === '9999-12-31') return null;
-    const d = new Date(s);
+    const d = s.includes('T') ? new Date(s) : new Date(`${s}T00:00:00`);
     return isNaN(d.getTime()) ? null : d;
+  };
+  const parseInputDate = (s?: string | null) => {
+    if (!s) return null;
+    const [y, m, d] = String(s).split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
   };
   const refDate = (ag: Agendamento) => {
     if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);

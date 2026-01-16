@@ -496,6 +496,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
         return;
       }
+      
+      if (email === 'helluany@medagenda.com') {
+        const hospitais: Hospital[] = [
+          { id: '933de4fb-ebfd-4838-bb43-153a7354d333', nome: 'Hospital Maternidade Nossa Senhora Aparecida', cidade: 'Fazenda Rio Grande', cnpj: '14.736.446/0010-84' },
+          { id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f', nome: 'Hospital Nossa Senhora Aparecida', cidade: 'Foz do Iguaçu', cnpj: '14.736.446/0009-40' }
+        ];
+        const usuarioMulti: Usuario = {
+          id: `user-${Date.now()}`,
+          email,
+          hospital_id: hospitais[0].id,
+          hospital: hospitais[0],
+          role: 'admin'
+        };
+        setUsuario(usuarioMulti);
+        setHospitalSelecionado(hospitais[0]);
+        setHospitaisDisponiveis(hospitais);
+        setIsAuthenticated(true);
+        localStorage.setItem('medagenda-auth', JSON.stringify({
+          usuario: usuarioMulti,
+          hospital: hospitais[0],
+          hospitais
+        }));
+        setIsLoading(false);
+        return;
+      }
 
       const hospitalData = emailHospitalMap[email];
       
