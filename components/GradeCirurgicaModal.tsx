@@ -115,6 +115,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         return 'bg-red-50 border-red-400 text-red-800';
       case 'ag ciência sms':
         return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'ag. correção':
+        return 'bg-teal-50 border-teal-400 text-teal-800';
       default:
         return 'bg-white border-gray-300 text-gray-600';
     }
@@ -145,6 +147,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         return 'bg-red-500';
       case 'ag ciência sms':
         return 'bg-blue-500';
+      case 'ag. correção':
+        return 'bg-teal-500';
       default:
         return 'bg-gray-300';
     }

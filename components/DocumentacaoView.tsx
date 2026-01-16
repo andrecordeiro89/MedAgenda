@@ -318,6 +318,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return 'bg-red-50 border-red-400 text-red-800';
       case 'ag ciência sms':
         return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'ag. correção':
+        return 'bg-teal-50 border-teal-400 text-teal-800';
       case 'n/a - urgência':
         return 'bg-purple-50 border-purple-400 text-purple-800';
       default:
@@ -351,6 +353,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         return 'bg-red-500';
       case 'ag ciência sms':
         return 'bg-blue-500';
+      case 'ag. correção':
+        return 'bg-teal-500';
       case 'n/a - urgência':
         return 'bg-purple-500';
       default:
