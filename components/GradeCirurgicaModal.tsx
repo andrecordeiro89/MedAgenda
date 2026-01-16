@@ -2996,18 +2996,23 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         }
         return `Relatório - ${nomeDiaClicado}s de ${mesExibidoNome}`;
       })();
-      const rows = dadosRelatorioFiltrados.map(l => ([
-        l.statusAih || '-',
-        l.prontuario || '-',
-        l.paciente || '-',
-        l.dataNascimento || '-',
-        l.idade !== null ? l.idade : '-',
-        l.procedimento || '-',
-        l.medico || '-',
-        (l.cidade ? String(l.cidade).toUpperCase() : '-'),
-        ''
-      ]));
-      const headers = ['STATUS AIH', 'PRONTUARIO', 'NOME', 'DATA DE NASCIMENTO', 'IDADE', 'PROCEDIMENTO', 'CIRURGIÃO', 'CIDADE', 'RETORNO'];
+      let seq = 0;
+      const rows = dadosRelatorioFiltrados.map(l => {
+        const numero = l.temPaciente ? (++seq) : '';
+        return [
+          numero,
+          l.statusAih || '-',
+          l.prontuario || '-',
+          l.paciente || '-',
+          l.dataNascimento || '-',
+          l.idade !== null ? l.idade : '-',
+          l.procedimento || '-',
+          l.medico || '-',
+          (l.cidade ? String(l.cidade).toUpperCase() : '-'),
+          ''
+        ];
+      });
+      const headers = ['Nº', 'STATUS AIH', 'PRONTUARIO', 'NOME', 'DATA DE NASCIMENTO', 'IDADE', 'PROCEDIMENTO', 'CIRURGIÃO', 'CIDADE', 'RETORNO'];
       const aoa = [[titulo], headers, ...rows];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: 0 } }];
