@@ -3003,6 +3003,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       let seq = 0;
       const rows = dadosRelatorioFiltrados.map(l => {
         const numero = l.temPaciente ? (++seq) : '';
+        const procedimentoComEsp = l.procedimentoEspecificacao
+          ? `${l.procedimento} - ${l.procedimentoEspecificacao}`
+          : (l.procedimento || '-');
         return [
           numero,
           l.statusAih || '-',
@@ -3010,7 +3013,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
           l.paciente || '-',
           l.dataNascimento || '-',
           l.idade !== null ? l.idade : '-',
-          l.procedimento || '-',
+          procedimentoComEsp,
           l.medico || '-',
           (l.cidade ? String(l.cidade).toUpperCase() : '-'),
           ''
