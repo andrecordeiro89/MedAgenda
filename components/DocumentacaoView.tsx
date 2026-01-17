@@ -651,6 +651,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     if (d > now) return 1;
     return 2;
   };
+  const maskDateInput = (s: string) => {
+    const d = s.replace(/\D/g, '').slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  };
   // ORDENAR: mês atual primeiro, depois pela DATA selecionada e MÉDICO
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
     const dA = refDate(a);
@@ -2467,56 +2473,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {/* Filtro Status EXAMES - DESTACADO */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              📄 Status dos Exames
-            </label>
-            <select
-              value={filtroStatus}
-              onChange={(e) => setFiltroStatus(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
-                filtroStatus 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-300'
-              }`}
-            >
-              <option value="">📊 Todos</option>
-              <option value="COM EXAMES">✅ Com Exames</option>
-              <option value="SEM EXAMES">⚠️ Sem Exames</option>
-            </select>
-          </div>
-          
-          
-          {/* Filtro Status Interno */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Status Interno
-            </label>
-            <select
-              value={filtroStatusInterno}
-              onChange={(e) => setFiltroStatusInterno(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
-                filtroStatusInterno 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-300'
-              }`}
-            >
-              <option value="">📊 Todos</option>
-              <option value="Anestesista">Anestesista</option>
-              <option value="Cardio">Cardio</option>
-              <option value="Exames">Exames</option>
-              <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
-              <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
-              <option value="Confirmado com Paciente">Confirmado com Paciente</option>
-              <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
-            </select>
-          </div>
-          
-          
-          {/* Filtro Status PRÉ-OPERATÓRIO removido */}
-          
-          {/* Filtro Paciente */}
+          {/* 1ª linha: Paciente, Prontuário, Data Consulta, Data Cirurgia, Status AIH */}
+          {/* Paciente */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Paciente
@@ -2529,8 +2487,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
-          
-          {/* Filtro Nº Prontuário */}
+          {/* Nº Prontuário */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Nº Prontuário
@@ -2546,58 +2503,21 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               title="Filtrar por números do prontuário"
             />
           </div>
-          
-          {/* Filtro Médico */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Médico
-            </label>
-            <select
-              value={filtroMedicoId}
-              onChange={(e) => setFiltroMedicoId(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            >
-              <option value="">Todos</option>
-              {medicosDisponiveis
-                .slice()
-                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-                .map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome}
-                  </option>
-                ))}
-            </select>
-          </div>
-          
-          {/* Filtro Data Consulta */}
+          {/* Data Consulta */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Data Consulta
             </label>
-            <input
-              type="text"
-              value={filtroDataConsulta}
-              onChange={(e) => setFiltroDataConsulta(e.target.value)}
-              placeholder="DD/MM/AAAA"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroDataConsulta} onChange={(e) => setFiltroDataConsulta(maskDateInput(e.target.value))} placeholder="DD/MM/AAAA" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
           </div>
-          
-          {/* Filtro Data Cirurgia */}
+          {/* Data Cirurgia */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Data Cirurgia
             </label>
-            <input
-              type="text"
-              value={filtroDataCirurgia}
-              onChange={(e) => setFiltroDataCirurgia(e.target.value)}
-              placeholder="DD/MM/AAAA"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroDataCirurgia} onChange={(e) => setFiltroDataCirurgia(maskDateInput(e.target.value))} placeholder="DD/MM/AAAA" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
           </div>
-          
-          {/* Filtro Status AIH */}
+          {/* Status AIH */}
     <div>
       <label className="block text-xs font-medium text-gray-700 mb-1">
         🧾 Status AIH
@@ -2627,7 +2547,32 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       </select>
     </div>
           
-          {/* Filtro Confirmado */}
+          {/* 2ª linha: Status Interno, Confirmado, Avaliação, Médico, Status Exames */}
+          {/* Status Interno */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Status Interno
+            </label>
+            <select
+              value={filtroStatusInterno}
+              onChange={(e) => setFiltroStatusInterno(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
+                filtroStatusInterno 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="Anestesista">Anestesista</option>
+              <option value="Cardio">Cardio</option>
+              <option value="Exames">Exames</option>
+              <option value="Liberado para Cirurgia">Liberado para Cirurgia</option>
+              <option value="Não Liberado para Cirurgia">Não Liberado para Cirurgia</option>
+              <option value="Confirmado com Paciente">Confirmado com Paciente</option>
+              <option value="Cirurgia Cancelada">Cirurgia Cancelada</option>
+            </select>
+          </div>
+          {/* Confirmado */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               Confirmado
@@ -2646,44 +2591,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <option value="Aguardando">Aguardando</option>
             </select>
           </div>
-          
-          {/* Filtro Observação */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Observação
-            </label>
-            <select
-              value={filtroObservacao}
-              onChange={(e) => setFiltroObservacao(e.target.value)}
-              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium"
-              title="Filtrar por observação"
-            >
-              <option value="">📊 Todos</option>
-              <option value="sem_observacao">Sem observação</option>
-              <option value="obs_agendamento">🟣 Observação de Agendamento</option>
-              <option value="obs_faturamento">🟠 Observação de Faturamento</option>
-              <option value="obs_ambos">🟣+🟠 Ambas</option>
-            </select>
-          </div>
-          
-          {/* Filtro Justificativa */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Justificativa
-            </label>
-            <select
-              value={filtroJustificativa}
-              onChange={(e) => setFiltroJustificativa(e.target.value)}
-              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none transition-colors bg-white font-medium"
-              title="Filtrar por justificativa"
-            >
-              <option value="">📊 Todos</option>
-              <option value="com_justificativa">🟣 Justificado</option>
-              <option value="sem_justificativa">Sem justificativa</option>
-            </select>
-          </div>
-          
-          {/* Filtro Avaliação Anestesista */}
+          {/* Avaliação Anestesista */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               Avaliação Anestesista
@@ -2704,8 +2612,83 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <option value="sem_avaliacao">Sem avaliação</option>
             </select>
           </div>
+          {/* Médico */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Médico
+            </label>
+            <select
+              value={filtroMedicoId}
+              onChange={(e) => setFiltroMedicoId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            >
+              <option value="">Todos</option>
+              {medicosDisponiveis
+                .slice()
+                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                .map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.nome}
+                  </option>
+                ))}
+            </select>
+          </div>
+          {/* Status EXAMES */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              📄 Status dos Exames
+            </label>
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${
+                filtroStatus 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Todos</option>
+              <option value="COM EXAMES">✅ Com Exames</option>
+              <option value="SEM EXAMES">⚠️ Sem Exames</option>
+            </select>
+          </div>
           
-          {/* Filtro Mês da Cirurgia */}
+          {/* 3ª linha: Observação, Justificativa, Mês Cirurgia, Data Inserção */}
+          {/* Observação */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Observação
+            </label>
+            <select
+              value={filtroObservacao}
+              onChange={(e) => setFiltroObservacao(e.target.value)}
+              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium"
+              title="Filtrar por observação"
+            >
+              <option value="">📊 Todos</option>
+              <option value="sem_observacao">Sem observação</option>
+              <option value="obs_agendamento">🟣 Observação de Agendamento</option>
+              <option value="obs_faturamento">🟠 Observação de Faturamento</option>
+              <option value="obs_ambos">🟣+🟠 Ambas</option>
+            </select>
+          </div>
+          {/* Justificativa */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Justificativa
+            </label>
+            <select
+              value={filtroJustificativa}
+              onChange={(e) => setFiltroJustificativa(e.target.value)}
+              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none transition-colors bg-white font-medium"
+              title="Filtrar por justificativa"
+            >
+              <option value="">📊 Todos</option>
+              <option value="com_justificativa">🟣 Justificado</option>
+              <option value="sem_justificativa">Sem justificativa</option>
+            </select>
+          </div>
+          {/* Mês da Cirurgia */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               📅 Mês Cirurgia

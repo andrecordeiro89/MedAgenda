@@ -1015,6 +1015,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       return 0;
     });
   };
+  const maskDateInput = (s: string) => {
+    const d = s.replace(/\D/g, '').slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  };
   
   // Aplicar ordenação
   const agendamentosComAnexosOrdenados = ordenarPorDataEMedico(agendamentosComAnexosFiltrados);
@@ -2186,25 +2192,26 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* 1ª linha: Paciente, Prontuário, Data Consulta, Data Cirurgia, Status AIH */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">📄 Status dos Exames</label>
-            <select
-              value={filtroStatusExames}
-              onChange={(e) => setFiltroStatusExames(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusExames ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-            >
-              <option value="">📊 Todos</option>
-              <option value="COM EXAMES">✅ Com Exames</option>
-              <option value="SEM EXAMES">⚠️ Sem Exames</option>
-            </select>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
+            <input type="text" value={filtroPaciente} onChange={(e) => setFiltroPaciente(e.target.value)} placeholder="Nome do paciente..." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nº Prontuário</label>
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroProntuario} onChange={(e) => setFiltroProntuario(e.target.value)} placeholder="Digite números do prontuário..." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" title="Filtrar por números do prontuário" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data Consulta</label>
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroDataConsulta} onChange={(e) => setFiltroDataConsulta(maskDateInput(e.target.value))} placeholder="DD/MM/AAAA" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data Cirurgia</label>
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroDataCirurgia} onChange={(e) => setFiltroDataCirurgia(maskDateInput(e.target.value))} placeholder="DD/MM/AAAA" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">🧾 Status AIH</label>
-            <select
-              value={filtroAih}
-              onChange={(e) => setFiltroAih(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${filtroAih ? 'border-amber-500 bg-amber-50' : 'border-gray-300'}`}
-            >
+            <select value={filtroAih} onChange={(e) => setFiltroAih(e.target.value)} className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${filtroAih ? 'border-amber-500 bg-amber-50' : 'border-gray-300'}`}>
               <option value="">📊 Todos</option>
               <option value="Autorizado">Autorizado</option>
               <option value="Pendência Hospital">Pendência Hospital</option>
@@ -2214,22 +2221,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               <option value="N/A - Urgência">N/A - Urgência</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">📄 Data Inserção</label>
-            <input
-              type="date"
-              value={filtroDataInsercao}
-              onChange={(e) => setFiltroDataInsercao(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white"
-            />
-          </div>
+          {/* 2ª linha: Status Interno, Confirmado, Status Exames, Médico, Mês Cirurgia */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Status Interno</label>
-            <select
-              value={filtroStatusInterno}
-              onChange={(e) => setFiltroStatusInterno(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusInterno ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-            >
+            <select value={filtroStatusInterno} onChange={(e) => setFiltroStatusInterno(e.target.value)} className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusInterno ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
               <option value="">📊 Todos</option>
               <option value="Anestesista">Anestesista</option>
               <option value="Cardio">Cardio</option>
@@ -2242,111 +2237,30 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
-            <select
-              value={filtroConfirmado}
-              onChange={(e) => setFiltroConfirmado(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroConfirmado ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-            >
+            <select value={filtroConfirmado} onChange={(e) => setFiltroConfirmado(e.target.value)} className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroConfirmado ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
               <option value="">📊 Todos</option>
               <option value="Confirmado">Confirmado</option>
               <option value="Aguardando">Aguardando</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Justificativa</label>
-            <select
-              value={filtroJustificativa}
-              onChange={(e) => setFiltroJustificativa(e.target.value)}
-              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition-colors bg-white font-medium"
-            >
+            <label className="block text-xs font-medium text-gray-700 mb-1">📄 Status dos Exames</label>
+            <select value={filtroStatusExames} onChange={(e) => setFiltroStatusExames(e.target.value)} className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors bg-white font-medium ${filtroStatusExames ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
               <option value="">📊 Todos</option>
-              <option value="com_justificativa">🟣 Justificado</option>
-              <option value="sem_justificativa">Sem justificativa</option>
+              <option value="COM EXAMES">✅ Com Exames</option>
+              <option value="SEM EXAMES">⚠️ Sem Exames</option>
             </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Observação</label>
-            <select
-              value={filtroObservacao}
-              onChange={(e) => setFiltroObservacao(e.target.value)}
-              className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium"
-              title="Filtrar por observação"
-            >
-              <option value="">📊 Todos</option>
-              <option value="sem_observacao">Sem observação</option>
-              <option value="obs_agendamento">🟣 Observação de Agendamento</option>
-              <option value="obs_faturamento">🟠 Observação de Faturamento</option>
-              <option value="obs_ambos">🟣+🟠 Ambas</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
-            <input
-              type="text"
-              value={filtroPaciente}
-              onChange={(e) => setFiltroPaciente(e.target.value)}
-              placeholder="Nome do paciente..."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Nº Prontuário</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={filtroProntuario}
-              onChange={(e) => setFiltroProntuario(e.target.value)}
-              placeholder="Digite números do prontuário..."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-              title="Filtrar por números do prontuário"
-            />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Médico</label>
-            <select
-              value={filtroMedicoId}
-              onChange={(e) => setFiltroMedicoId(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            >
+            <select value={filtroMedicoId} onChange={(e) => setFiltroMedicoId(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors">
               <option value="">Todos</option>
-              {medicosDisponiveis
-                .slice()
-                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-                .map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome}
-                  </option>
-                ))}
+              {medicosDisponiveis.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(m => (<option key={m.id} value={m.id}>{m.nome}</option>))}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Data Consulta</label>
-            <input
-              type="text"
-              value={filtroDataConsulta}
-              onChange={(e) => setFiltroDataConsulta(e.target.value)}
-              placeholder="DD/MM/AAAA"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Data Cirurgia</label>
-            <input
-              type="text"
-              value={filtroDataCirurgia}
-              onChange={(e) => setFiltroDataCirurgia(e.target.value)}
-              placeholder="DD/MM/AAAA"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-            />
-          </div>
-          <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">📅 Mês Cirurgia</label>
-            <select
-              value={filtroMesCirurgia}
-              onChange={(e) => setFiltroMesCirurgia(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${filtroMesCirurgia ? 'border-teal-500 bg-teal-50' : 'border-gray-300'}`}
-            >
+            <select value={filtroMesCirurgia} onChange={(e) => setFiltroMesCirurgia(e.target.value)} className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${filtroMesCirurgia ? 'border-teal-500 bg-teal-50' : 'border-gray-300'}`}>
               <option value="">Todos os meses</option>
               <option value="2025-10">Outubro/2025</option>
               <option value="2025-11">Novembro/2025</option>
@@ -2364,6 +2278,29 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               <option value="2026-11">Novembro/2026</option>
               <option value="2026-12">Dezembro/2026</option>
             </select>
+          </div>
+          {/* 3ª linha: Observação, Justificativa, Data Inserção */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Observação</label>
+            <select value={filtroObservacao} onChange={(e) => setFiltroObservacao(e.target.value)} className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors bg-white font-medium" title="Filtrar por observação">
+              <option value="">📊 Todos</option>
+              <option value="sem_observacao">Sem observação</option>
+              <option value="obs_agendamento">🟣 Observação de Agendamento</option>
+              <option value="obs_faturamento">🟠 Observação de Faturamento</option>
+              <option value="obs_ambos">🟣+🟠 Ambas</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Justificativa</label>
+            <select value={filtroJustificativa} onChange={(e) => setFiltroJustificativa(e.target.value)} className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition-colors bg-white font-medium">
+              <option value="">📊 Todos</option>
+              <option value="com_justificativa">🟣 Justificado</option>
+              <option value="sem_justificativa">Sem justificativa</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">📄 Data Inserção</label>
+            <input type="date" value={filtroDataInsercao} onChange={(e) => setFiltroDataInsercao(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white" />
           </div>
         </div>
         
