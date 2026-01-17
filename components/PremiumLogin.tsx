@@ -629,7 +629,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 // HOOK PARA FILTROS POR HOSPITAL E PERMISSÕES
 // ============================================================================
 export const useHospitalFilter = () => {
-  const { hospitalSelecionado, userRole } = useAuth();
+  const { hospitalSelecionado, userRole, usuario } = useAuth();
 
   // Função para adicionar filtro de hospital em query string (URL)
   const addHospitalFilter = (url: string): string => {
@@ -664,6 +664,9 @@ export const useHospitalFilter = () => {
     
     // Recepcao e Triagem têm acesso apenas a Dashboard e Documentação
     if (userRole === 'recepcao' || userRole === 'triagem') {
+      if (usuario?.email?.toLowerCase() === 'triagem.foz@medagenda.com') {
+        return viewName === 'dashboard' || viewName === 'documentacao' || viewName === 'anestesista';
+      }
       return viewName === 'dashboard' || viewName === 'documentacao';
     }
     // Anestesista: acesso a Dashboard e Anestesista
