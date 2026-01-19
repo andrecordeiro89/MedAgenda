@@ -257,16 +257,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         medicosCarregados = [];
       }
       
-      // 2. DEPOIS: Buscar agendamentos reais do banco UMA VEZ e filtrar por data
-      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
-      console.log('📚 Total de agendamentos carregados:', todosAgendamentos.length);
-
       const gradesCarregadas = await Promise.all(
         proximasDatas.map(async (data, index) => {
             const dataFormatada = data.toISOString().split('T')[0];
             
             try {
-              const agendamentosDoDia = todosAgendamentos.filter(a => a.data_agendamento === dataFormatada);
+              const agendamentosDoDia = await agendamentoService.getByDateHospital(dataFormatada, hospitalId);
               
               console.log(`📅 Dia ${dataFormatada}: ${agendamentosDoDia.length} agendamentos`);
               
@@ -1160,7 +1156,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // Atualizar texto de um item (APENAS ESPECIALIDADE - PROCEDIMENTO NÃO É MAIS EDITÁVEL DIRETO)
   const handleUpdateItem = (gradeIndex: number, itemId: string, novoTexto: string) => {
-    // Calcular novo estado
     const novasGrades = grades.map((grade, i) => {
       if (i === gradeIndex) {
         return {
@@ -1172,11 +1167,44 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }
       return grade;
     });
-
-    // Atualizar estado local
     setGrades(novasGrades);
   };
 
+  const handlePersistEspecialidadeEditada = async (gradeIndex: number, itemId: string, novoTexto: string) => {
+    const grade = grades[gradeIndex];
+    const item = grade.itens.find(i => i.id === itemId);
+    if (!item || item.tipo !== 'especialidade') return;
+    const dataFormatada = grade.data;
+    const antigoTexto = item.texto;
+    const antigoEsp = antigoTexto.includes(' - ') ? antigoTexto.split(' - ')[0] : antigoTexto;
+    const antigoMed = antigoTexto.includes(' - ') ? antigoTexto.split(' - ')[1] : null;
+    const novoEsp = novoTexto.includes(' - ') ? novoTexto.split(' - ')[0] : novoTexto;
+    try {
+      const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+      let candidatos = todosAgendamentos.filter(a => {
+        const med = (a.medico || '') || null;
+        const dataOk = a.data_agendamento === dataFormatada;
+        const espOk = (a.especialidade || '') === antigoEsp;
+        const medOk = antigoMed ? (med === antigoMed) : (!med || med === '');
+        return dataOk && espOk && medOk;
+      });
+      if (candidatos.length === 0) {
+        const startIndex = grade.itens.findIndex(i => i.id === itemId);
+        const ids: string[] = [];
+        for (let i = startIndex + 1; i < grade.itens.length; i++) {
+          const it = grade.itens[i];
+          if (it.tipo === 'especialidade') break;
+          if (it.agendamentoId) ids.push(String(it.agendamentoId));
+        }
+        candidatos = todosAgendamentos.filter(a => ids.includes(String(a.id)));
+      }
+      await Promise.all(candidatos.map(a => agendamentoService.update(String(a.id), { especialidade: novoEsp })));
+      mostrarMensagem('✅ Sucesso', 'Especialidade atualizada com sucesso.', 'sucesso');
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem('❌ Erro', 'Falha ao atualizar especialidade.', 'erro');
+    }
+  };
   // NOVA FUNÇÃO: Abrir modal para alterar procedimento
   const handleAbrirAlterarProcedimento = (gradeIndex: number, itemId: string) => {
     console.log('🔍 Abrindo modal para editar procedimento:', { gradeIndex, itemId, totalGrades: grades.length });
@@ -1250,6 +1278,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     
     setModalAlterarProcAberto(true);
   };
+
+  const [edicaoEspecialidade, setEdicaoEspecialidade] = useState<{ gradeIndex: number; itemId: string } | null>(null);
+  const [novaEspecialidadeId, setNovaEspecialidadeId] = useState<string>('');
 
   // NOVA FUNÇÃO: Salvar alteração de procedimento (UPDATE ou INSERT no banco)
   const handleSalvarAlteracaoProcedimento = async () => {
@@ -3606,9 +3637,60 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
                               <Input
                                 value={grupo.especialidade.texto}
                                 onChange={(e) => handleUpdateItem(index, grupo.especialidade!.id, e.target.value)}
+                                onBlur={(e) => handlePersistEspecialidadeEditada(index, grupo.especialidade!.id, e.target.value)}
                                 placeholder="Ex: Ortopedia - Joelho"
                                 className="flex-1 border-0 shadow-none bg-transparent text-gray-800 placeholder-gray-500 font-bold text-sm py-1 px-2"
                               />
+
+                              {edicaoEspecialidade && edicaoEspecialidade.gradeIndex === index && edicaoEspecialidade.itemId === grupo.especialidade!.id ? (
+                                <div className="flex items-center gap-1">
+                                  <select
+                                    value={novaEspecialidadeId}
+                                    onChange={(e) => setNovaEspecialidadeId(e.target.value)}
+                                    className="text-xs px-2 py-1 border border-slate-300 rounded bg-white"
+                                    title="Selecionar nova especialidade"
+                                  >
+                                    <option value="">Selecione</option>
+                                    {especialidades.map(esp => (
+                                      <option key={esp.id} value={esp.id}>{esp.nome}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    onClick={async () => {
+                                      if (!novaEspecialidadeId) return;
+                                      const esp = especialidades.find(e => e.id === novaEspecialidadeId);
+                                      if (!esp) return;
+                                      const textoAtual = grupo.especialidade!.texto;
+                                      const partes = textoAtual.includes(' - ') ? textoAtual.split(' - ') : [textoAtual];
+                                      const medicoNome = partes.length > 1 ? partes[1] : '';
+                                      const novoTexto = medicoNome ? `${esp.nome} - ${medicoNome}` : esp.nome;
+                                      handleUpdateItem(index, grupo.especialidade!.id, novoTexto);
+                                      await handlePersistEspecialidadeEditada(index, grupo.especialidade!.id, novoTexto);
+                                      setEdicaoEspecialidade(null);
+                                      setNovaEspecialidadeId('');
+                                    }}
+                                    className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                                    title="Salvar"
+                                  >
+                                    Salvar
+                                  </button>
+                                  <button
+                                    onClick={() => { setEdicaoEspecialidade(null); setNovaEspecialidadeId(''); }}
+                                    className="px-2 py-1 bg-gray-200 text-gray-800 rounded text-xs"
+                                    title="Cancelar"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setEdicaoEspecialidade({ gradeIndex: index, itemId: grupo.especialidade!.id })}
+                                  className="ml-1 px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                                  title="Editar Especialidade"
+                                >
+                                  Editar Esp.
+                                </button>
+                              )}
 
                               {/* Badge com contador */}
                               <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs font-semibold">

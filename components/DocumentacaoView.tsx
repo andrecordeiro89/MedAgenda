@@ -158,7 +158,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const carregarAgendamentos = async () => {
     setLoading(true);
     try {
-      const dados = await agendamentoService.getAll(hospitalId);
+      const agora = new Date();
+      const dados = await agendamentoService.getByMonthHospital(agora.getFullYear(), agora.getMonth(), hospitalId);
       console.log('📋 Agendamentos carregados:', dados);
       console.log('📊 Total de registros:', dados.length);
       
