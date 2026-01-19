@@ -266,10 +266,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
   // Status do paciente - NOVA LÓGICA (Exames e Pré-Op separados)
   const getStatusPaciente = (ag: Agendamento) => {
-    const temExames = ag.documentos_ok === true;
-    
-    // NOVA DEFINIÇÃO: "COM EXAMES" = tem documentos anexados (independente de pré-op)
-    if (temExames) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800', grupo: 'com_exames' };
+    const temAlgumAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || ag.complementares_ok === true;
+    if (temAlgumAnexo) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800', grupo: 'com_exames' };
     return { texto: 'SEM EXAMES', cor: 'bg-red-100 text-red-800', grupo: 'sem_exames' };
   };
   
