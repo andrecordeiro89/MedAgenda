@@ -301,6 +301,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
   const [agendamentosBuscaExtra, setAgendamentosBuscaExtra] = useState<Agendamento[]>([]);
   const [agendamentosBuscaConsulta, setAgendamentosBuscaConsulta] = useState<Agendamento[]>([]);
+  const [agendamentosBuscaCirurgia, setAgendamentosBuscaCirurgia] = useState<Agendamento[]>([]);
+  const [agendamentosBuscaProntuario, setAgendamentosBuscaProntuario] = useState<Agendamento[]>([]);
   useEffect(() => {
     const term = (filtroPaciente || '').trim();
     if (!term || term.length < 2) {
@@ -363,6 +365,74 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }, 250);
     return () => clearTimeout(handle);
   }, [filtroDataConsulta, hospitalId]);
+
+  useEffect(() => {
+    const entrada = (filtroDataCirurgia || '').trim();
+    if (!entrada) {
+      setAgendamentosBuscaCirurgia([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const partes = entrada.split('/');
+        let iso = '';
+        if (partes.length === 3) {
+          const [dd, mm, yyyy] = partes;
+          iso = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+        } else if (partes.length === 2) {
+          const [dd, mm] = partes;
+          const y = new Date().getFullYear();
+          iso = `${y}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+        } else {
+          setAgendamentosBuscaCirurgia([]);
+          return;
+        }
+        const resultados = await agendamentoService.getByCirurgiaDateHospital(iso, hospitalId);
+        const filtrados = resultados.filter(ag => {
+          const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+          const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+          if (temPaciente && temProcedimento) return true;
+          if (ag.is_grade_cirurgica === true && !temPaciente) return false;
+          if (!temProcedimento && !temPaciente) return false;
+          return true;
+        });
+        setAgendamentosBuscaCirurgia(filtrados);
+      } catch {
+        setAgendamentosBuscaCirurgia([]);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [filtroDataCirurgia, hospitalId]);
+
+  useEffect(() => {
+    const entrada = (filtroProntuario || '').trim();
+    if (!entrada) {
+      setAgendamentosBuscaProntuario([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const digits = entrada.replace(/\D/g, '');
+        if (!digits) {
+          setAgendamentosBuscaProntuario([]);
+          return;
+        }
+        const resultados = await agendamentoService.searchByProntuarioHospital(digits, hospitalId);
+        const filtrados = resultados.filter(ag => {
+          const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+          const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+          if (temPaciente && temProcedimento) return true;
+          if (ag.is_grade_cirurgica === true && !temPaciente) return false;
+          if (!temProcedimento && !temPaciente) return false;
+          return true;
+        });
+        setAgendamentosBuscaProntuario(filtrados);
+      } catch {
+        setAgendamentosBuscaProntuario([]);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [filtroProntuario, hospitalId]);
   // Status do paciente - NOVA LÓGICA (Exames e Pré-Op separados)
   const getStatusPaciente = (ag: Agendamento) => {
     const temAlgumAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || ag.complementares_ok === true;
@@ -595,7 +665,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     const bases = [
       ...agendamentos,
       ...(filtroPaciente ? agendamentosBuscaExtra : []),
-      ...(filtroDataConsulta ? agendamentosBuscaConsulta : [])
+      ...(filtroDataConsulta ? agendamentosBuscaConsulta : []),
+      ...(filtroDataCirurgia ? agendamentosBuscaCirurgia : []),
+      ...(filtroProntuario ? agendamentosBuscaProntuario : [])
     ];
     bases.forEach(a => {
       if (a.id) mapa.set(String(a.id), a);

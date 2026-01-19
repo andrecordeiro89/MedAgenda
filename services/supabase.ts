@@ -542,6 +542,30 @@ export const agendamentoService = {
     if (error) throw new Error(error.message);
     return data as Agendamento[];
   },
+  async getByCirurgiaDateHospital(dateIso: string, hospitalId?: string): Promise<Agendamento[]> {
+    let query = supabase
+      .from('agendamentos')
+      .select('*')
+      .eq('data_agendamento', dateIso);
+    if (hospitalId) {
+      query = query.eq('hospital_id', hospitalId);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data as Agendamento[];
+  },
+  async searchByProntuarioHospital(termDigits: string, hospitalId?: string): Promise<Agendamento[]> {
+    let query = supabase
+      .from('agendamentos')
+      .select('*')
+      .ilike('n_prontuario', `%${termDigits}%`);
+    if (hospitalId) {
+      query = query.eq('hospital_id', hospitalId);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data as Agendamento[];
+  },
 
   async create(agendamento: Omit<Agendamento, 'id' | 'created_at' | 'updated_at'>): Promise<Agendamento> {
     console.log('💾 Salvando agendamento no Supabase...', agendamento);
