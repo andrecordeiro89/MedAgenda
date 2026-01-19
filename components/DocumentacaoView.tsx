@@ -299,6 +299,70 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
   };
 
+  const [agendamentosBuscaExtra, setAgendamentosBuscaExtra] = useState<Agendamento[]>([]);
+  const [agendamentosBuscaConsulta, setAgendamentosBuscaConsulta] = useState<Agendamento[]>([]);
+  useEffect(() => {
+    const term = (filtroPaciente || '').trim();
+    if (!term || term.length < 2) {
+      setAgendamentosBuscaExtra([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const resultados = await agendamentoService.searchByPacienteHospital(term, hospitalId);
+        const filtrados = resultados.filter(ag => {
+          const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+          const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+          if (temPaciente && temProcedimento) return true;
+          if (ag.is_grade_cirurgica === true && !temPaciente) return false;
+          if (!temProcedimento && !temPaciente) return false;
+          return true;
+        });
+        setAgendamentosBuscaExtra(filtrados);
+      } catch {
+        setAgendamentosBuscaExtra([]);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [filtroPaciente, hospitalId]);
+
+  useEffect(() => {
+    const entrada = (filtroDataConsulta || '').trim();
+    if (!entrada) {
+      setAgendamentosBuscaConsulta([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const partes = entrada.split('/');
+        let iso = '';
+        if (partes.length === 3) {
+          const [dd, mm, yyyy] = partes;
+          iso = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+        } else if (partes.length === 2) {
+          const [dd, mm] = partes;
+          const y = new Date().getFullYear();
+          iso = `${y}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+        } else {
+          setAgendamentosBuscaConsulta([]);
+          return;
+        }
+        const resultados = await agendamentoService.getByConsultaDateHospital(iso, hospitalId);
+        const filtrados = resultados.filter(ag => {
+          const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
+          const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
+          if (temPaciente && temProcedimento) return true;
+          if (ag.is_grade_cirurgica === true && !temPaciente) return false;
+          if (!temProcedimento && !temPaciente) return false;
+          return true;
+        });
+        setAgendamentosBuscaConsulta(filtrados);
+      } catch {
+        setAgendamentosBuscaConsulta([]);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [filtroDataConsulta, hospitalId]);
   // Status do paciente - NOVA LÓGICA (Exames e Pré-Op separados)
   const getStatusPaciente = (ag: Agendamento) => {
     const temAlgumAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || ag.complementares_ok === true;
@@ -526,8 +590,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     return Array.from(pacientesMap.values());
   };
   
-  // Filtrar agendamentos (ANTES de agrupar)
-  const agendamentosFiltradosCompletos = agendamentos.filter(ag => {
+  const fonteAgendamentos = (() => {
+    const mapa = new Map<string, Agendamento>();
+    const bases = [
+      ...agendamentos,
+      ...(filtroPaciente ? agendamentosBuscaExtra : []),
+      ...(filtroDataConsulta ? agendamentosBuscaConsulta : [])
+    ];
+    bases.forEach(a => {
+      if (a.id) mapa.set(String(a.id), a);
+    });
+    return Array.from(mapa.values());
+  })();
+  const agendamentosFiltradosCompletos = fonteAgendamentos.filter(ag => {
     // Filtro por status de EXAMES (documentos)
     if (filtroStatus) {
       const status = getStatusPaciente(ag);

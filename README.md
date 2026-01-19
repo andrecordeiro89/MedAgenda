@@ -1,207 +1,108 @@
-# 🏥 MedAgenda - Sistema de Agendamento Hospitalar
+# 🏥 MedAgenda
 
-<div align="center">
+Sistema de agendamento hospitalar multi‑hospital com foco em rotina cirúrgica. Inclui Grade Cirúrgica, Documentação pré‑operatória, Anestesia, Faturamento e integrações externas (SIGTAP). Construído em React + Vite e Node/Express com PostgreSQL/Supabase.
 
-![MedAgenda](https://img.shields.io/badge/MedAgenda-Sistema%20Hospitalar-blue?style=for-the-badge)
-![React](https://img.shields.io/badge/React-19.1.1-61DAFB?style=for-the-badge&logo=react)
-![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=node.js)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=for-the-badge&logo=postgresql)
-![TypeScript](https://img.shields.io/badge/TypeScript-Full%20Stack-3178C6?style=for-the-badge&logo=typescript)
-
-</div>
-
-Sistema completo de agendamento hospitalar com interface moderna e responsiva, incluindo calendário interativo e gerenciamento de pacientes, médicos e procedimentos.
-
-## ✨ Funcionalidades
-
-### 📊 Dashboard
-- Estatísticas em tempo real de agendamentos
-- Visão geral de procedimentos cirúrgicos e ambulatoriais
-- Lista dos próximos agendamentos
-- Métricas de status (pendentes vs liberados)
-
-### 📅 Calendário Interativo
-- Visualização mensal de agendamentos
-- Indicadores visuais por tipo e status
-- Modal com detalhes ao clicar nas datas
-- Navegação intuitiva entre meses
-
-### 🏥 Gerenciamento Completo
-- **Médicos**: CRUD completo com especialidades e contatos
-- **Procedimentos**: Tipos ambulatoriais e cirúrgicos com duração
-- **Agendamentos**: Sistema completo com validação de conflitos
-
-### 🔍 Recursos Avançados
-- Busca em tempo real
-- Validação de conflitos de horário
-- Cálculo automático de idade
-- Interface responsiva (desktop/mobile)
-- Feedback visual consistente
-
-## 🚀 Início Rápido
-
-### Pré-requisitos
-- Node.js 18+
-- PostgreSQL 12+
-- npm ou yarn
-
-### Configuração Rápida
-```bash
-# 1. Configurar backend
-cd backend
-npm install
-cp env.example .env  # Configure suas credenciais do PostgreSQL
-
-# 2. Configurar banco
-npm run db:setup
-
-# 3. Iniciar backend
-npm run dev  # Porta 3001
-
-# 4. Em nova aba, iniciar frontend
-cd ..
-npm run dev  # Porta 3000
-```
-
-📖 **Guia completo**: Veja [SETUP.md](SETUP.md) para instruções detalhadas
+## ✨ Visão Geral
+- Grade Cirúrgica por dia com especialidades, procedimentos e pacientes
+- Documentação: anexos de exames, pré‑operatório e complementares
+- Anestesia: avaliação, observações e acompanhamento de documentação
+- Faturamento: relatórios, exportações XLSX/PDF/ZIP e controles de AIH
+- Integração externa SIGTAP via Supabase (procedimentos e estatísticas)
+- Atualizações em tempo real entre telas via Supabase Realtime
 
 ## 🏗️ Arquitetura
+- Frontend: React + TypeScript + Vite, estado por Context e hooks
+- Backend: Node/Express (TypeScript), validações e segurança
+- Banco: PostgreSQL/Supabase, consultas filtradas por hospital e data
+- Serviços: 
+  - services/supabase.ts (CRUD e queries filtradas)
+  - services/external-supabase.ts (SIGTAP)
+  - Integração de médicos e agendamentos por hospital
 
-### Frontend (React + TypeScript)
-- **Framework**: React 19.1.1 com hooks modernos
-- **Build**: Vite para desenvolvimento rápido
-- **Estilização**: Tailwind CSS responsivo
-- **Estado**: Context API com useReducer
-- **Tipagem**: TypeScript para segurança
+Documentos úteis:
+- SUPABASE: [SUPABASE-SETUP.md](SUPABASE-SETUP.md)
+- Dados externos (SIGTAP): [DADOS_EXTERNOS.md](DADOS_EXTERNOS.md), [SIGTAP_INTEGRATION.md](SIGTAP_INTEGRATION.md)
+- Multi‑hospital: [GUIA-INTEGRACAO-MULTIHOSPITAL.md](GUIA-INTEGRACAO-MULTIHOSPITAL.md)
 
-### Backend (Node.js + Express)
-- **Runtime**: Node.js com Express.js
-- **Banco**: PostgreSQL com queries otimizadas
-- **Validação**: express-validator para dados
-- **Segurança**: Helmet, CORS, sanitização
-- **API**: RESTful com responses padronizadas
+## 🔹 Módulos Principais
+- Grade Cirúrgica: montar agenda do dia, editar especialidade do grupo, mover pacientes entre datas preservando todos os dados
+- Documentação: filtros, anexos (exames/pré‑op/complementares), exportações, realtime
+- Anestesia: status, observações, complementares, pré‑operatório e visualizações
+- Faturamento: AIH, relatórios, justificativas e exportações
+- Dashboard: visão geral e indicadores
 
-### Banco de Dados (PostgreSQL)
-```sql
-medicos (id, nome, especialidade, crm, telefone, email)
-procedimentos (id, nome, tipo, duracao_estimada_min, descricao)  
-agendamentos (id, nome_paciente, data_nascimento, data_agendamento, 
-              horario, status_liberacao, medico_id, procedimento_id)
-```
+## 🚀 Início Rápido
+Pré‑requisitos:
+- Node.js 18+ e npm
+- PostgreSQL/Supabase configurado
 
-## 📱 Screenshots
-
-### Dashboard
-Visão geral com métricas e próximos agendamentos
-
-### Calendário
-Interface interativa com indicadores visuais por status
-
-### Gerenciamento
-CRUD completo com formulários validados
-
-## 🛠️ Tecnologias
-
-### Frontend
-- React 19.1.1
-- TypeScript 5.8.2
-- Tailwind CSS
-- Vite 6.2.0
-
-### Backend
-- Node.js + Express
-- PostgreSQL
-- express-validator
-- Helmet + CORS
-
-### Ferramentas
-- Hot reload development
-- TypeScript em todo stack
-- Migrations e seeds automatizadas
-- Validação robusta de dados
-
-## 📚 Documentação
-
-- [Guia de Setup](SETUP.md) - Configuração completa
-- [Backend API](backend/README.md) - Documentação da API
-- [Análise do Sistema](ANALISE.md) - Análise técnica detalhada
-
-## 🔧 Scripts Disponíveis
-
-### Frontend
+Passos:
 ```bash
-npm run dev     # Desenvolvimento
-npm run build   # Build produção
-npm run preview # Preview build
+# Backend
+cd backend
+npm install
+cp .env.example .env
+npm run db:setup
+npm run dev   # http://localhost:3001
+
+# Frontend (raiz)
+cd ..
+npm install
+npm run dev   # http://localhost:3000
 ```
 
-### Backend
+## 🔧 Scripts
+Frontend:
 ```bash
-npm run dev          # Desenvolvimento  
-npm run db:setup     # Setup completo
-npm run db:reset     # Reset banco
-npm run migrate up   # Criar tabelas
-npm run seed         # Popular dados
+npm run dev
+npm run build
+npm run preview
+```
+Backend:
+```bash
+npm run dev
+npm run db:setup
+npm run db:reset
+npm run migrate up
+npm run seed
 ```
 
-## 🌟 Características Técnicas
+## 🔌 Integrações
+- Supabase local: CRUD de agendamentos, médicos, documentação
+- Supabase externo (SIGTAP): busca e paginação de ~100k registros, deduplicação
+- Exportações: XLSX, PDF (jsPDF + autotable), ZIP (JSZip)
 
-### Segurança
-- Validação completa de inputs
-- Sanitização de dados
-- Headers de segurança HTTP
-- Prevenção de SQL injection
+## 🔁 Atualizações em Tempo Real
+- Documentação: canal doc‑aih‑{hospitalId}
+- Faturamento: canal fat‑just‑{hospitalId}
+- Anestesia: canal anes‑{hospitalId}
+As telas refletem transferências e edições imediatamente, sem recarga completa.
 
-### Performance
-- Queries otimizadas com índices
-- Loading states e feedback visual
-- Componentes React otimizados
-- Hot reload para desenvolvimento
+## ⚙️ Performance
+- Carregamento por mês/hospital na Documentação
+- Consultas por dia/hospital na Grade Cirúrgica
+- Virtualização de listas e ordenações estáveis
+- Priorizar paginação server‑side e seleção de colunas mínimas
 
-### Usabilidade
-- Interface responsiva
-- Validação em tempo real
-- Mensagens de erro claras
-- Navegação intuitiva
+## 🔒 Segurança
+- Helmet, CORS, validações robustas (Express)
+- Recomendado: autenticação JWT/sessão e políticas RLS por hospital_id no PostgreSQL/Supabase
+- Evitar uso de chaves anon para dados sensíveis diretamente no frontend
 
-## 🎯 Casos de Uso
-
-### Hospitais e Clínicas
-- Agendamento de consultas
-- Controle de procedimentos
-- Gestão de médicos
-- Relatórios e estatísticas
-
-### Funcionalidades Principais
-- Evitar conflitos de horário
-- Calcular idade automaticamente
-- Filtrar por status e tipo
-- Buscar pacientes e médicos
+## 🧾 Modelo de Dados (principais campos)
+- Agendamento: paciente, datas (agendamento/consulta), hospital_id, especialidade, médico, procedimentos, documentação (exames/pré‑op/complementares), AIH, avaliação anestesista, faturamento e justificativas
 
 ## 🤝 Contribuição
-
-1. Fork o projeto
-2. Crie sua feature branch (`git checkout -b feature/nova-feature`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova feature'`)
-4. Push para a branch (`git push origin feature/nova-feature`)
-5. Abra um Pull Request
+1. Fork
+2. Branch (`feature/nova-feature`)
+3. Commits
+4. Pull Request
 
 ## 📄 Licença
+ISC — veja [LICENSE](LICENSE).
 
-Este projeto está sob a licença ISC - veja o arquivo [LICENSE](LICENSE) para detalhes.
-
-## 🆘 Suporte
-
-- 📖 Documentação completa em [SETUP.md](SETUP.md)
-- 🐛 Issues: Use o GitHub Issues para reportar bugs
-- 💡 Sugestões: Pull requests são bem-vindos
-
----
-
-<div align="center">
-
-**Desenvolvido com ❤️ para facilitar o agendamento hospitalar**
-
-[Documentação](SETUP.md) • [API](backend/README.md) • [Análise](ANALISE.md)
-
-</div>
+## 📚 Referências
+- Backend API: [backend/README.md](backend/README.md)
+- Setup Supabase: [SUPABASE-SETUP.md](SUPABASE-SETUP.md)
+- Integração SIGTAP: [SIGTAP_INTEGRATION.md](SIGTAP_INTEGRATION.md)
+- Multi‑hospital: [GUIA-INTEGRACAO-MULTIHOSPITAL.md](GUIA-INTEGRACAO-MULTIHOSPITAL.md)
