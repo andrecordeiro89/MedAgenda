@@ -2589,138 +2589,35 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // Função para executar a mudança de data
   const handleMoverPaciente = async () => {
-    if (!agendamentoParaMover || !novaDataSelecionada || !especialidadeSelecionadaDestino || !procedimentoSelecionadoDestino) {
+    if (!agendamentoParaMover || !novaDataSelecionada) {
       setConfirmacaoData({
         titulo: '⚠️ Atenção',
-        mensagem: 'Por favor, selecione a data, especialidade e procedimento de destino.',
+        mensagem: 'Por favor, selecione a nova data.',
         onConfirm: () => setModalConfirmacao(false)
       });
       setModalConfirmacao(true);
       return;
     }
-
     setMovendoPaciente(true);
     try {
-      // Buscar dados da especialidade e procedimento de destino
-      const especialidadeDestino = especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino);
-      const agendamentoSelecionado = (especialidadeDestino?.agendamentos as any[] || []).find((a: any) => String(a.id) === String(procedimentoSelecionadoDestino));
-      if (!especialidadeDestino || !agendamentoSelecionado) {
-        throw new Error('Especialidade ou procedimento de destino não encontrado.');
-      }
-      const procedimentoDestino = { texto: String(agendamentoSelecionado.procedimentos || ''), agendamentoId: String(agendamentoSelecionado.id) };
-      
-      console.log('📅 Movendo paciente...', {
-        agendamentoId: agendamentoParaMover.id,
-        dataAtual: agendamentoParaMover.dataAtual,
-        novaData: novaDataSelecionada,
-        novaEspecialidade: especialidadeDestino.nome,
-        novoProcedimento: procedimentoDestino.texto,
-        novoMedico: especialidadeDestino.medicoNome
-      });
-
-      // 1) Carregar TODOS os dados do paciente na origem para transferir campos completos
-      const agOrigem = await agendamentoService.getById(agendamentoParaMover.id);
-
-      // 2) Preencher o SLOT DE DESTINO com todos os dados relevantes do paciente
-      const resultadoDestino = await agendamentoService.update(procedimentoDestino.agendamentoId, {
-        nome_paciente: agOrigem.nome_paciente || agendamentoParaMover.nome,
-        data_nascimento: agOrigem.data_nascimento || agendamentoParaMover.dataNascimento || null,
-        cidade_natal: agOrigem.cidade_natal ?? agendamentoParaMover.cidadeNatal ?? null,
-        telefone: agOrigem.telefone ?? agendamentoParaMover.telefone ?? null,
-        data_consulta: agOrigem.data_consulta ?? agendamentoParaMover.dataConsulta ?? null,
-        n_prontuario: agOrigem.n_prontuario ?? agendamentoParaMover.prontuario ?? null,
-        status_aih: agOrigem.status_aih ?? null,
-        status_de_liberacao: agOrigem.status_de_liberacao ?? null,
-        tipo_de_exame: agOrigem.tipo_de_exame ?? null,
-        documentos_meta: agOrigem.documentos_meta ?? null,
-        observacao_agendamento: agOrigem.observacao_agendamento ?? null,
-        documentos_ok: agOrigem.documentos_ok ?? false,
-        documentos_urls: agOrigem.documentos_urls ?? null,
-        documentos_data: agOrigem.documentos_data ?? null,
-        ficha_pre_anestesica_ok: agOrigem.ficha_pre_anestesica_ok ?? false,
-        ficha_pre_anestesica_url: agOrigem.ficha_pre_anestesica_url ?? null,
-        ficha_pre_anestesica_data: agOrigem.ficha_pre_anestesica_data ?? null,
-        complementares_ok: agOrigem.complementares_ok ?? false,
-        complementares_urls: agOrigem.complementares_urls ?? null,
-        complementares_data: agOrigem.complementares_data ?? null,
-        observacoes: agOrigem.observacoes ?? null,
-        avaliacao_anestesista: agOrigem.avaliacao_anestesista ?? null,
-        avaliacao_anestesista_observacao: agOrigem.avaliacao_anestesista_observacao ?? null,
-        avaliacao_anestesista_motivo_reprovacao: agOrigem.avaliacao_anestesista_motivo_reprovacao ?? null,
-        avaliacao_anestesista_complementares: agOrigem.avaliacao_anestesista_complementares ?? null,
-        avaliacao_anestesista_data: agOrigem.avaliacao_anestesista_data ?? null,
-        faturamento_liberado: agOrigem.faturamento_liberado ?? null,
-        faturamento_observacao: agOrigem.faturamento_observacao ?? null,
-        faturamento_data: agOrigem.faturamento_data ?? null,
-        faturamento_status: agOrigem.faturamento_status ?? null,
-        observacao_faturamento: agOrigem.observacao_faturamento ?? null,
-        justificativa_alteracao_agendamento: agOrigem.justificativa_alteracao_agendamento ?? null,
-        justificativa_alteracao_agendamento_nome: agOrigem.justificativa_alteracao_agendamento_nome ?? null,
-        justificativa_alteracao_agendamento_nome_hora: agOrigem.justificativa_alteracao_agendamento_nome_hora ?? null
-      });
-
-      console.log('✅ Paciente atribuído ao destino com sucesso!', resultadoDestino);
-
-      // 3) LIMPAR O SLOT DE ORIGEM (todos os campos relacionados ao paciente)
       await agendamentoService.update(agendamentoParaMover.id, {
-        nome_paciente: '',
-        data_nascimento: '2000-01-01', // placeholder, seguindo a lógica de remoção existente
-        cidade_natal: null,
-        telefone: null,
-        data_consulta: null,
-        n_prontuario: null,
-        status_aih: null,
-        status_de_liberacao: null,
-        tipo_de_exame: null,
-        documentos_meta: null,
-        observacao_agendamento: null,
-        documentos_ok: false,
-        documentos_urls: null,
-        documentos_data: null,
-        ficha_pre_anestesica_ok: false,
-        ficha_pre_anestesica_url: null,
-        ficha_pre_anestesica_data: null,
-        complementares_ok: false,
-        complementares_urls: null,
-        complementares_data: null,
-        observacoes: null,
-        avaliacao_anestesista: null,
-        avaliacao_anestesista_observacao: null,
-        avaliacao_anestesista_motivo_reprovacao: null,
-        avaliacao_anestesista_complementares: null,
-        avaliacao_anestesista_data: null,
-        faturamento_liberado: null,
-        faturamento_observacao: null,
-        faturamento_data: null,
-        faturamento_status: null,
-        observacao_faturamento: null
+        data_agendamento: novaDataSelecionada
       });
-
-      console.log('✅ Slot de origem limpo com sucesso!');
-      console.log('🔄 Datas atualmente visíveis no modal:', proximasDatas.map(d => d.toISOString().split('T')[0]));
-
-      // Fechar modal de mover paciente
       setModalMoverPaciente(false);
       setAgendamentoParaMover(null);
-
-      // Recarregar todas as grades do banco (MANTÉM O MODAL PRINCIPAL ABERTO)
       await recarregarGradesDoSupabase();
-
-      // Mostrar mensagem de sucesso
       setConfirmacaoData({
-        titulo: '✅ Paciente Movido com Sucesso',
-        mensagem: `O paciente "${agendamentoParaMover.nome}" foi movido para:\n\n📅 Data: ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}\n🏥 Especialidade: ${especialidadeDestino.nome}\n💉 Procedimento: ${procedimentoDestino.texto}\n\n✨ As grades foram atualizadas automaticamente!`,
+        titulo: '✅ Data alterada com sucesso',
+        mensagem: `O paciente "${agendamentoParaMover.nome}" foi reagendado para ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}.`,
         onConfirm: () => {
           setModalConfirmacao(false);
         }
       });
       setModalConfirmacao(true);
-
     } catch (error) {
-      console.error('❌ Erro ao mover paciente:', error);
       setConfirmacaoData({
         titulo: '❌ Erro',
-        mensagem: `Erro ao mover paciente: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        mensagem: `Erro ao alterar a data: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         onConfirm: () => setModalConfirmacao(false)
       });
       setModalConfirmacao(true);

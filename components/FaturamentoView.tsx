@@ -1741,10 +1741,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Verificar se a observação foi modificada
   const observacaoModificada = (ag: Agendamento) => {
     if (!ag.id) return false;
-    const original = ag.observacao_faturamento || '';
+    const original = (ag.observacao_faturamento || ag.faturamento_observacao || '') as string;
     const editada = observacaoEmEdicao[ag.id];
     if (editada === undefined) return false;
-    return editada !== original;
+    return (editada || '').trim() !== (original || '').trim();
   };
   
   const handleSalvarJustificativa = async (ag: Agendamento) => {
@@ -2148,7 +2148,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
                   <textarea
-                    value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ''}
+                    value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ag.faturamento_observacao ?? ''}
                     onChange={(e) => setObservacaoEmEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
                     placeholder="Digite uma observação sobre este paciente..."
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
@@ -2156,7 +2156,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     disabled={salvandoObservacao === ag.id}
                   />
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-gray-500">{ag.observacao_faturamento ? 'Observação salva' : 'Nenhuma observação salva'}</span>
+                    <span className="text-xs text-gray-500">{(ag.observacao_faturamento || ag.faturamento_observacao) ? 'Observação salva' : 'Nenhuma observação salva'}</span>
                     <button
                       onClick={() => handleSalvarObservacao(ag)}
                       disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
