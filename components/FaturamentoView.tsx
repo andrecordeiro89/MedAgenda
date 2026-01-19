@@ -213,7 +213,34 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         if (!novo) return;
         if (hospitalId && novo.hospital_id && novo.hospital_id !== hospitalId) return;
         setAgendamentos(prev => {
-          const atualizados = prev.map(a => a.id === novo.id ? { ...a, justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento, justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome, justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora, updated_at: novo.updated_at } : a);
+          const atualizados = prev.map(a => a.id === novo.id ? {
+            ...a,
+            nome_paciente: novo.nome_paciente || '',
+            data_nascimento: novo.data_nascimento || '',
+            cidade_natal: novo.cidade_natal ?? null,
+            telefone: novo.telefone ?? null,
+            data_agendamento: novo.data_agendamento,
+            data_consulta: novo.data_consulta ?? null,
+            hospital_id: novo.hospital_id ?? null,
+            especialidade: novo.especialidade ?? null,
+            medico: novo.medico ?? null,
+            procedimentos: novo.procedimentos ?? null,
+            procedimento_especificacao: novo.procedimento_especificacao ?? null,
+            status_aih: novo.status_aih ?? null,
+            status_de_liberacao: novo.status_de_liberacao ?? null,
+            documentos_ok: novo.documentos_ok ?? false,
+            ficha_pre_anestesica_ok: novo.ficha_pre_anestesica_ok ?? false,
+            complementares_ok: novo.complementares_ok ?? false,
+            observacao_faturamento: novo.observacao_faturamento ?? null,
+            faturamento_observacao: novo.faturamento_observacao ?? null,
+            faturamento_liberado: novo.faturamento_liberado ?? null,
+            faturamento_data: novo.faturamento_data ?? null,
+            faturamento_status: novo.faturamento_status ?? null,
+            justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento ?? null,
+            justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome ?? null,
+            justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora ?? null,
+            updated_at: novo.updated_at ?? a.updated_at
+          } : a);
           const hoje = hojeLocalStr();
           const countHoje = atualizados.filter(ax => {
             const hora = ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '';

@@ -137,15 +137,49 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         if (hospitalId && novo.hospital_id && novo.hospital_id !== hospitalId) return;
         setAgendamentos(prev => prev.map(a => 
           a.id === novo.id 
-            ? { 
-                ...a, 
-                status_aih: novo.status_aih,
-                justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento,
-                justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome,
-                justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora,
-                observacao_faturamento: novo.observacao_faturamento,
-                faturamento_observacao: novo.faturamento_observacao
-              } 
+            ? {
+                ...a,
+                nome_paciente: novo.nome_paciente || '',
+                data_nascimento: novo.data_nascimento || '',
+                cidade_natal: novo.cidade_natal ?? null,
+                telefone: novo.telefone ?? null,
+                data_agendamento: novo.data_agendamento,
+                data_consulta: novo.data_consulta ?? null,
+                hospital_id: novo.hospital_id ?? null,
+                especialidade: novo.especialidade ?? null,
+                medico: novo.medico ?? null,
+                procedimentos: novo.procedimentos ?? null,
+                procedimento_especificacao: novo.procedimento_especificacao ?? null,
+                status_aih: novo.status_aih ?? null,
+                status_de_liberacao: novo.status_de_liberacao ?? null,
+                tipo_de_exame: novo.tipo_de_exame ?? null,
+                documentos_meta: novo.documentos_meta ?? null,
+                observacao_agendamento: novo.observacao_agendamento ?? null,
+                documentos_ok: novo.documentos_ok ?? false,
+                documentos_urls: novo.documentos_urls ?? null,
+                documentos_data: novo.documentos_data ?? null,
+                ficha_pre_anestesica_ok: novo.ficha_pre_anestesica_ok ?? false,
+                ficha_pre_anestesica_url: novo.ficha_pre_anestesica_url ?? null,
+                ficha_pre_anestesica_data: novo.ficha_pre_anestesica_data ?? null,
+                complementares_ok: novo.complementares_ok ?? false,
+                complementares_urls: novo.complementares_urls ?? null,
+                complementares_data: novo.complementares_data ?? null,
+                observacoes: novo.observacoes ?? null,
+                avaliacao_anestesista: novo.avaliacao_anestesista ?? null,
+                avaliacao_anestesista_observacao: novo.avaliacao_anestesista_observacao ?? null,
+                avaliacao_anestesista_motivo_reprovacao: novo.avaliacao_anestesista_motivo_reprovacao ?? null,
+                avaliacao_anestesista_complementares: novo.avaliacao_anestesista_complementares ?? null,
+                avaliacao_anestesista_data: novo.avaliacao_anestesista_data ?? null,
+                faturamento_liberado: novo.faturamento_liberado ?? null,
+                faturamento_observacao: novo.faturamento_observacao ?? null,
+                faturamento_data: novo.faturamento_data ?? null,
+                faturamento_status: novo.faturamento_status ?? null,
+                observacao_faturamento: novo.observacao_faturamento ?? null,
+                justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento ?? null,
+                justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome ?? null,
+                justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora ?? null,
+                updated_at: novo.updated_at ?? a.updated_at
+              }
             : a
         ));
       });
