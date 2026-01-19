@@ -966,11 +966,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
   const handleSalvarObservacaoAgendamento = async (ag: Agendamento) => {
     if (!ag.id) return;
+    const original = ag.observacao_agendamento || '';
     const nova = (obsAgendamentoEdicao[ag.id] ?? ag.observacao_agendamento ?? '').trim();
+    if (!nova) {
+      toastError('Digite a observação para salvar');
+      return;
+    }
+    const agora = new Date();
+    const stamp = `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const textoComData = (original?.trim() ? `${original}\n[${stamp}] ${nova}` : `[${stamp}] ${nova}`).trim();
     setSalvandoObsAgendamento(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
-        observacao_agendamento: nova || null
+        observacao_agendamento: textoComData || null
       };
       await agendamentoService.update(ag.id, updateData);
       setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
@@ -1015,12 +1023,20 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
 
   const handleSalvarObservacaoFaturamento = async (ag: Agendamento) => {
     if (!ag.id) return;
+    const original = (ag.faturamento_observacao || ag.observacao_faturamento || '') as string;
     const nova = (obsFaturamentoEdicao[ag.id] ?? ag.faturamento_observacao ?? ag.observacao_faturamento ?? '').trim();
+    if (!nova) {
+      toastError('Digite a observação para salvar');
+      return;
+    }
+    const agora = new Date();
+    const stamp = `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const textoComData = (original?.trim() ? `${original}\n[${stamp}] ${nova}` : `[${stamp}] ${nova}`).trim();
     setSalvandoObsFaturamento(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
-        faturamento_observacao: nova || null,
-        observacao_faturamento: nova || null
+        faturamento_observacao: textoComData || null,
+        observacao_faturamento: textoComData || null
       };
       await agendamentoService.update(ag.id, updateData);
       setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));

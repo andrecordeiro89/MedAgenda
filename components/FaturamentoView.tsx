@@ -1697,12 +1697,20 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const handleSalvarObservacao = async (ag: Agendamento) => {
     if (!ag.id) return;
     
-    const novaObservacao = observacaoEmEdicao[ag.id] ?? ag.observacao_faturamento ?? '';
+    const original = ag.observacao_faturamento || '';
+    const novaObservacao = (observacaoEmEdicao[ag.id] ?? ag.observacao_faturamento ?? '').trim();
+    if (!novaObservacao) {
+      toastError('Digite a observação para salvar');
+      return;
+    }
+    const agora = new Date();
+    const stamp = `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const textoComData = (original?.trim() ? `${original}\n[${stamp}] ${novaObservacao}` : `[${stamp}] ${novaObservacao}`).trim();
     
     setSalvandoObservacao(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
-        observacao_faturamento: novaObservacao.trim() || null
+        observacao_faturamento: textoComData || null
       };
       
       await agendamentoService.update(ag.id, updateData);
