@@ -1768,7 +1768,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             <div className="mx-auto flex items-center justify-between w-32">
               {(() => {
                 const val = (ag.avaliacao_anestesista || '').toLowerCase();
-                const texto = val === 'aprovado' ? 'Aprovado' : val === 'reprovado' ? 'Reprovado' : val === 'complementares' ? 'Complementares' : '-';
+                const texto = val === 'aprovado' ? 'Aprovado' : val === 'reprovado' ? 'Reprovado' : val === 'complementares' ? 'Complemen.' : '-';
                 return (
                   <span className={`inline-block w-20 text-center px-2 py-1 text-xs font-semibold rounded ${getAvaliacaoBadgeClass(val)}`}>
                     {texto}
