@@ -657,34 +657,38 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
     return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
   };
-  // ORDENAR: mês atual primeiro, depois pela DATA selecionada e MÉDICO
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
     const dA = refDate(a);
     const dB = refDate(b);
-    const pA = monthPriority(dA);
-    const pB = monthPriority(dB);
-    if (pA !== pB) return pA - pB;
+    const mpA = monthPriority(dA);
+    const mpB = monthPriority(dB);
+    if (mpA !== mpB) return mpA - mpB;
     const sA = dA ? dA.toISOString().slice(0, 10) : '9999-12-31';
     const sB = dB ? dB.toISOString().slice(0, 10) : '9999-12-31';
     if (sA !== sB) {
-      const cmp = sA.localeCompare(sB);
-      return direcaoOrdenacao === 'asc' ? cmp : -cmp;
+      const cmpDate = sA.localeCompare(sB);
+      return direcaoOrdenacao === 'asc' ? cmpDate : -cmpDate;
     }
-    
-    // PRIORIDADE: nome do médico
     const medicoA = (a.medico || '').trim().toUpperCase();
     const medicoB = (b.medico || '').trim().toUpperCase();
-    
     if (medicoA !== medicoB) {
       if (!medicoA) return 1;
       if (!medicoB) return -1;
       return medicoA.localeCompare(medicoB, 'pt-BR');
     }
-    
+    const hasPacA = !!((a.nome_paciente || a.nome || '').trim());
+    const hasPacB = !!((b.nome_paciente || b.nome || '').trim());
+    if (hasPacA !== hasPacB) return hasPacA ? -1 : 1;
+    const procA = (a.procedimentos || '').trim().toUpperCase();
+    const procB = (b.procedimentos || '').trim().toUpperCase();
+    if (procA !== procB) {
+      if (!procA) return 1;
+      if (!procB) return -1;
+      return procA.localeCompare(procB, 'pt-BR');
+    }
     if (ordenarPorAnestesista) {
       const statusA = (a.status_de_liberacao || a.status_liberacao || '').toString().toLowerCase();
       const statusB = (b.status_de_liberacao || b.status_liberacao || '').toString().toLowerCase();
-      
       const prioridade: Record<string, number> = {
         'liberado': 1,
         'exames': 2,
@@ -693,17 +697,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         'não liberado': 5,
         'nao liberado': 5
       };
-      
       const prioridadeA = prioridade[statusA] || 999;
       const prioridadeB = prioridade[statusB] || 999;
-      
-      // Se prioridades diferentes, ordenar por prioridade
-      if (prioridadeA !== prioridadeB) {
-        return prioridadeA - prioridadeB;
-      }
+      if (prioridadeA !== prioridadeB) return prioridadeA - prioridadeB;
     }
-    
-    // PRIORIDADE 4: Se tudo igual, manter ordem de criação
     return 0;
   });
   
@@ -1941,7 +1938,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     Procedimento
                   </div>
                   <div className="text-sm text-gray-900">
-                    {ag.procedimentos || '-'}
+                    {ag.procedimento_especificacao
+                      ? `${ag.procedimentos || '-'} - ${ag.procedimento_especificacao}`
+                      : (ag.procedimentos || '-')}
                   </div>
                 </div>
                 
