@@ -1070,6 +1070,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     }
     const texto = (justificativaEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento ?? '').trim();
     const nome = (justificativaNomeEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    if (!nome) {
+      toastError('Informe o Nome do Colaborador para registrar a justificativa');
+      return;
+    }
     const payload: Partial<Agendamento> = {
       justificativa_alteracao_agendamento: texto || null,
       justificativa_alteracao_agendamento_nome: nome || null,
@@ -2262,9 +2266,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         </span>
                         <button
                           onClick={() => handleSalvarJustificativa(ag)}
-                          disabled={justificativaSalva || salvandoJustificativaId === ag.id}
+                          disabled={
+                            justificativaSalva ||
+                            salvandoJustificativaId === ag.id ||
+                            !((justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim())
+                          }
                           className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                            justificativaSalva || salvandoJustificativaId === ag.id
+                            justificativaSalva || salvandoJustificativaId === ag.id || !((justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim())
                               ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                               : 'bg-violet-600 text-white hover:bg-violet-700'
                           }`}
