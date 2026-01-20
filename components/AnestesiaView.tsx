@@ -69,6 +69,9 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [itensPorPagina, setItensPorPagina] = useState(20);
   const tabelaRef = useRef<HTMLDivElement>(null);
+  const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
+    setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+  };
 
   // Carregar agendamentos
   useEffect(() => {
@@ -581,12 +584,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
 
       await agendamentoService.update(agendamentoId, updateData);
 
-      // Atualizar estado local
-      setAgendamentos(prev => prev.map(ag => 
-        ag.id === agendamentoId 
-          ? { ...ag, ...updateData }
-          : ag
-      ));
+      applyUpdateEverywhere(agendamentoId, updateData);
 
       // Limpar formulário e recolher linha
       handleCancelarAvaliacao(agendamentoId);
@@ -614,12 +612,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
 
       await agendamentoService.update(agendamentoId, updateData);
 
-      // Atualizar estado local
-      setAgendamentos(prev => prev.map(ag => 
-        ag.id === agendamentoId 
-          ? { ...ag, ...updateData }
-          : ag
-      ));
+      applyUpdateEverywhere(agendamentoId, updateData);
 
       // Limpar formulário e recolher linha
       handleCancelarAvaliacao(agendamentoId);

@@ -389,6 +389,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           setJustificadosHojeLista(listaHoje);
           return atualizados;
         });
+        applyUpdateEverywhere(novo.id, {
+          status_aih: novo.status_aih ?? null,
+          observacao_faturamento: novo.observacao_faturamento ?? null,
+          faturamento_observacao: novo.faturamento_observacao ?? null,
+          faturamento_liberado: novo.faturamento_liberado ?? null,
+          faturamento_data: novo.faturamento_data ?? null,
+          faturamento_status: novo.faturamento_status ?? null,
+          updated_at: novo.updated_at ?? undefined
+        });
       });
     channel.subscribe();
     return () => {
@@ -1266,12 +1275,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       
       await agendamentoService.update(agendamentoNaoLiberado.id, updateData);
       
-      // Atualizar lista local
-      setAgendamentos(prev => prev.map(ag => 
-        ag.id === agendamentoNaoLiberado.id 
-          ? { ...ag, ...updateData }
-          : ag
-      ));
+      applyUpdateEverywhere(agendamentoNaoLiberado.id, updateData);
       
       handleFecharModalNaoLiberado();
       success('Marcado como NÃO LIBERADO');
@@ -1298,11 +1302,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             faturamento_data: new Date().toISOString()
           };
           await agendamentoService.update(ag.id!, updateData);
-          setAgendamentos(prev => prev.map(agItem => 
-            agItem.id === ag.id 
-              ? { ...agItem, ...updateData }
-              : agItem
-          ));
+          applyUpdateEverywhere(ag.id!, updateData);
         } catch (error) {
           console.error('Erro ao marcar como liberado:', error);
           toastError('Erro ao salvar. Tente novamente');
@@ -1320,13 +1320,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         };
         
         await agendamentoService.update(ag.id, updateData);
-        
-        // Atualizar lista local
-        setAgendamentos(prev => prev.map(agItem => 
-          agItem.id === ag.id 
-            ? { ...agItem, ...updateData }
-            : agItem
-        ));
+        applyUpdateEverywhere(ag.id, updateData);
       } catch (error) {
         console.error('Erro ao desmarcar:', error);
         toastError('Erro ao desmarcar. Tente novamente');
@@ -1340,13 +1334,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         };
         
         await agendamentoService.update(ag.id, updateData);
-        
-        // Atualizar lista local
-        setAgendamentos(prev => prev.map(agItem => 
-          agItem.id === ag.id 
-            ? { ...agItem, ...updateData }
-            : agItem
-        ));
+        applyUpdateEverywhere(ag.id, updateData);
       } catch (error) {
         console.error('Erro ao marcar como liberado:', error);
         toastError('Erro ao salvar. Tente novamente');
@@ -1693,6 +1681,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [justificativaNomeEdicao, setJustificativaNomeEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoJustificativaId, setSalvandoJustificativaId] = useState<string | null>(null);
   
+  const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
+    setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaExtra(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaConsulta(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaCirurgia(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaProntuario(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+  };
+  
   // Salvar observação do faturamento
   const handleSalvarObservacao = async (ag: Agendamento) => {
     if (!ag.id) return;
@@ -1710,17 +1706,13 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setSalvandoObservacao(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
-        observacao_faturamento: textoComData || null
+        observacao_faturamento: textoComData || null,
+        faturamento_observacao: textoComData || null
       };
       
       await agendamentoService.update(ag.id, updateData);
       
-      // Atualizar lista local
-      setAgendamentos(prev => prev.map(agItem => 
-        agItem.id === ag.id 
-          ? { ...agItem, ...updateData }
-          : agItem
-      ));
+      applyUpdateEverywhere(ag.id, updateData);
       
       // Limpar estado de edição
       setObservacaoEmEdicao(prev => {
@@ -1733,6 +1725,30 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     } catch (error) {
       console.error('Erro ao salvar observação:', error);
       toastError('Erro ao salvar observação. Tente novamente');
+    } finally {
+      setSalvandoObservacao(null);
+    }
+  };
+  
+  const handleApagarObservacao = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    setSalvandoObservacao(ag.id);
+    try {
+      const updateData: Partial<Agendamento> = {
+        observacao_faturamento: null,
+        faturamento_observacao: null
+      };
+      await agendamentoService.update(ag.id, updateData);
+      applyUpdateEverywhere(ag.id, updateData);
+      setObservacaoEmEdicao(prev => {
+        const novo = { ...prev };
+        delete novo[ag.id!];
+        return novo;
+      });
+      success('Observação apagada');
+    } catch (error) {
+      console.error('Erro ao apagar observação:', error);
+      toastError('Erro ao apagar observação. Tente novamente');
     } finally {
       setSalvandoObservacao(null);
     }
@@ -1918,7 +1934,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                             if (!ag.id) return;
                             setSalvandoAIH(prev => new Set(prev).add(ag.id!));
                             await agendamentoService.update(ag.id, { status_aih: novo });
-                            setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, status_aih: novo } : x));
+                            applyUpdateEverywhere(ag.id!, { status_aih: novo });
                             success('Status AIH atualizado');
                           } catch (err) {}
                           finally {
@@ -2157,6 +2173,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   />
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-gray-500">{(ag.observacao_faturamento || ag.faturamento_observacao) ? 'Observação salva' : 'Nenhuma observação salva'}</span>
+                    <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleSalvarObservacao(ag)}
                       disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
@@ -2174,6 +2191,24 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                         </>
                       )}
                     </button>
+                    <button
+                      onClick={() => handleApagarObservacao(ag)}
+                      disabled={salvandoObservacao === ag.id || !(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim())}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim()) ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                    >
+                      {salvandoObservacao === ag.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                          Apagando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          Apagar Observação
+                        </>
+                      )}
+                    </button>
+                    </div>
                   </div>
                 </div>
                 {(() => {

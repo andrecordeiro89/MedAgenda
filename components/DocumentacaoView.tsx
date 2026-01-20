@@ -182,6 +182,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               }
             : a
         ));
+        applyUpdateEverywhere(novo.id, {
+          status_aih: novo.status_aih ?? null,
+          observacao_agendamento: novo.observacao_agendamento ?? null,
+          documentos_ok: novo.documentos_ok ?? undefined,
+          ficha_pre_anestesica_ok: novo.ficha_pre_anestesica_ok ?? undefined,
+          complementares_ok: novo.complementares_ok ?? undefined,
+          observacao_faturamento: novo.observacao_faturamento ?? null,
+          faturamento_observacao: novo.faturamento_observacao ?? null,
+          updated_at: novo.updated_at ?? undefined
+        });
       });
     channel.subscribe();
     return () => {
@@ -303,6 +313,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [agendamentosBuscaConsulta, setAgendamentosBuscaConsulta] = useState<Agendamento[]>([]);
   const [agendamentosBuscaCirurgia, setAgendamentosBuscaCirurgia] = useState<Agendamento[]>([]);
   const [agendamentosBuscaProntuario, setAgendamentosBuscaProntuario] = useState<Agendamento[]>([]);
+  const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
+    setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaExtra(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaConsulta(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaCirurgia(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAgendamentosBuscaProntuario(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+  };
   useEffect(() => {
     const term = (filtroPaciente || '').trim();
     if (!term || term.length < 2) {
@@ -981,7 +998,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         observacao_agendamento: textoComData || null
       };
       await agendamentoService.update(ag.id, updateData);
-      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      applyUpdateEverywhere(ag.id, updateData);
       setObsAgendamentoEdicao(prev => {
         const next = { ...prev };
         delete next[ag.id!];
@@ -1004,7 +1021,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         observacao_agendamento: null
       };
       await agendamentoService.update(ag.id, updateData);
-      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      applyUpdateEverywhere(ag.id, updateData);
       setObsAgendamentoEdicao(prev => {
         const next = { ...prev };
         delete next[ag.id!];
@@ -1039,7 +1056,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         observacao_faturamento: textoComData || null
       };
       await agendamentoService.update(ag.id, updateData);
-      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      applyUpdateEverywhere(ag.id, updateData);
       setObsFaturamentoEdicao(prev => {
         const next = { ...prev };
         delete next[ag.id!];
@@ -1063,7 +1080,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         observacao_faturamento: null
       };
       await agendamentoService.update(ag.id, updateData);
-      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      applyUpdateEverywhere(ag.id, updateData);
       setObsFaturamentoEdicao(prev => {
         const next = { ...prev };
         delete next[ag.id!];
@@ -2375,13 +2392,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     try {
       setSalvandoLiberacao(prev => new Set(prev).add(agendamentoId));
       await agendamentoService.update(agendamentoId, { status_de_liberacao: novoStatus });
-      
-      // Atualizar estado local
-      setAgendamentos(prev => prev.map(ag => 
-        ag.id === agendamentoId
-          ? { ...ag, status_de_liberacao: novoStatus }
-          : ag
-      ));
+      applyUpdateEverywhere(agendamentoId, { status_de_liberacao: novoStatus });
       success('Status de liberação atualizado');
     } catch (error: any) {
       console.error('Erro ao atualizar status de liberação:', error);
@@ -2403,13 +2414,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       await agendamentoService.update(agendamentoId, {
         confirmacao: novaConfirmacao
       });
-      
-      // Atualizar estado local
-      setAgendamentos(prev => prev.map(ag => 
-        ag.id === agendamentoId
-          ? { ...ag, confirmacao: novaConfirmacao }
-          : ag
-      ));
+      applyUpdateEverywhere(agendamentoId, { confirmacao: novaConfirmacao });
     } catch (error: any) {
       console.error('Erro ao atualizar confirmação:', error);
       toastError(`Erro ao atualizar confirmação: ${error.message}`);
@@ -2431,7 +2436,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         observacao_agendamento: motivo
       };
       await agendamentoService.update(ag.id, updateData);
-      setAgendamentos(prev => prev.map(x => x.id === ag.id ? { ...x, ...updateData } : x));
+      applyUpdateEverywhere(ag.id, updateData);
       setObsAgendamentoEdicao(prev => {
         const next = { ...prev };
         delete next[ag.id!];
