@@ -63,12 +63,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     'Pendência Faturamento',
     'Auditor Externo',
     'Aguardando Ciência SMS',
-    'Agendado',
-    'AG Regulação',
-    'Solicitar',
-    'Emitida',
-    'AIH Represada',
-    'AG Ciência SMS',
+    'Ag. Correção',
     'N/A - Urgência'
   ];
   
@@ -2449,12 +2444,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               <option value="Pendência Faturamento">Pendência Faturamento</option>
               <option value="Auditor Externo">Auditor Externo</option>
               <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
-              <option value="Agendado">Agendado</option>
-              <option value="AG Regulação">AG Regulação</option>
-              <option value="Solicitar">Solicitar</option>
-              <option value="Emitida">Emitida</option>
-              <option value="AIH Represada">AIH Represada</option>
-              <option value="AG Ciência SMS">AG Ciência SMS</option>
+              <option value="Ag. Correção">Ag. Correção</option>
               <option value="N/A - Urgência">N/A - Urgência</option>
             </select>
           </div>
