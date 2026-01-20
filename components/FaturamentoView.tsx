@@ -72,6 +72,22 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     'N/A - Urgência'
   ];
   
+  const normalizeAih = (s?: string | null) => {
+    const v = (s || '').toString().trim().toLowerCase();
+    const noAccents = v
+      .replace(/ç/g, 'c')
+      .replace(/[áàâã]/g, 'a')
+      .replace(/[éèê]/g, 'e')
+      .replace(/[íìî]/g, 'i')
+      .replace(/[óòôõ]/g, 'o')
+      .replace(/[úùû]/g, 'u');
+    const cleaned = noAccents.replace(/\./g, '').replace(/\s+/g, ' ');
+    if (!cleaned) return 'pendencia faturamento';
+    if (cleaned.includes('n/a') && cleaned.includes('urg')) return 'n/a - urgencia';
+    if (cleaned.includes('ag') && cleaned.includes('correcao')) return 'ag correcao';
+    return cleaned;
+  };
+  
   // Estado para controlar visualização de pendências
   const [mostrarPendencias, setMostrarPendencias] = useState(false);
   const { success, error: toastError, warning } = useToast();
@@ -739,8 +755,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       
       // Filtro por Status AIH
       if (filtroAih) {
-        const aih = (ag.status_aih || 'Pendência Faturamento').toString().toLowerCase();
-        if (aih !== filtroAih.toLowerCase()) return false;
+        const aih = normalizeAih(ag.status_aih);
+        const f = normalizeAih(filtroAih);
+        if (aih !== f) return false;
       }
       
       // Filtro por Status Interno
@@ -2432,6 +2449,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               <option value="Pendência Faturamento">Pendência Faturamento</option>
               <option value="Auditor Externo">Auditor Externo</option>
               <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+              <option value="Agendado">Agendado</option>
+              <option value="AG Regulação">AG Regulação</option>
+              <option value="Solicitar">Solicitar</option>
+              <option value="Emitida">Emitida</option>
+              <option value="AIH Represada">AIH Represada</option>
+              <option value="AG Ciência SMS">AG Ciência SMS</option>
               <option value="N/A - Urgência">N/A - Urgência</option>
             </select>
           </div>

@@ -41,6 +41,22 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [filtroAvaliacaoAnestesista, setFiltroAvaliacaoAnestesista] = useState<string>('');
   const [filtroDataInsercao, setFiltroDataInsercao] = useState<string>('');
   
+  const normalizeAih = (s?: string | null) => {
+    const v = (s || '').toString().trim().toLowerCase();
+    const noAccents = v
+      .replace(/ç/g, 'c')
+      .replace(/[áàâã]/g, 'a')
+      .replace(/[éèê]/g, 'e')
+      .replace(/[íìî]/g, 'i')
+      .replace(/[óòôõ]/g, 'o')
+      .replace(/[úùû]/g, 'u');
+    const cleaned = noAccents.replace(/\./g, '').replace(/\s+/g, ' ');
+    if (!cleaned) return 'pendencia faturamento';
+    if (cleaned.includes('n/a') && cleaned.includes('urg')) return 'n/a - urgencia';
+    if (cleaned.includes('ag') && cleaned.includes('correcao')) return 'ag correcao';
+    return cleaned;
+  };
+  
   // Estados para ordenação por data
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
@@ -203,7 +219,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setLoading(true);
     try {
       const agora = new Date();
-      const dados = await agendamentoService.getByMonthHospital(agora.getFullYear(), agora.getMonth(), hospitalId);
+      const dados = await agendamentoService.getAll(hospitalId);
       console.log('📋 Agendamentos carregados:', dados);
       console.log('📊 Total de registros:', dados.length);
       
@@ -749,8 +765,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     
     // Filtro por Status AIH
     if (filtroAih) {
-      const aih = (ag.status_aih || 'Pendência Faturamento').toString().toLowerCase();
-      if (aih !== filtroAih.toLowerCase()) return false;
+      const aih = normalizeAih(ag.status_aih);
+      const f = normalizeAih(filtroAih);
+      if (aih !== f) return false;
     }
     
     // Filtro por Status Interno

@@ -516,6 +516,20 @@ export const agendamentoService = {
     if (error) throw new Error(error.message);
     return data as Agendamento[];
   },
+  
+  async getByDateRangeHospital(startIso: string, endIso: string, hospitalId?: string): Promise<Agendamento[]> {
+    let query = supabase
+      .from('agendamentos')
+      .select('*')
+      .gte('data_agendamento', startIso)
+      .lte('data_agendamento', endIso);
+    if (hospitalId) {
+      query = query.eq('hospital_id', hospitalId);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data as Agendamento[];
+  },
 
   async searchByPacienteHospital(term: string, hospitalId?: string): Promise<Agendamento[]> {
     let query = supabase
