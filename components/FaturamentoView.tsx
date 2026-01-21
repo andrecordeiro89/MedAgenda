@@ -724,15 +724,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       
       // Filtro por data cirurgia
       if (filtroDataCirurgia) {
-        const dataCirurgia = formatarData(ag.data_agendamento || ag.dataAgendamento).toLowerCase();
+        const dataCirurgia = formatarData(ag.data_agendamento).toLowerCase();
         if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
       }
       
       // Filtro por mês da cirurgia (formato: "YYYY-MM")
       if (filtroMesCirurgia) {
-        const dataCirurgiaRaw = ag.data_agendamento || ag.dataAgendamento;
+        const dataCirurgiaRaw = ag.data_agendamento;
         if (!dataCirurgiaRaw) return false;
-        const mesCirurgia = dataCirurgiaRaw.substring(0, 7); // "YYYY-MM"
+        const mesCirurgia = dataCirurgiaRaw.substring(0, 7);
         if (mesCirurgia !== filtroMesCirurgia) return false;
       }
       
@@ -847,7 +847,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const lista = agendamentos.filter(ag => {
       const s = (ag.status_aih || '').toString().trim();
       if (s !== statusSelecionado) return false;
-      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
@@ -872,7 +872,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         (ag.medico || '').toUpperCase(),
         ((ag.cidade_natal || ag.cidadeNatal || '') as string).toUpperCase(),
         formatarData(ag.data_consulta),
-        formatarData(ag.data_agendamento || ag.dataAgendamento),
+        formatarData(ag.data_agendamento),
         (ag.status_de_liberacao || '').toUpperCase(),
         (ag.confirmacao || '').toUpperCase(),
         (ag.observacao_agendamento || '').toUpperCase(),
@@ -969,7 +969,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const lista = agendamentos.filter(ag => {
       const c = (ag.confirmacao || '').toString().trim();
       if (c !== statusSelecionado) return false;
-      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
@@ -1005,7 +1005,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       doc.text(`Total de registros: ${lista.length}`, 14, 27);
     }
     const tableData = lista.map(ag => [
-      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      formatarData(ag.data_agendamento),
       ag.especialidade || '-',
       formatarProcedimento(ag) || '-',
       ag.procedimento_especificacao || '-',
@@ -1064,7 +1064,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const lista = agendamentos.filter(ag => {
       const s = (ag.status_aih || '').toString().trim();
       if (s !== statusSelecionado) return false;
-      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
@@ -1100,7 +1100,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       doc.text(`Total de registros: ${lista.length}`, 14, 27);
     }
     const tableData = lista.map(ag => [
-      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      formatarData(ag.data_agendamento),
       ag.especialidade || '-',
       formatarProcedimento(ag) || '-',
       ag.procedimento_especificacao || '-',
@@ -1172,7 +1172,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   };
   const refDate = (ag: Agendamento) => {
     if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
-    return parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+    return parseDateStr(ag.data_agendamento);
   };
   const monthPriority = (d: Date | null) => {
     if (!d) return 3;

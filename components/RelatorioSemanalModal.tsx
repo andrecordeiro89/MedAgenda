@@ -81,7 +81,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
     const nomeMedicosSet = new Set<string>();
     
     agendamentosCarregados.forEach(ag => {
-      const dataAgendamento = ag.data_agendamento || ag.dataAgendamento;
+      const dataAgendamento = ag.data_agendamento;
       if (!dataAgendamento) return;
 
       const dataNormalizada = dataAgendamento.split('T')[0];
@@ -155,7 +155,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
         const diasSet = new Set<string>();
         
         agendamentos.forEach(ag => {
-          const dataAgendamento = ag.data_agendamento || ag.dataAgendamento;
+          const dataAgendamento = ag.data_agendamento;
           if (!dataAgendamento) return;
 
           const data = new Date(dataAgendamento + 'T00:00:00');
@@ -277,7 +277,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
       });
 
       agendamentos.forEach(ag => {
-        const dataAgendamento = ag.data_agendamento || ag.dataAgendamento;
+        const dataAgendamento = ag.data_agendamento;
         if (!dataAgendamento) return;
 
         // Normalizar data
@@ -385,7 +385,7 @@ const RelatorioSemanalModal: React.FC<RelatorioSemanalModalProps> = ({
 
         // Preparar dados da tabela
         const tableData = agendamentos.map(ag => {
-          const dataAgendamento = ag.data_agendamento || ag.dataAgendamento || '-';
+          const dataAgendamento = ag.data_agendamento || '-';
           const dataFormatada = dataAgendamento !== '-' 
             ? formatDate(dataAgendamento)
             : '-';

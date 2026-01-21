@@ -299,7 +299,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       // ⚠️ DEBUG: Mostrar distribuição por data
       const porData: Record<string, number> = {};
       agendamentosFiltrados.forEach(ag => {
-        const data = ag.data_agendamento || ag.dataAgendamento || 'sem_data';
+        const data = ag.data_agendamento || 'sem_data';
         porData[data] = (porData[data] || 0) + 1;
       });
       console.log('📅 Registros por data:', porData);
@@ -743,15 +743,15 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     
     // Filtro por data cirurgia
     if (filtroDataCirurgia) {
-      const dataCirurgia = formatarData(ag.data_agendamento || ag.dataAgendamento).toLowerCase();
+      const dataCirurgia = formatarData(ag.data_agendamento).toLowerCase();
       if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
     }
     
     // Filtro por mês da cirurgia (formato: "YYYY-MM")
     if (filtroMesCirurgia) {
-      const dataCirurgiaRaw = ag.data_agendamento || ag.dataAgendamento;
+      const dataCirurgiaRaw = ag.data_agendamento;
       if (!dataCirurgiaRaw) return false;
-      const mesCirurgia = dataCirurgiaRaw.substring(0, 7); // "YYYY-MM"
+      const mesCirurgia = dataCirurgiaRaw.substring(0, 7);
       if (mesCirurgia !== filtroMesCirurgia) return false;
     }
     
@@ -861,7 +861,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   };
   const refDate = (ag: Agendamento) => {
     if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
-    return parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+    return parseDateStr(ag.data_agendamento);
   };
   const monthPriority = (d: Date | null) => {
     if (!d) return 3;
@@ -1232,7 +1232,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     const lista = agendamentos.filter(ag => {
       const s = (ag.status_de_liberacao || ag.status_liberacao || '').toString().trim();
       if (s !== statusSelecionado) return false;
-      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
@@ -1247,7 +1247,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       Procedimento: ag.procedimentos || '',
       Medico: ag.medico || '',
       DataConsulta: formatarData(ag.data_consulta),
-      DataCirurgia: formatarData(ag.data_agendamento || ag.dataAgendamento),
+      DataCirurgia: formatarData(ag.data_agendamento),
       StatusInterno: ag.status_de_liberacao || '',
       Confirmado: ag.confirmacao || '',
       StatusAIH: ag.status_aih || '',
@@ -1287,7 +1287,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     const lista = agendamentos.filter(ag => {
       const s = (ag.status_de_liberacao || ag.status_liberacao || '').toString().trim();
       if (s !== statusSelecionado) return false;
-      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
@@ -1323,7 +1323,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       doc.text(`Total de registros: ${lista.length}`, 14, 27);
     }
     const tableData = lista.map(ag => [
-      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      formatarData(ag.data_agendamento),
       ag.especialidade || '-',
       ag.procedimentos || '-',
       ag.procedimento_especificacao || '-',
@@ -1383,7 +1383,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     const lista = agendamentos.filter(ag => {
       const c = (ag.confirmacao || '').toString().trim();
       if (c !== statusSelecionado) return false;
-      const d = parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+      const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
@@ -1419,7 +1419,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       doc.text(`Total de registros: ${lista.length}`, 14, 27);
     }
     const tableData = lista.map(ag => [
-      formatarData(ag.data_agendamento || ag.dataAgendamento),
+      formatarData(ag.data_agendamento),
       ag.especialidade || '-',
       ag.procedimentos || '-',
       ag.procedimento_especificacao || '-',

@@ -226,7 +226,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                             ) : (
                                                 <div className="divide-y divide-gray-100">
                                                     {pendencias.map((ag) => {
-                                                        const dias = diasAte(ag.data_agendamento || ag.dataAgendamento);
+                                                        const dias = diasAte(ag.data_agendamento);
                                                         const faltaExames = ag.documentos_ok !== true;
                                                         const faltaPreOp = ag.ficha_pre_anestesica_ok !== true;
                                                         
@@ -262,7 +262,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                                                                     </div>
                                                                     <div className="text-right flex-shrink-0">
                                                                         <p className="text-xs font-medium text-gray-700">
-                                                                            {formatarData(ag.data_agendamento || ag.dataAgendamento)}
+                                                                            {formatarData(ag.data_agendamento)}
                                                                         </p>
                                                                         <p className={`text-xs font-bold ${
                                                                             dias === 0 ? 'text-red-600' :

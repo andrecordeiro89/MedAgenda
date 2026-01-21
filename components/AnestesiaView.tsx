@@ -278,15 +278,15 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     }
     
     if (filtroDataCirurgia) {
-      const dataCirurgia = formatarData(ag.data_agendamento || ag.dataAgendamento).toLowerCase();
+      const dataCirurgia = formatarData(ag.data_agendamento).toLowerCase();
       if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
     }
     
     // Filtro por mês da cirurgia (formato: "YYYY-MM")
     if (filtroMesCirurgia) {
-      const dataCirurgiaRaw = ag.data_agendamento || ag.dataAgendamento;
+      const dataCirurgiaRaw = ag.data_agendamento;
       if (!dataCirurgiaRaw) return false;
-      const mesCirurgia = dataCirurgiaRaw.substring(0, 7); // "YYYY-MM"
+      const mesCirurgia = dataCirurgiaRaw.substring(0, 7);
       if (mesCirurgia !== filtroMesCirurgia) return false;
     }
     
@@ -324,7 +324,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
   };
-  const refDate = (ag: Agendamento) => parseDateStr(ag.data_agendamento || ag.dataAgendamento);
+  const refDate = (ag: Agendamento) => parseDateStr(ag.data_agendamento);
   const monthPriority = (d: Date | null) => {
     if (!d) return 3;
     const now = new Date();
