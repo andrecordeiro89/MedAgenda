@@ -203,12 +203,11 @@ const ExcelImportProcedimentos: React.FC<ExcelImportProcedimentosProps> = ({
 
     console.log(`📊 Importação concluída: ${successCount} sucessos, ${errorCount} erros`);
 
-    // Aguardar 2 segundos antes de fechar e atualizar
     setTimeout(() => {
       if (successCount > 0) {
         onImportComplete();
       }
-    }, 2000);
+    }, 300);
   };
 
   const handleClose = () => {

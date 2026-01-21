@@ -53,47 +53,32 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
     useEffect(() => {
         const carregarPendencias = async () => {
             if (!hospitalSelecionado?.id) return;
-            
+            if (document.visibilityState !== 'visible') return;
             setCarregandoPendencias(true);
             try {
                 const dados = await agendamentoService.getAll(hospitalSelecionado.id);
-                
-                // Data de hoje e daqui a 7 dias
                 const hoje = new Date();
                 hoje.setHours(0, 0, 0, 0);
                 const em7Dias = new Date(hoje);
                 em7Dias.setDate(em7Dias.getDate() + 7);
-                
-                // Filtrar pacientes nos próximos 7 dias com pendências
                 const pendenciasFiltradas = dados.filter(ag => {
-                    // Deve ter paciente e procedimento
                     const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
                     const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
                     if (!temPaciente || !temProcedimento) return false;
-                    
-                    // Verificar data de cirurgia nos próximos 7 dias
                     const dataCirurgia = ag.data_agendamento || ag.dataAgendamento;
                     if (!dataCirurgia) return false;
-                    
                     const dataAg = new Date(dataCirurgia + 'T00:00:00');
                     const dentroDoRange = dataAg >= hoje && dataAg <= em7Dias;
                     if (!dentroDoRange) return false;
-                    
-                    // Verificar se falta exames OU pré-operatório
-                    // null, undefined ou false = pendência
                     const faltaExames = !ag.documentos_ok;
                     const faltaPreOp = !ag.ficha_pre_anestesica_ok;
-                    
                     return faltaExames || faltaPreOp;
                 });
-                
-                // Ordenar por data de cirurgia (mais próximo primeiro)
                 pendenciasFiltradas.sort((a, b) => {
                     const dataA = a.data_agendamento || a.dataAgendamento || '';
                     const dataB = b.data_agendamento || b.dataAgendamento || '';
                     return dataA.localeCompare(dataB);
                 });
-                
                 setPendencias(pendenciasFiltradas);
             } catch (error) {
                 console.error('Erro ao carregar pendências:', error);
@@ -101,12 +86,15 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
                 setCarregandoPendencias(false);
             }
         };
-        
-        carregarPendencias();
-        
-        // Atualizar a cada 5 minutos
-        const interval = setInterval(carregarPendencias, 5 * 60 * 1000);
-        return () => clearInterval(interval);
+        const tick = () => { carregarPendencias(); };
+        tick();
+        const interval = setInterval(tick, 5 * 60 * 1000);
+        const onVisibility = () => { if (document.visibilityState === 'visible') tick(); };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
     }, [hospitalSelecionado?.id]);
     
     // Fechar dropdown ao clicar fora

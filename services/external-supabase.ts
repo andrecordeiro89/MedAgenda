@@ -742,7 +742,8 @@ export const externalDataService = {
         
         // Pequena pausa entre lotes para não sobrecarregar
         if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100))
+          const delay = Number((import.meta as any).env?.VITE_BATCH_DELAY_MS) || 20
+          await new Promise(resolve => setTimeout(resolve, delay))
         }
       }
       
@@ -874,7 +875,8 @@ export const externalDataService = {
         
         // Pequena pausa entre lotes para não sobrecarregar
         if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100))
+          const delay = Number((import.meta as any).env?.VITE_BATCH_DELAY_MS) || 20
+          await new Promise(resolve => setTimeout(resolve, delay))
         }
       }
       

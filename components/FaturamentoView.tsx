@@ -8,6 +8,7 @@ import { Modal } from './ui';
 import JSZip from 'jszip';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
+import { useDebounce } from '../hooks/useDebounce';
 
 export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -220,13 +221,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [agendamentosBuscaConsulta, setAgendamentosBuscaConsulta] = useState<Agendamento[]>([]);
   const [agendamentosBuscaCirurgia, setAgendamentosBuscaCirurgia] = useState<Agendamento[]>([]);
   const [agendamentosBuscaProntuario, setAgendamentosBuscaProntuario] = useState<Agendamento[]>([]);
+  const debouncedPaciente = useDebounce(filtroPaciente, 300);
+  const debouncedConsulta = useDebounce(filtroDataConsulta, 250);
+  const debouncedCirurgia = useDebounce(filtroDataCirurgia, 250);
+  const debouncedProntuario = useDebounce(filtroProntuario, 250);
   useEffect(() => {
-    const term = (filtroPaciente || '').trim();
+    const term = (debouncedPaciente || '').trim();
     if (!term || term.length < 2) {
       setAgendamentosBuscaExtra([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const resultados = await agendamentoService.searchByPacienteHospital(term, hospitalId);
         const filtrados = resultados.filter(ag => {
@@ -241,16 +246,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       } catch {
         setAgendamentosBuscaExtra([]);
       }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [filtroPaciente, hospitalId]);
+    })();
+  }, [debouncedPaciente, hospitalId]);
   useEffect(() => {
-    const entrada = (filtroDataConsulta || '').trim();
+    const entrada = (debouncedConsulta || '').trim();
     if (!entrada) {
       setAgendamentosBuscaConsulta([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const partes = entrada.split('/');
         let iso = '';
@@ -278,16 +282,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       } catch {
         setAgendamentosBuscaConsulta([]);
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [filtroDataConsulta, hospitalId]);
+    })();
+  }, [debouncedConsulta, hospitalId]);
   useEffect(() => {
-    const entrada = (filtroDataCirurgia || '').trim();
+    const entrada = (debouncedCirurgia || '').trim();
     if (!entrada) {
       setAgendamentosBuscaCirurgia([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const partes = entrada.split('/');
         let iso = '';
@@ -315,16 +318,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       } catch {
         setAgendamentosBuscaCirurgia([]);
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [filtroDataCirurgia, hospitalId]);
+    })();
+  }, [debouncedCirurgia, hospitalId]);
   useEffect(() => {
-    const entrada = (filtroProntuario || '').trim();
+    const entrada = (debouncedProntuario || '').trim();
     if (!entrada) {
       setAgendamentosBuscaProntuario([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const digits = entrada.replace(/\D/g, '');
         if (!digits) {
@@ -344,9 +346,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       } catch {
         setAgendamentosBuscaProntuario([]);
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [filtroProntuario, hospitalId]);
+    })();
+  }, [debouncedProntuario, hospitalId]);
   useEffect(() => {
     const channel = supabase
       .channel(`fat-just-${hospitalId || 'all'}`)
@@ -1687,11 +1688,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   };
 
   // Estado para controlar observação em edição
-  const [observacaoEmEdicao, setObservacaoEmEdicao] = useState<{ [id: string]: string }>({});
+  const observacaoRefs = useRef<{ [id: string]: HTMLTextAreaElement | null }>({});
   const [salvandoObservacao, setSalvandoObservacao] = useState<string | null>(null);
   const [justificativaEdicao, setJustificativaEdicao] = useState<{ [id: string]: string }>({});
   const [justificativaNomeEdicao, setJustificativaNomeEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoJustificativaId, setSalvandoJustificativaId] = useState<string | null>(null);
+  const justificativaTextoRefs = useRef<{ [id: string]: HTMLTextAreaElement | null }>({});
+  const justificativaNomeRefs = useRef<{ [id: string]: HTMLInputElement | null }>({});
+  const [justificativaNomePreenchida, setJustificativaNomePreenchida] = useState<{ [id: string]: boolean }>({});
   
   const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
     setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
@@ -1706,7 +1710,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     if (!ag.id) return;
     
     const original = ag.observacao_faturamento || '';
-    const novaObservacao = (observacaoEmEdicao[ag.id] ?? ag.observacao_faturamento ?? '').trim();
+    const novaObservacao = (observacaoRefs.current[ag.id!]?.value ?? ag.observacao_faturamento ?? '').trim();
     if (!novaObservacao) {
       toastError('Digite a observação para salvar');
       return;
@@ -1725,14 +1729,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       await agendamentoService.update(ag.id, updateData);
       
       applyUpdateEverywhere(ag.id, updateData);
-      
-      // Limpar estado de edição
-      setObservacaoEmEdicao(prev => {
-        const novo = { ...prev };
-        delete novo[ag.id!];
-        return novo;
-      });
-      
+      if (observacaoRefs.current[ag.id!]) {
+        observacaoRefs.current[ag.id!]!.value = textoComData;
+      }
       success('Observação salva com sucesso');
     } catch (error) {
       console.error('Erro ao salvar observação:', error);
@@ -1752,11 +1751,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       };
       await agendamentoService.update(ag.id, updateData);
       applyUpdateEverywhere(ag.id, updateData);
-      setObservacaoEmEdicao(prev => {
-        const novo = { ...prev };
-        delete novo[ag.id!];
-        return novo;
-      });
+      if (observacaoRefs.current[ag.id!]) {
+        observacaoRefs.current[ag.id!]!.value = '';
+      }
       success('Observação apagada');
     } catch (error) {
       console.error('Erro ao apagar observação:', error);
@@ -1770,15 +1767,19 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const observacaoModificada = (ag: Agendamento) => {
     if (!ag.id) return false;
     const original = (ag.observacao_faturamento || ag.faturamento_observacao || '') as string;
-    const editada = observacaoEmEdicao[ag.id];
-    if (editada === undefined) return false;
-    return (editada || '').trim() !== (original || '').trim();
+    const atual = (observacaoRefs.current[ag.id!]?.value ?? original) as string;
+    return (atual || '').trim() !== (original || '').trim();
   };
   
   const handleSalvarJustificativa = async (ag: Agendamento) => {
     if (!ag.id) return;
-    const texto = (justificativaEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento ?? '').trim();
-    const nome = (justificativaNomeEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    const texto = (justificativaTextoRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento ?? '').trim();
+    const nome = (justificativaNomeRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    if (!nome) {
+      toastError('Informe o Nome do Colaborador para registrar a justificativa');
+      justificativaNomeRefs.current[ag.id!]?.focus();
+      return;
+    }
     const payload: Partial<Agendamento> = {
       justificativa_alteracao_agendamento: texto || null,
       justificativa_alteracao_agendamento_nome: nome || null,
@@ -1788,10 +1789,42 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setSalvandoJustificativaId(ag.id);
       await agendamentoService.update(ag.id, payload);
       setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
+      if (justificativaTextoRefs.current[ag.id!]) {
+        justificativaTextoRefs.current[ag.id!]!.value = texto || '';
+      }
+      if (justificativaNomeRefs.current[ag.id!]) {
+        justificativaNomeRefs.current[ag.id!]!.value = nome || '';
+      }
       success('Justificativa salva');
     } catch (error) {
       console.error('Erro ao salvar justificativa:', error);
       toastError('Erro ao salvar justificativa. Tente novamente');
+    } finally {
+      setSalvandoJustificativaId(null);
+    }
+  };
+  
+  const handleApagarJustificativa = async (ag: Agendamento) => {
+    if (!ag.id) return;
+    try {
+      setSalvandoJustificativaId(ag.id);
+      const payload: Partial<Agendamento> = {
+        justificativa_alteracao_agendamento: null,
+        justificativa_alteracao_agendamento_nome: null,
+        justificativa_alteracao_agendamento_nome_hora: null
+      };
+      await agendamentoService.update(ag.id, payload);
+      setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
+      if (justificativaTextoRefs.current[ag.id!]) {
+        justificativaTextoRefs.current[ag.id!]!.value = '';
+      }
+      if (justificativaNomeRefs.current[ag.id!]) {
+        justificativaNomeRefs.current[ag.id!]!.value = '';
+      }
+      success('Justificativa apagada');
+    } catch (error) {
+      console.error('Erro ao apagar justificativa:', error);
+      toastError('Erro ao apagar justificativa. Tente novamente');
     } finally {
       setSalvandoJustificativaId(null);
     }
@@ -1980,7 +2013,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 {(((ag.observacao_agendamento || '') as string).trim() !== '') && (
                   <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-purple-500" title="Observação de Agendamento" />
                 )}
-                {(((observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ag.faturamento_observacao ?? '') as string).trim() !== '') && (
+                {(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim() !== '') && (
                   <span className="flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-orange-500" title="Observação de Faturamento" />
                 )}
                 {(((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim())) && (
@@ -2176,8 +2209,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
                   <textarea
-                    value={observacaoEmEdicao[ag.id!] ?? ag.observacao_faturamento ?? ag.faturamento_observacao ?? ''}
-                    onChange={(e) => setObservacaoEmEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                    defaultValue={ag.observacao_faturamento ?? ag.faturamento_observacao ?? ''}
+                    ref={(el) => { observacaoRefs.current[ag.id!] = el; }}
                     placeholder="Digite uma observação sobre este paciente..."
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
                     rows={2}
@@ -2230,8 +2263,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       <div className="flex items-center gap-2 mb-2"><span className="text-violet-600">✍️</span><label className="text-sm font-semibold text-gray-700">Justificativa de Alteração</label></div>
                       <div className="space-y-2">
                         <textarea
-                          value={justificativaEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento ?? ''}
-                          onChange={(e) => setJustificativaEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                          defaultValue={ag.justificativa_alteracao_agendamento ?? ''}
+                          ref={(el) => { justificativaTextoRefs.current[ag.id!] = el; }}
                           placeholder="Descreva a justificativa da alteração..."
                           className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
                           rows={2}
@@ -2239,31 +2272,51 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                         />
                         <input
                           type="text"
-                          value={justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? ''}
-                          onChange={(e) => setJustificativaNomeEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                          defaultValue={ag.justificativa_alteracao_agendamento_nome ?? ''}
+                          ref={(el) => { justificativaNomeRefs.current[ag.id!] = el; }}
+                          required
                           placeholder="Nome do colaborador"
                           className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
                           disabled={salvandoJustificativaId === ag.id}
                         />
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-500">{justificativaSalva ? 'Justificativa salva' : 'Nenhuma justificativa registrada'}</span>
-                          <button
-                            onClick={() => handleSalvarJustificativa(ag)}
-                            disabled={salvandoJustificativaId === ag.id}
-                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${salvandoJustificativaId === ag.id ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-violet-600 text-white hover:bg-violet-700'}`}
-                          >
-                            {salvandoJustificativaId === ag.id ? (
-                              <>
-                                <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
-                                Salvando...
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                Salvar
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleSalvarJustificativa(ag)}
+                              disabled={salvandoJustificativaId === ag.id}
+                              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${salvandoJustificativaId === ag.id ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-violet-600 text-white hover:bg-violet-700'}`}
+                            >
+                              {salvandoJustificativaId === ag.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                                  Salvando...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                  Salvar
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleApagarJustificativa(ag)}
+                              disabled={salvandoJustificativaId === ag.id || !justificativaSalva}
+                              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${justificativaSalva ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                            >
+                              {salvandoJustificativaId === ag.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                                  Apagando...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                  Apagar
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                         {(ag.justificativa_alteracao_agendamento_nome || ag.justificativa_alteracao_agendamento_nome_hora) && (
                           <div className="text-xs text-gray-500">

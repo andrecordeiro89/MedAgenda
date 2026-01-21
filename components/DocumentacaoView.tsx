@@ -9,6 +9,7 @@ import PreAnestesiaModal from './PreAnestesiaModal';
 import { useAuth } from './PremiumLogin';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
+import { useDebounce } from '../hooks/useDebounce';
 
 export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -103,6 +104,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [justificativaEdicao, setJustificativaEdicao] = useState<{ [id: string]: string }>({});
   const [justificativaNomeEdicao, setJustificativaNomeEdicao] = useState<{ [id: string]: string }>({});
   const [salvandoJustificativaId, setSalvandoJustificativaId] = useState<string | null>(null);
+  const justificativaTextoRefs = useRef<{ [id: string]: HTMLTextAreaElement | null }>({});
+  const justificativaNomeRefs = useRef<{ [id: string]: HTMLInputElement | null }>({});
+  const [justificativaNomePreenchida, setJustificativaNomePreenchida] = useState<{ [id: string]: boolean }>({});
   
   const [salvandoAIH, setSalvandoAIH] = useState<Set<string>>(new Set());
   const [salvandoLiberacao, setSalvandoLiberacao] = useState<Set<string>>(new Set());
@@ -329,6 +333,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [agendamentosBuscaConsulta, setAgendamentosBuscaConsulta] = useState<Agendamento[]>([]);
   const [agendamentosBuscaCirurgia, setAgendamentosBuscaCirurgia] = useState<Agendamento[]>([]);
   const [agendamentosBuscaProntuario, setAgendamentosBuscaProntuario] = useState<Agendamento[]>([]);
+  const obsAgendamentoRefs = useRef<{ [id: string]: HTMLTextAreaElement | null }>({});
+  const debouncedPaciente = useDebounce(filtroPaciente, 300);
+  const debouncedConsulta = useDebounce(filtroDataConsulta, 250);
+  const debouncedCirurgia = useDebounce(filtroDataCirurgia, 250);
+  const debouncedProntuario = useDebounce(filtroProntuario, 250);
   const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
     setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
     setAgendamentosBuscaExtra(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
@@ -337,12 +346,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setAgendamentosBuscaProntuario(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
   };
   useEffect(() => {
-    const term = (filtroPaciente || '').trim();
+    const term = (debouncedPaciente || '').trim();
     if (!term || term.length < 2) {
       setAgendamentosBuscaExtra([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const resultados = await agendamentoService.searchByPacienteHospital(term, hospitalId);
         const filtrados = resultados.filter(ag => {
@@ -357,17 +366,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       } catch {
         setAgendamentosBuscaExtra([]);
       }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [filtroPaciente, hospitalId]);
+    })();
+  }, [debouncedPaciente, hospitalId]);
 
   useEffect(() => {
-    const entrada = (filtroDataConsulta || '').trim();
+    const entrada = (debouncedConsulta || '').trim();
     if (!entrada) {
       setAgendamentosBuscaConsulta([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const partes = entrada.split('/');
         let iso = '';
@@ -395,17 +403,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       } catch {
         setAgendamentosBuscaConsulta([]);
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [filtroDataConsulta, hospitalId]);
+    })();
+  }, [debouncedConsulta, hospitalId]);
 
   useEffect(() => {
-    const entrada = (filtroDataCirurgia || '').trim();
+    const entrada = (debouncedCirurgia || '').trim();
     if (!entrada) {
       setAgendamentosBuscaCirurgia([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const partes = entrada.split('/');
         let iso = '';
@@ -433,17 +440,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       } catch {
         setAgendamentosBuscaCirurgia([]);
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [filtroDataCirurgia, hospitalId]);
+    })();
+  }, [debouncedCirurgia, hospitalId]);
 
   useEffect(() => {
-    const entrada = (filtroProntuario || '').trim();
+    const entrada = (debouncedProntuario || '').trim();
     if (!entrada) {
       setAgendamentosBuscaProntuario([]);
       return;
     }
-    const handle = setTimeout(async () => {
+    (async () => {
       try {
         const digits = entrada.replace(/\D/g, '');
         if (!digits) {
@@ -463,9 +469,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       } catch {
         setAgendamentosBuscaProntuario([]);
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [filtroProntuario, hospitalId]);
+    })();
+  }, [debouncedProntuario, hospitalId]);
   // Status do paciente - NOVA LÓGICA (Exames e Pré-Op separados)
   const getStatusPaciente = (ag: Agendamento) => {
     const temAlgumAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || ag.complementares_ok === true;
@@ -1001,7 +1006,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const handleSalvarObservacaoAgendamento = async (ag: Agendamento) => {
     if (!ag.id) return;
     const original = ag.observacao_agendamento || '';
-    const nova = (obsAgendamentoEdicao[ag.id] ?? ag.observacao_agendamento ?? '').trim();
+    const nova = (obsAgendamentoRefs.current[ag.id!]?.value ?? ag.observacao_agendamento ?? '').trim();
     if (!nova) {
       toastError('Digite a observação para salvar');
       return;
@@ -1016,11 +1021,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       };
       await agendamentoService.update(ag.id, updateData);
       applyUpdateEverywhere(ag.id, updateData);
-      setObsAgendamentoEdicao(prev => {
-        const next = { ...prev };
-        delete next[ag.id!];
-        return next;
-      });
+      if (obsAgendamentoRefs.current[ag.id!]) {
+        obsAgendamentoRefs.current[ag.id!]!.value = textoComData;
+      }
       success('Observação do agendamento salva');
     } catch (error: any) {
       console.error('Erro ao salvar observação do agendamento:', error);
@@ -1039,11 +1042,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       };
       await agendamentoService.update(ag.id, updateData);
       applyUpdateEverywhere(ag.id, updateData);
-      setObsAgendamentoEdicao(prev => {
-        const next = { ...prev };
-        delete next[ag.id!];
-        return next;
-      });
+      if (obsAgendamentoRefs.current[ag.id!]) {
+        obsAgendamentoRefs.current[ag.id!]!.value = '';
+      }
       success('Observação do agendamento apagada');
     } catch (error: any) {
       console.error('Erro ao apagar observação do agendamento:', error);
@@ -1118,10 +1119,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       warning('Justificativa já registrada; altere pela tela de Faturamento');
       return;
     }
-    const texto = (justificativaEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento ?? '').trim();
-    const nome = (justificativaNomeEdicao[ag.id] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    const texto = (justificativaTextoRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento ?? '').trim();
+    const nome = (justificativaNomeRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
     if (!nome) {
       toastError('Informe o Nome do Colaborador para registrar a justificativa');
+      justificativaNomeRefs.current[ag.id!]?.focus();
       return;
     }
     const payload: Partial<Agendamento> = {
@@ -1133,6 +1135,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       setSalvandoJustificativaId(ag.id);
       const atualizado = await agendamentoService.update(ag.id, payload);
       setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
+      if (justificativaTextoRefs.current[ag.id!]) {
+        justificativaTextoRefs.current[ag.id!]!.value = texto || '';
+      }
+      if (justificativaNomeRefs.current[ag.id!]) {
+        justificativaNomeRefs.current[ag.id!]!.value = nome || '';
+      }
       success('Justificativa salva');
     } catch (error) {
       console.error('Erro ao salvar justificativa:', error);
@@ -2211,8 +2219,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   </label>
                 </div>
                 <textarea
-                  value={obsAgendamentoEdicao[ag.id!] ?? ag.observacao_agendamento ?? ''}
-                  onChange={(e) => setObsAgendamentoEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                  defaultValue={ag.observacao_agendamento ?? ''}
+                  ref={(el) => { obsAgendamentoRefs.current[ag.id!] = el; }}
                   placeholder="Digite uma observação sobre este agendamento..."
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none transition-colors"
                   rows={2}
@@ -2225,11 +2233,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleSalvarObservacaoAgendamento(ag)}
-                      disabled={salvandoObsAgendamento === ag.id || !obsAgendamentoModificada(ag)}
+                      disabled={salvandoObsAgendamento === ag.id}
                       className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                        obsAgendamentoModificada(ag)
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        salvandoObsAgendamento === ag.id
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
                     >
                       {salvandoObsAgendamento === ag.id ? (
@@ -2293,8 +2301,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     </div>
                     <div className="space-y-2">
                       <textarea
-                        value={justificativaEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento ?? ''}
-                        onChange={(e) => setJustificativaEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                        defaultValue={ag.justificativa_alteracao_agendamento ?? ''}
+                        ref={(el) => { justificativaTextoRefs.current[ag.id!] = el; }}
                         placeholder="Descreva a justificativa da alteração..."
                         className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
                         rows={2}
@@ -2303,8 +2311,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       />
                       <input
                         type="text"
-                        value={justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? ''}
-                        onChange={(e) => setJustificativaNomeEdicao(prev => ({ ...prev, [ag.id!]: e.target.value }))}
+                        defaultValue={ag.justificativa_alteracao_agendamento_nome ?? ''}
+                        ref={(el) => { justificativaNomeRefs.current[ag.id!] = el; }}
+                          required
+                          onInput={(e) => {
+                            const v = (e.currentTarget.value || '').trim();
+                            setJustificativaNomePreenchida(prev => ({ ...prev, [ag.id!]: !!v }));
+                          }}
                         placeholder="Nome do colaborador"
                         className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
                         readOnly={justificativaSalva}
@@ -2316,15 +2329,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                         </span>
                         <button
                           onClick={() => handleSalvarJustificativa(ag)}
-                          disabled={
-                            justificativaSalva ||
-                            salvandoJustificativaId === ag.id ||
-                            !((justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim())
-                          }
+                            disabled={justificativaSalva || salvandoJustificativaId === ag.id}
                           className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                            justificativaSalva || salvandoJustificativaId === ag.id || !((justificativaNomeEdicao[ag.id!] ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim())
-                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                              : 'bg-violet-600 text-white hover:bg-violet-700'
+                              justificativaSalva || salvandoJustificativaId === ag.id
+                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                : 'bg-violet-600 text-white hover:bg-violet-700'
                           }`}
                         >
                           {salvandoJustificativaId === ag.id ? (
