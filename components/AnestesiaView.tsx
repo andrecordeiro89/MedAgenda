@@ -315,8 +315,14 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   let agendamentosFiltrados = agruparPorPacienteUnico(agendamentosFiltradosCompletos);
   
   // Alternar ordenação ao clicar no cabeçalho
-  const handleOrdenacao = () => {
-    setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
+  const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_cirurgia' | 'data_consulta'>('data_cirurgia');
+  const handleOrdenacao = (coluna: 'data_cirurgia' | 'data_consulta') => {
+    if (colunaOrdenacao !== coluna) {
+      setColunaOrdenacao(coluna);
+      setDirecaoOrdenacao('asc');
+    } else {
+      setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
+    }
   };
   
   const parseDateStr = (s?: string | null) => {
@@ -324,7 +330,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
   };
-  const refDate = (ag: Agendamento) => parseDateStr(ag.data_agendamento);
+  const refDate = (ag: Agendamento) => {
+    if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
+    return parseDateStr(ag.data_agendamento);
+  };
   const monthPriority = (d: Date | null) => {
     if (!d) return 3;
     const now = new Date();
@@ -332,7 +341,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     if (d > now) return 1;
     return 2;
   };
-  // Ordenar por data de cirurgia
+  // Ordenar por data (cirurgia ou consulta)
   agendamentosFiltrados = [...agendamentosFiltrados].sort((a, b) => {
     const dA = refDate(a);
     const dB = refDate(b);
@@ -664,6 +673,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           {/* Data Cirurgia */}
           <td className="px-2 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 sm:w-28 md:w-32 lg:w-36">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
+          </td>
+          
+          {/* Data Consulta */}
+          <td className="px-2 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 sm:w-28 md:w-32 lg:w-36">
+            {formatarData(ag.data_consulta)}
           </td>
           
           {/* Médico */}
@@ -1327,13 +1341,25 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     </th>
                     <th 
                       className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                      onClick={handleOrdenacao}
+                      onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
                     >
                       <div className="flex items-center gap-1">
                         Data Cirurgia
                         <span className="text-gray-400">
-                          {direcaoOrdenacao === 'asc' ? '↑' : '↓'}
+                          {colunaOrdenacao === 'data_cirurgia' ? (direcaoOrdenacao === 'asc' ? '↑' : '↓') : ''}
+                        </span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      onClick={() => handleOrdenacao('data_consulta')}
+                      title="Clique para ordenar por Data Consulta"
+                    >
+                      <div className="flex items-center gap-1">
+                        Data Consulta
+                        <span className="text-gray-400">
+                          {colunaOrdenacao === 'data_consulta' ? (direcaoOrdenacao === 'asc' ? '↑' : '↓') : ''}
                         </span>
                       </div>
                     </th>
