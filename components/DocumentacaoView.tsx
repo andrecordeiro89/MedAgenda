@@ -3628,6 +3628,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       <option value="Radiografia">Radiografia</option>
                       <option value="Ressonância magnética">Ressonância magnética</option>
                       <option value="Exames de laboratório">Exames de laboratório</option>
+                      <option value="Cardio">Cardio</option>
                       <option value="Termo de planejamento familiar">Termo de planejamento familiar</option>
                       <option value="Outros">Outros</option>
                     </select>

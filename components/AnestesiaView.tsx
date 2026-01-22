@@ -32,6 +32,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   
   // Estados para filtros de busca
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
+  const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>('');
   const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
@@ -277,6 +278,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       if (!nomePaciente.includes(filtroPaciente.toLowerCase())) return false;
     }
     
+    if (filtroDataConsulta) {
+      const dataConsulta = formatarData(ag.data_consulta).toLowerCase();
+      if (!dataConsulta.includes(filtroDataConsulta.toLowerCase())) return false;
+    }
+    
     if (filtroDataCirurgia) {
       const dataCirurgia = formatarData(ag.data_agendamento).toLowerCase();
       if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
@@ -330,6 +336,12 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
   };
+  const maskDateInput = (s: string) => {
+    const d = s.replace(/\D/g, '').slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  };
   const refDate = (ag: Agendamento) => {
     if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
     return parseDateStr(ag.data_agendamento);
@@ -360,7 +372,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroPaciente, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAvaliacaoAnestesista, filtroStatus]);
+  }, [filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAvaliacaoAnestesista, filtroStatus]);
   
   useEffect(() => {
     if (tabelaRef.current && paginaAtual > 1) {
@@ -375,13 +387,14 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const limparFiltros = () => {
     setFiltroStatus('todos');
     setFiltroPaciente('');
+    setFiltroDataConsulta('');
     setFiltroDataCirurgia('');
     setFiltroMesCirurgia('');
     setFiltroMedicoId('');
     setFiltroAvaliacaoAnestesista('');
   };
   
-  const temFiltrosAtivos = filtroStatus !== 'todos' || filtroPaciente || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAvaliacaoAnestesista;
+  const temFiltrosAtivos = filtroStatus !== 'todos' || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAvaliacaoAnestesista;
 
   // Toggle expandir linha
   const toggleExpandirLinha = (agendamentoId: string | undefined) => {
@@ -1071,7 +1084,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           {/* Filtro de Status (substituindo abas) */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Status Ficha Pré-Anestésica</label>
@@ -1102,8 +1115,21 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
             <input
               type="text"
               value={filtroDataCirurgia}
-              onChange={(e) => setFiltroDataCirurgia(e.target.value)}
+              onChange={(e) => setFiltroDataCirurgia(maskDateInput(e.target.value))}
               placeholder="DD/MM/AAAA"
+              inputMode="numeric"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data Consulta</label>
+            <input
+              type="text"
+              value={filtroDataConsulta}
+              onChange={(e) => setFiltroDataConsulta(maskDateInput(e.target.value))}
+              placeholder="DD/MM/AAAA"
+              inputMode="numeric"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
