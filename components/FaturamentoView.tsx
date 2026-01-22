@@ -694,12 +694,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     return Array.from(mapa.values());
   })();
   const agendamentosComPaciente = fonteAgendamentos.filter(ag => {
-    const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
-    const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
-    if (temPaciente && temProcedimento) return true;
-    if (ag.is_grade_cirurgica === true && !temPaciente) return false;
-    if (!temProcedimento && !temPaciente) return false;
-    return true;
+    const nome = (ag.nome_paciente || (ag as any).nome || '').trim();
+    return nome !== '';
   });
   const agendamentosProntos = agendamentosComPaciente.filter(ag => ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true);
   const agendamentosPendentes = agendamentosComPaciente.filter(ag => !(ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true));
@@ -821,6 +817,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   
   const agendamentosComAnexosFiltrados = aplicarFiltros(agendamentosComPaciente);
   const agendamentosPendentesFiltrados = aplicarFiltros(agendamentosPendentes);
+  const agendamentosTodosFiltrados = aplicarFiltros(fonteAgendamentos);
   
   // Limpar todos os filtros
   const limparFiltros = () => {
@@ -1245,6 +1242,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   
   // Paginação
   const totalRegistros = agendamentosComAnexosOrdenados.length;
+  const totalProcedimentosAgendados = agendamentosTodosFiltrados.length;
   const totalPaginas = Math.ceil(totalRegistros / itensPorPagina);
   
   // Resetar para página 1 quando filtros mudarem
@@ -2226,10 +2224,26 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Última modificação</div>
-                  <div className="text-sm text-gray-900">
-                    {ag.updated_at
-                      ? `${formatarData(ag.updated_at.split('T')[0])} às ${new Date(ag.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                      : '-'}
+                  <div className="flex items-center justify-between text-sm text-gray-900">
+                    <span>
+                      {ag.updated_at
+                        ? `${formatarData(ag.updated_at.split('T')[0])} às ${new Date(ag.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                        : '-'}
+                    </span>
+                    <span className="flex flex-wrap gap-1">
+                      {[
+                        { key: 'falta_senha', label: 'Falta Senha' },
+                        { key: 'falta_retorno_gsus', label: 'Falta Retorno GSUS' },
+                        { key: 'falta_de_laudo_de_exame', label: 'Falta de laudo de exame' },
+                        { key: 'falta_registro_do_paciente_no_gsus', label: 'Falta registro GSUS' },
+                        { key: 'divergencia_no_cadastro_do_paciente', label: 'Divergência cadastro' },
+                        { key: 'insuficiencia_de_dados_clinicos', label: 'Insuficiência dados clínicos' }
+                      ].filter(opt => !!(ag as any)[opt.key]).map(opt => (
+                        <span key={opt.key} className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[11px]">
+                          {opt.label}
+                        </span>
+                      ))}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2710,16 +2724,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <p className="text-sm text-gray-700">
                       Mostrando <span className="font-semibold">{Math.min((paginaAtual - 1) * itensPorPagina + 1, totalRegistros)}</span> a{' '}
                       <span className="font-semibold">{Math.min(paginaAtual * itensPorPagina, totalRegistros)}</span> de{' '}
-                      <span className="font-semibold">{totalRegistros}</span> pacientes com exames
+                      <span className="font-semibold">{totalRegistros}</span> pacientes agendados •{' '}
+                      Procedimentos agendados: <span className="font-semibold">{totalProcedimentosAgendados}</span>
                     </p>
-                    {agendamentosPaginados.length > 0 && (
-                      <p className="text-xs text-blue-600 font-medium">
-                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)} 
-                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento && 
-                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
-                        }
-                      </p>
-                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600">Por página:</label>
@@ -2765,6 +2772,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     >
                       Relatório Confirmado
                     </button>
+                    {agendamentosPaginados.length > 0 && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)}
+                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento &&
+                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
+                        }
+                      </p>
+                    )}
                   </div>
                 </div>
                 </div>

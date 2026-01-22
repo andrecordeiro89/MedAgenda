@@ -718,11 +718,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     });
     return Array.from(mapa.values());
   })();
-  const agendamentosFiltradosCompletos = fonteAgendamentos.filter(ag => {
+  const passaFiltros = (ag: Agendamento) => {
     // Filtro por status de EXAMES (documentos)
     if (filtroStatus) {
       const status = getStatusPaciente(ag);
-      // Comparação exata (case-insensitive)
       if (status.texto.toUpperCase() !== filtroStatus.toUpperCase()) return false;
     }
     
@@ -841,9 +840,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         if (c === 'confirmado') return false;
       }
     }
-    
     return true;
+  };
+  
+  const agendamentosFiltradosCompletos = fonteAgendamentos.filter(ag => {
+    const temPaciente = ((ag.nome_paciente || ag.nome || '').trim() !== '');
+    if (!temPaciente) return false;
+    return passaFiltros(ag);
   });
+  
+  const agendamentosTodosFiltrados = fonteAgendamentos.filter(passaFiltros);
   
   // SEMPRE MOSTRAR TODOS OS REGISTROS (sem agrupamento por paciente)
   let agendamentosFiltrados = agendamentosFiltradosCompletos;
@@ -931,6 +937,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   // Total de registros (antes da paginação)
   const totalRegistros = agendamentosFiltrados.length;
+  const totalProcedimentosAgendados = agendamentosTodosFiltrados.length;
   const totalPaginas = Math.ceil(totalRegistros / itensPorPagina);
   
   // Resetar para página 1 quando filtros mudarem
@@ -3197,16 +3204,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     <p className="text-sm text-gray-700">
                       Mostrando <span className="font-semibold">{Math.min((paginaAtual - 1) * itensPorPagina + 1, totalRegistros)}</span> a{' '}
                       <span className="font-semibold">{Math.min(paginaAtual * itensPorPagina, totalRegistros)}</span> de{' '}
-                      <span className="font-semibold">{totalRegistros}</span> pacientes
+                      <span className="font-semibold">{totalRegistros}</span> pacientes •{' '}
+                      Procedimentos agendados: <span className="font-semibold">{totalProcedimentosAgendados}</span>
                     </p>
-                    {agendamentosPaginados.length > 0 && (
-                      <p className="text-xs text-blue-600 font-medium">
-                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)} 
-                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento && 
-                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
-                        }
-                      </p>
-                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600">Por página:</label>
@@ -3259,6 +3259,14 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                     >
                       Relatório Confirmado
                     </button>
+                    {agendamentosPaginados.length > 0 && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || (agendamentosPaginados[0] as any)?.dataAgendamento)}
+                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento &&
+                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || (agendamentosPaginados[agendamentosPaginados.length - 1] as any)?.dataAgendamento)}`
+                        }
+                      </p>
+                    )}
                   </div>
                   </div>
                 </div>
