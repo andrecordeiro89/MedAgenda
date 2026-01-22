@@ -1696,6 +1696,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const justificativaTextoRefs = useRef<{ [id: string]: HTMLTextAreaElement | null }>({});
   const justificativaNomeRefs = useRef<{ [id: string]: HTMLInputElement | null }>({});
   const [justificativaNomePreenchida, setJustificativaNomePreenchida] = useState<{ [id: string]: boolean }>({});
+  const [observacaoDirty, setObservacaoDirty] = useState<{ [id: string]: boolean }>({});
   
   const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
     setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
@@ -1732,6 +1733,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       if (observacaoRefs.current[ag.id!]) {
         observacaoRefs.current[ag.id!]!.value = textoComData;
       }
+      setObservacaoDirty(prev => ({ ...prev, [ag.id!]: false }));
       success('Observação salva com sucesso');
     } catch (error) {
       console.error('Erro ao salvar observação:', error);
@@ -1754,6 +1756,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       if (observacaoRefs.current[ag.id!]) {
         observacaoRefs.current[ag.id!]!.value = '';
       }
+      setObservacaoDirty(prev => ({ ...prev, [ag.id!]: false }));
       success('Observação apagada');
     } catch (error) {
       console.error('Erro ao apagar observação:', error);
@@ -2211,6 +2214,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <textarea
                     defaultValue={ag.observacao_faturamento ?? ag.faturamento_observacao ?? ''}
                     ref={(el) => { observacaoRefs.current[ag.id!] = el; }}
+                    onInput={(e) => {
+                      const val = (e.currentTarget.value || '').trim();
+                      const original = ((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim();
+                      setObservacaoDirty(prev => ({ ...prev, [ag.id!]: val !== original }));
+                    }}
                     placeholder="Digite uma observação sobre este paciente..."
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
                     rows={2}
@@ -2221,8 +2229,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleSalvarObservacao(ag)}
-                      disabled={salvandoObservacao === ag.id || !observacaoModificada(ag)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${observacaoModificada(ag) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                      disabled={salvandoObservacao === ag.id || !(observacaoDirty[ag.id!] === true)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(observacaoDirty[ag.id!] === true) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                     >
                       {salvandoObservacao === ag.id ? (
                         <>
