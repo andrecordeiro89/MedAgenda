@@ -24,7 +24,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [filtroDataCirurgia, setFiltroDataCirurgia] = useState<string>('');
   const [filtroMesCirurgia, setFiltroMesCirurgia] = useState<string>('');
   const [filtroStatusExames, setFiltroStatusExames] = useState<string>('');
-  const [filtroAih, setFiltroAih] = useState<string>('');
+  const [filtroAih, setFiltroAih] = useState<string[]>([]);
+  const [filtroAihSelecionado, setFiltroAihSelecionado] = useState<string>('');
   const [filtroStatusInterno, setFiltroStatusInterno] = useState<string>('');
   const [filtroConfirmado, setFiltroConfirmado] = useState<string>('');
   const [filtroProntuario, setFiltroProntuario] = useState<string>('');
@@ -50,7 +51,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [itensPorPagina, setItensPorPagina] = useState(20);
   const tabelaRef = useRef<HTMLDivElement>(null);
   const [reportModalAberto, setReportModalAberto] = useState(false);
-  const [reportAihStatus, setReportAihStatus] = useState<string>('');
+  const [reportAihStatuses, setReportAihStatuses] = useState<string[]>([]);
+  const [reportAihSelecionado, setReportAihSelecionado] = useState<string>('');
   const [reportStartDate, setReportStartDate] = useState<string>('');
   const [reportEndDate, setReportEndDate] = useState<string>('');
   const [reportConfirmModalAberto, setReportConfirmModalAberto] = useState(false);
@@ -379,6 +381,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             faturamento_liberado: novo.faturamento_liberado ?? null,
             faturamento_data: novo.faturamento_data ?? null,
             faturamento_status: novo.faturamento_status ?? null,
+            falta_senha: novo.falta_senha ?? null,
+            falta_retorno_gsus: novo.falta_retorno_gsus ?? null,
+            falta_de_laudo_de_exame: novo.falta_de_laudo_de_exame ?? null,
+            falta_registro_do_paciente_no_gsus: novo.falta_registro_do_paciente_no_gsus ?? null,
+            divergencia_no_cadastro_do_paciente: novo.divergencia_no_cadastro_do_paciente ?? null,
+            insuficiencia_de_dados_clinicos: novo.insuficiencia_de_dados_clinicos ?? null,
             justificativa_alteracao_agendamento: novo.justificativa_alteracao_agendamento ?? null,
             justificativa_alteracao_agendamento_nome: novo.justificativa_alteracao_agendamento_nome ?? null,
             justificativa_alteracao_agendamento_nome_hora: novo.justificativa_alteracao_agendamento_nome_hora ?? null,
@@ -408,6 +416,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           faturamento_liberado: novo.faturamento_liberado ?? null,
           faturamento_data: novo.faturamento_data ?? null,
           faturamento_status: novo.faturamento_status ?? null,
+          falta_senha: novo.falta_senha ?? null,
+          falta_retorno_gsus: novo.falta_retorno_gsus ?? null,
+          falta_de_laudo_de_exame: novo.falta_de_laudo_de_exame ?? null,
+          falta_registro_do_paciente_no_gsus: novo.falta_registro_do_paciente_no_gsus ?? null,
+          divergencia_no_cadastro_do_paciente: novo.divergencia_no_cadastro_do_paciente ?? null,
+          insuficiencia_de_dados_clinicos: novo.insuficiencia_de_dados_clinicos ?? null,
           updated_at: novo.updated_at ?? undefined
         });
       });
@@ -749,11 +763,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         }
       }
       
-      // Filtro por Status AIH
-      if (filtroAih) {
+      // Filtro por Status AIH (multi-seleção)
+      if (Array.isArray(filtroAih) && filtroAih.length > 0) {
         const aih = normalizeAih(ag.status_aih);
-        const f = normalizeAih(filtroAih);
-        if (aih !== f) return false;
+        const selecionados = filtroAih.map(s => normalizeAih(s));
+        if (!selecionados.includes(aih)) return false;
       }
       
       // Filtro por Status Interno
@@ -817,7 +831,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setFiltroDataCirurgia('');
     setFiltroMesCirurgia('');
     setFiltroMedicoId('');
-    setFiltroAih('');
+    setFiltroAih([]);
+    setFiltroAihSelecionado('');
     setFiltroStatusInterno('');
     setFiltroConfirmado('');
     setFiltroObservacao('');
@@ -826,16 +841,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   };
 
   const handleAbrirModalRelatorio = () => {
-    setReportAihStatus(filtroAih || '');
+    setReportAihStatuses(Array.isArray(filtroAih) ? [...filtroAih] : []);
+    setReportAihSelecionado('');
     setReportStartDate('');
     setReportEndDate('');
     setReportModalAberto(true);
   };
 
   const handleEmitirRelatorio = () => {
-    const statusSelecionado = (reportAihStatus || '').trim();
-    if (!statusSelecionado) {
-      toastError('Selecione o Status AIH para emitir o relatório');
+    const selecionados = Array.isArray(reportAihStatuses) ? reportAihStatuses.filter(s => (s || '').trim() !== '') : [];
+    if (selecionados.length === 0) {
+      toastError('Adicione pelo menos um Status AIH para emitir o relatório');
       return;
     }
     const start = parseInputDate(reportStartDate);
@@ -845,28 +861,32 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       return;
     }
     const lista = agendamentos.filter(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
+      if (!nomePaciente) return false;
       const s = (ag.status_aih || '').toString().trim();
-      if (s !== statusSelecionado) return false;
+      if (!selecionados.includes(s)) return false;
       const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
     });
     if (lista.length === 0) {
-      toastError('Nenhum registro encontrado para o status selecionado');
+      toastError('Nenhum registro encontrado para os status selecionados');
       return;
     }
     const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
+    const statusTxt = selecionados.join(', ');
     const headers = [
-      'PRONTUÁRIO','PACIENTE','DATA NASCIMENTO','PROCEDIMENTO','CIRURGIÃO','MUNICÍPIO',
+      'STATUS AIH','PACIENTE','PRONTUÁRIO','DATA NASCIMENTO','PROCEDIMENTO','CIRURGIÃO','MUNICÍPIO',
       'DATA CONSULTA','DATA CIRURGIA','STATUS INTERNO','CONFIRMADO',
       'OBS AGENDAMENTO','OBS FATURAMENTO','JUSTIFICATIVA','JUSTIFICATIVA POR','JUSTIFICATIVA DATA/HORA',
       'EXAMES OK','PRÉ-OP OK','COMPLEMENTAR OK'
     ];
     const aoaRows = lista.map(ag => {
       return [
-        ag.n_prontuario || '',
+        (ag.status_aih || '').toUpperCase(),
         (ag.nome_paciente || ag.nome || '').toUpperCase(),
+        ag.n_prontuario || '',
         formatarData(ag.data_nascimento || ag.dataNascimento),
         (formatarProcedimento(ag) || '').toUpperCase(),
         (ag.medico || '').toUpperCase(),
@@ -886,9 +906,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       ];
     });
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([[`Relatório Status AIH: ${statusSelecionado} • Período: ${periodoTxt} • Total: ${lista.length}`], headers, ...aoaRows]);
+    const ws = XLSX.utils.aoa_to_sheet([[`Relatório Status AIH: ${statusTxt} • Período: ${periodoTxt} • Total: ${lista.length}`], headers, ...aoaRows]);
     ws['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: 0 } }];
-    XLSX.utils.book_append_sheet(wb, ws, statusSelecionado.slice(0, 30));
+    XLSX.utils.book_append_sheet(wb, ws, 'AIH');
     const statusMap: Record<string, number> = {};
     const medicoMap: Record<string, number> = {};
     const espMap: Record<string, number> = {};
@@ -907,7 +927,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       internoMap[i] = (internoMap[i] || 0) + 1;
     });
     const resumoData: any[][] = [];
-    resumoData.push([`Resumo • Status: ${statusSelecionado} • Período: ${periodoTxt} • Total: ${lista.length}`]);
+    resumoData.push([`Resumo • Status: ${statusTxt} • Período: ${periodoTxt} • Total: ${lista.length}`]);
     resumoData.push([]);
     resumoData.push(['Por Status AIH']);
     resumoData.push(['Status AIH','Qtd']);
@@ -932,7 +952,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     wsResumo['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: 5, r: 0 } }];
     XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
     const now = new Date();
-    const nomeArquivo = `Relatorio_AIH_${statusSelecionado}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s=>s.replace(/\s+/g,'_')).join('-')}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -967,6 +987,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       return;
     }
     const lista = agendamentos.filter(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
+      if (!nomePaciente) return false;
       const c = (ag.confirmacao || '').toString().trim();
       if (c !== statusSelecionado) return false;
       const d = parseDateStr(ag.data_agendamento);
@@ -1050,9 +1072,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     doc.save(nomeArquivo);
   };
   const gerarPDFRelatorioAIH = async () => {
-    const statusSelecionado = (reportAihStatus || '').trim();
-    if (!statusSelecionado) {
-      toastError('Selecione o Status AIH para emitir o relatório');
+    const selecionados = Array.isArray(reportAihStatuses) ? reportAihStatuses.filter(s => (s || '').trim() !== '') : [];
+    if (selecionados.length === 0) {
+      toastError('Adicione pelo menos um Status AIH para emitir o relatório');
       return;
     }
     const start = parseInputDate(reportStartDate);
@@ -1062,15 +1084,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       return;
     }
     const lista = agendamentos.filter(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
+      if (!nomePaciente) return false;
       const s = (ag.status_aih || '').toString().trim();
-      if (s !== statusSelecionado) return false;
+      if (!selecionados.includes(s)) return false;
       const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
       return true;
     });
     if (lista.length === 0) {
-      toastError('Nenhum registro encontrado para o status selecionado');
+      toastError('Nenhum registro encontrado para os status selecionados');
       return;
     }
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -1083,7 +1107,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       const titleY = 8 + (logoHeight / 2) - 3;
-      doc.text(`Relatório - Status AIH: ${statusSelecionado}`, 14 + logoWidth + 5, titleY);
+      doc.text(`Relatório - Status AIH: ${selecionados.join(', ')}`, 14 + logoWidth + 5, titleY);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
@@ -1092,7 +1116,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     } catch {
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Relatório - Status AIH: ${statusSelecionado}`, 14, 15);
+      doc.text(`Relatório - Status AIH: ${selecionados.join(', ')}`, 14, 15);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
@@ -1100,40 +1124,40 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       doc.text(`Total de registros: ${lista.length}`, 14, 27);
     }
     const tableData = lista.map(ag => [
+      ag.status_aih || '-',
+      ag.nome_paciente || ag.nome || '-',
+      ag.n_prontuario || '-',
       formatarData(ag.data_agendamento),
       ag.especialidade || '-',
       formatarProcedimento(ag) || '-',
       ag.procedimento_especificacao || '-',
       ag.medico || '-',
-      ag.nome_paciente || ag.nome || '-',
-      ag.n_prontuario || '-',
       ageFromISO(ag.data_nascimento || ag.dataNascimento) !== null ? String(ageFromISO(ag.data_nascimento || ag.dataNascimento)) : '-',
       ag.cidade_natal || ag.cidadeNatal || '-',
       ag.telefone || '-',
       formatarData(ag.data_consulta),
-      formatarData(ag.data_nascimento || ag.dataNascimento),
-      ag.status_aih || '-'
+      formatarData(ag.data_nascimento || ag.dataNascimento)
     ]);
     autoTable(doc, {
-      head: [['Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Paciente', 'Prontuário', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento', 'Status AIH']],
+      head: [['Status AIH', 'Paciente', 'Prontuário', 'Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento']],
       body: tableData,
       startY: 28,
       styles: { fontSize: 6, cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 }, overflow: 'linebreak', halign: 'left', valign: 'middle' },
       headStyles: { fillColor: [128, 128, 128], textColor: 255, fontStyle: 'bold', fontSize: 6, valign: 'middle' },
       columnStyles: {
-        0: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
-        1: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
-        2: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
-        3: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
-        4: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
-        5: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
-        6: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
-        7: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
-        8: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
-        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
-        10: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
-        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
-        12: { cellWidth: 24, halign: 'left', overflow: 'linebreak' }
+        0: { cellWidth: 20, halign: 'left', overflow: 'linebreak' },      /* Status AIH */
+        1: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },      /* Paciente */
+        2: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },    /* Prontuário */
+        3: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },      /* Data */
+        4: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },      /* Especialidade */
+        5: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },      /* Procedimento */
+        6: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },      /* Esp. Procedimento */
+        7: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },      /* Médico */
+        8: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },    /* Idade */
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },      /* Cidade */
+        10: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },     /* Telefone */
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },   /* Consulta */
+        12: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' }    /* Nascimento */
       },
       margin: { left: 14, right: 14 },
       didDrawPage: function (data: any) {
@@ -1141,11 +1165,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       }
     });
-    const nomeArquivo = `Relatorio_AIH_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s=>s.replace(/\s+/g,'_')).join('-')}_${new Date().toISOString().slice(0,10)}.pdf`;
     doc.save(nomeArquivo);
   };
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroJustificativa || filtroDataInsercao;
+  const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || (Array.isArray(filtroAih) && filtroAih.length > 0) || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroJustificativa || filtroDataInsercao;
   
   // Alternar ordenação ao clicar no cabeçalho
   const handleOrdenacao = (coluna: 'data_consulta' | 'data_cirurgia') => {
@@ -1697,6 +1721,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const justificativaNomeRefs = useRef<{ [id: string]: HTMLInputElement | null }>({});
   const [justificativaNomePreenchida, setJustificativaNomePreenchida] = useState<{ [id: string]: boolean }>({});
   const [observacaoDirty, setObservacaoDirty] = useState<{ [id: string]: boolean }>({});
+  const [salvandoFlagsId, setSalvandoFlagsId] = useState<string | null>(null);
   
   const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
     setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
@@ -2263,6 +2288,39 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     </button>
                     </div>
                   </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[
+                      { key: 'falta_senha', label: 'Falta Senha' },
+                      { key: 'falta_retorno_gsus', label: 'Falta Retorno GSUS' },
+                      { key: 'falta_de_laudo_de_exame', label: 'Falta de laudo de exame' },
+                      { key: 'falta_registro_do_paciente_no_gsus', label: 'Falta registro do paciente no GSUS' },
+                      { key: 'divergencia_no_cadastro_do_paciente', label: 'Divergência no cadastro do paciente' },
+                      { key: 'insuficiencia_de_dados_clinicos', label: 'Insuficiência de dados Clínicos' }
+                    ].map(opt => (
+                      <label key={opt.key} className={`flex items-center gap-2 text-xs ${salvandoFlagsId === ag.id ? 'opacity-70' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={!!(ag as any)[opt.key]}
+                          disabled={salvandoFlagsId === ag.id}
+                          onChange={async (e) => {
+                            const checked = e.target.checked;
+                            const value = checked ? 'Sim' : null;
+                            setSalvandoFlagsId(ag.id!);
+                            try {
+                              await agendamentoService.update(ag.id!, { [opt.key]: value } as any);
+                              applyUpdateEverywhere(ag.id!, { [opt.key]: value } as any);
+                              success('Marcador atualizado');
+                            } catch (err) {
+                              toastError('Erro ao atualizar marcador');
+                            } finally {
+                              setSalvandoFlagsId(null);
+                            }
+                          }}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 {(() => {
                   const justificativaSalva = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
@@ -2497,16 +2555,42 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroDataCirurgia} onChange={(e) => setFiltroDataCirurgia(maskDateInput(e.target.value))} placeholder="DD/MM/AAAA" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">🧾 Status AIH</label>
-            <select value={filtroAih} onChange={(e) => setFiltroAih(e.target.value)} className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${filtroAih ? 'border-amber-500 bg-amber-50' : 'border-gray-300'}`}>
-              <option value="">📊 Todos</option>
-              <option value="Autorizado">Autorizado</option>
-              <option value="Pendência Hospital">Pendência Hospital</option>
-              <option value="Pendência Faturamento">Pendência Faturamento</option>
-              <option value="Auditor Externo">Auditor Externo</option>
-              <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
-              <option value="Ag. Correção">Ag. Correção</option>
-              <option value="N/A - Urgência">N/A - Urgência</option>
+            <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <span>🧾 Status AIH</span>
+              <span className="flex flex-wrap gap-1">
+                {(Array.isArray(filtroAih) && filtroAih.length > 0) ? (
+                  filtroAih.map(st => (
+                    <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      {st}
+                      <button
+                        onClick={() => setFiltroAih(prev => prev.filter(x => x !== st))}
+                        className="text-amber-700 hover:text-amber-900"
+                        title="Remover"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+                )}
+              </span>
+            </label>
+            <select
+              value={filtroAihSelecionado}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) {
+                  setFiltroAih(prev => prev.includes(v) ? prev : [...prev, v]);
+                  setFiltroAihSelecionado('');
+                }
+              }}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
+                (Array.isArray(filtroAih) && filtroAih.length > 0) ? 'border-amber-500 bg-amber-50' : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Adicionar status...</option>
+              {aihStatusOptions.map(op => (<option key={op} value={op}>{op}</option>))}
             </select>
           </div>
           {/* 2ª linha: Status Interno, Confirmado, Status Exames, Médico, Mês Cirurgia */}
@@ -2784,13 +2868,39 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
 >
   <div className="space-y-3">
     <div>
-      <label className="block text-xs font-medium text-gray-700 mb-1">Status AIH</label>
+      <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+        <span>Status AIH</span>
+        <span className="flex flex-wrap gap-1">
+          {(Array.isArray(reportAihStatuses) && reportAihStatuses.length > 0) ? (
+            reportAihStatuses.map(st => (
+              <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                {st}
+                <button
+                  onClick={() => setReportAihStatuses(prev => prev.filter(x => x !== st))}
+                  className="text-emerald-700 hover:text-emerald-900"
+                  title="Remover"
+                >
+                  ×
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+          )}
+        </span>
+      </label>
       <select
-        value={reportAihStatus}
-        onChange={(e) => setReportAihStatus(e.target.value)}
+        value={reportAihSelecionado}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v) {
+            setReportAihStatuses(prev => prev.includes(v) ? prev : [...prev, v]);
+            setReportAihSelecionado('');
+          }
+        }}
         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
       >
-        <option value="">Selecione</option>
+        <option value="">📊 Adicionar status...</option>
         {aihStatusOptions.map(op => (
           <option key={op} value={op}>{op}</option>
         ))}

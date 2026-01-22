@@ -686,6 +686,12 @@ export const agendamentoService = {
     if (agendamento.faturamento_data !== undefined) updateData.faturamento_data = agendamento.faturamento_data
     if (agendamento.faturamento_status !== undefined) updateData.faturamento_status = agendamento.faturamento_status
     if (agendamento.observacao_faturamento !== undefined) updateData.observacao_faturamento = agendamento.observacao_faturamento
+    if (agendamento.falta_senha !== undefined) updateData.falta_senha = agendamento.falta_senha
+    if (agendamento.falta_retorno_gsus !== undefined) updateData.falta_retorno_gsus = agendamento.falta_retorno_gsus
+    if (agendamento.falta_de_laudo_de_exame !== undefined) updateData.falta_de_laudo_de_exame = agendamento.falta_de_laudo_de_exame
+    if (agendamento.falta_registro_do_paciente_no_gsus !== undefined) updateData.falta_registro_do_paciente_no_gsus = agendamento.falta_registro_do_paciente_no_gsus
+    if (agendamento.divergencia_no_cadastro_do_paciente !== undefined) updateData.divergencia_no_cadastro_do_paciente = agendamento.divergencia_no_cadastro_do_paciente
+    if (agendamento.insuficiencia_de_dados_clinicos !== undefined) updateData.insuficiencia_de_dados_clinicos = agendamento.insuficiencia_de_dados_clinicos
     
     // Justificativa de alteração no Agendamento (campos de auditoria)
     if (agendamento.justificativa_alteracao_agendamento !== undefined) updateData.justificativa_alteracao_agendamento = agendamento.justificativa_alteracao_agendamento

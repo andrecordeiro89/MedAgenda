@@ -54,6 +54,14 @@ export interface Agendamento {
   faturamento_status?: 'pendente' | 'auditor' | 'autorizado' | null; // Status do processo: pendente, auditor, autorizado
   observacao_faturamento?: string | null; // Observação livre do faturamento
   
+  // Flags de pendências de faturamento (checkboxes)
+  falta_senha?: string | null;
+  falta_retorno_gsus?: string | null;
+  falta_de_laudo_de_exame?: string | null;
+  falta_registro_do_paciente_no_gsus?: string | null;
+  divergencia_no_cadastro_do_paciente?: string | null;
+  insuficiencia_de_dados_clinicos?: string | null;
+  
   // Justificativa de alteração em Agendamento (auditoria)
   justificativa_alteracao_agendamento?: string | null;
   justificativa_alteracao_agendamento_nome?: string | null;

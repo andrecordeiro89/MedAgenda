@@ -27,7 +27,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   // Estados para filtros de busca
   const [filtroStatus, setFiltroStatus] = useState<string>('');
-  const [filtroAih, setFiltroAih] = useState<string>('');
+  const [filtroAih, setFiltroAih] = useState<string[]>([]);
   const [filtroStatusInterno, setFiltroStatusInterno] = useState<string>('');
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroProntuario, setFiltroProntuario] = useState<string>('');
@@ -41,6 +41,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
   const [filtroAvaliacaoAnestesista, setFiltroAvaliacaoAnestesista] = useState<string>('');
   const [filtroDataInsercao, setFiltroDataInsercao] = useState<string>('');
+  const [filtroAihSelecionado, setFiltroAihSelecionado] = useState<string>('');
   
   const normalizeAih = (s?: string | null) => {
     const v = (s || '').toString().trim().toLowerCase();
@@ -133,6 +134,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [reportConfirmStartDate, setReportConfirmStartDate] = useState<string>('');
   const [reportConfirmEndDate, setReportConfirmEndDate] = useState<string>('');
   const confirmStatusOptions = ['Confirmado', 'Aguardando'];
+  const [reportAihModalAberto, setReportAihModalAberto] = useState(false);
+  const [reportAihStatuses, setReportAihStatuses] = useState<string[]>([]);
+  const [reportAihSelecionado, setReportAihSelecionado] = useState<string>('');
+  const [reportAihStartDate, setReportAihStartDate] = useState<string>('');
+  const [reportAihEndDate, setReportAihEndDate] = useState<string>('');
 
   // Carregar agendamentos
   useEffect(() => {
@@ -768,11 +774,11 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
     }
     
-    // Filtro por Status AIH
-    if (filtroAih) {
+    // Filtro por Status AIH (multi-seleção)
+    if (Array.isArray(filtroAih) && filtroAih.length > 0) {
       const aih = normalizeAih(ag.status_aih);
-      const f = normalizeAih(filtroAih);
-      if (aih !== f) return false;
+      const selecionados = filtroAih.map(s => normalizeAih(s));
+      if (!selecionados.includes(aih)) return false;
     }
     
     // Filtro por Status Interno
@@ -956,7 +962,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     setFiltroDataCirurgia('');
     setFiltroMesCirurgia('');
     setFiltroMedicoId('');
-    setFiltroAih('');
+    setFiltroAih([]);
+    setFiltroAihSelecionado('');
     setFiltroStatusInterno('');
     setFiltroConfirmado('');
     setFiltroObservacao('');
@@ -965,7 +972,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   };
   
   // Verificar se há filtros ativos
-  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAih || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroAvaliacaoAnestesista || filtroDataInsercao;
+  const temFiltrosAtivos = filtroStatus || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || (Array.isArray(filtroAih) && filtroAih.length > 0) || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroAvaliacaoAnestesista || filtroDataInsercao;
 
   // Agrupar agendamentos por status
   const agendamentosAgrupados = () => {
@@ -1461,6 +1468,177 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       }
     });
     const nomeArquivo = `Relatorio_Confirmado_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(nomeArquivo);
+  };
+  
+  const handleAbrirModalRelatorioAih = () => {
+    setReportAihStatuses(Array.isArray(filtroAih) ? [...filtroAih] : []);
+    setReportAihSelecionado('');
+    setReportAihStartDate('');
+    setReportAihEndDate('');
+    setReportAihModalAberto(true);
+  };
+  
+  const handleEmitirRelatorioAih = () => {
+    const selecionados = Array.isArray(reportAihStatuses) ? reportAihStatuses.filter(s => (s || '').trim() !== '') : [];
+    if (selecionados.length === 0) {
+      toastError('Adicione pelo menos um Status AIH para emitir o relatório');
+      return;
+    }
+    const start = reportAihStartDate ? new Date(reportAihStartDate) : null;
+    const end = reportAihEndDate ? new Date(reportAihEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
+      if (!nomePaciente) return false;
+      const s = (ag.status_aih || '').toString().trim();
+      if (!selecionados.includes(s)) return false;
+      const d = parseDateStr(ag.data_agendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para os status selecionados');
+      return;
+    }
+    const statusTxt = selecionados.join(', ');
+    const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
+    const headers = [
+      'STATUS AIH','PACIENTE','PRONTUÁRIO','DATA NASCIMENTO','PROCEDIMENTO','CIRURGIÃO','MUNICÍPIO',
+      'DATA CONSULTA','DATA CIRURGIA','STATUS INTERNO','CONFIRMADO'
+    ];
+    const aoaRows = lista.map(ag => [
+      (ag.status_aih || '').toUpperCase(),
+      (ag.nome_paciente || ag.nome || '').toUpperCase(),
+      ag.n_prontuario || '',
+      formatarData(ag.data_nascimento || (ag as any).dataNascimento),
+      (ag.procedimentos || '').toUpperCase(),
+      (ag.medico || '').toUpperCase(),
+      ((ag.cidade_natal || (ag as any).cidadeNatal || '') as string).toUpperCase(),
+      formatarData(ag.data_consulta),
+      formatarData(ag.data_agendamento),
+      (ag.status_de_liberacao || '').toUpperCase(),
+      (ag.confirmacao || '').toUpperCase()
+    ]);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([[`Relatório Status AIH: ${statusTxt} • Período: ${periodoTxt} • Total: ${lista.length}`], headers, ...aoaRows]);
+    ws['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: 0 } }];
+    XLSX.utils.book_append_sheet(wb, ws, 'AIH');
+    const now = new Date();
+    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s=>s.replace(/\s+/g,'_')).join('-')}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setReportAihModalAberto(false);
+    success('Relatório Excel gerado');
+  };
+  
+  const gerarPDFRelatorioAih = async () => {
+    const selecionados = Array.isArray(reportAihStatuses) ? reportAihStatuses.filter(s => (s || '').trim() !== '') : [];
+    if (selecionados.length === 0) {
+      toastError('Adicione pelo menos um Status AIH para emitir o relatório');
+      return;
+    }
+    const start = reportAihStartDate ? new Date(reportAihStartDate) : null;
+    const end = reportAihEndDate ? new Date(reportAihEndDate) : null;
+    if (start && end && start > end) {
+      toastError('Período inválido: data inicial maior que a final');
+      return;
+    }
+    const lista = agendamentos.filter(ag => {
+      const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
+      if (!nomePaciente) return false;
+      const s = (ag.status_aih || '').toString().trim();
+      if (!selecionados.includes(s)) return false;
+      const d = parseDateStr(ag.data_agendamento);
+      if (start && (!d || d < start)) return false;
+      if (end && (!d || d > end)) return false;
+      return true;
+    });
+    if (lista.length === 0) {
+      toastError('Nenhum registro encontrado para os status selecionados');
+      return;
+    }
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    try {
+      const logoPath = '/CIS Sem fundo.jpg';
+      const logoBase64 = await imageToBase64(logoPath);
+      const logoWidth = 25;
+      const logoHeight = 15;
+      doc.addImage(logoBase64, 'JPEG', 14, 8, logoWidth, logoHeight, undefined, 'FAST');
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleY = 8 + (logoHeight / 2) - 3;
+      doc.text(`Relatório - Status AIH: ${selecionados.join(', ')}`, 14 + logoWidth + 5, titleY);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportAihStartDate ? new Date(reportAihStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportAihEndDate ? new Date(reportAihEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14 + logoWidth + 5, titleY + 7);
+      doc.text(`Total de registros: ${lista.length}`, 14 + logoWidth + 5, titleY + 12);
+    } catch {
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Relatório - Status AIH: ${selecionados.join(', ')}`, 14, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const periodoTxt = `${reportAihStartDate ? new Date(reportAihStartDate).toLocaleDateString('pt-BR') : '-'} a ${reportAihEndDate ? new Date(reportAihEndDate).toLocaleDateString('pt-BR') : '-'}`;
+      doc.text(`Período: ${periodoTxt}`, 14, 22);
+      doc.text(`Total de registros: ${lista.length}`, 14, 27);
+    }
+    const tableData = lista.map(ag => [
+      ag.status_aih || '-',
+      ag.nome_paciente || ag.nome || '-',
+      ag.n_prontuario || '-',
+      formatarData(ag.data_agendamento),
+      ag.especialidade || '-',
+      ag.procedimentos || '-',
+      ag.procedimento_especificacao || '-',
+      ag.medico || '-',
+      ageFromISO(ag.data_nascimento || (ag as any).dataNascimento) !== null ? String(ageFromISO(ag.data_nascimento || (ag as any).dataNascimento)) : '-',
+      ag.cidade_natal || (ag as any).cidadeNatal || '-',
+      ag.telefone || '-',
+      formatarData(ag.data_consulta),
+      formatarData(ag.data_nascimento || (ag as any).dataNascimento)
+    ]);
+    autoTable(doc, {
+      head: [['Status AIH', 'Paciente', 'Prontuário', 'Data', 'Especialidade', 'Procedimento', 'Esp. Procedimento', 'Médico', 'Idade', 'Cidade', 'Telefone', 'Consulta', 'Nascimento']],
+      body: tableData,
+      startY: 28,
+      styles: { fontSize: 6, cellPadding: { top: 0.8, right: 1, bottom: 0.8, left: 1 }, overflow: 'linebreak', halign: 'left', valign: 'middle' },
+      headStyles: { fillColor: [128, 128, 128], textColor: 255, fontStyle: 'bold', fontSize: 6, valign: 'middle' },
+      columnStyles: {
+        0: { cellWidth: 20, halign: 'left', overflow: 'linebreak' },
+        1: { cellWidth: 27, halign: 'left', overflow: 'linebreak' },
+        2: { cellWidth: 16, halign: 'center', overflow: 'ellipsize' },
+        3: { cellWidth: 16, halign: 'left', overflow: 'ellipsize' },
+        4: { cellWidth: 23, halign: 'left', overflow: 'linebreak' },
+        5: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        6: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },
+        7: { cellWidth: 28, halign: 'left', overflow: 'linebreak' },
+        8: { cellWidth: 12, halign: 'center', overflow: 'ellipsize' },
+        9: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        10: { cellWidth: 19, halign: 'left', overflow: 'ellipsize' },
+        11: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' },
+        12: { cellWidth: 18, halign: 'center', overflow: 'ellipsize' }
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: function (data: any) {
+        doc.setFontSize(8);
+        doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+    });
+    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s=>s.replace(/\s+/g,'_')).join('-')}_${new Date().toISOString().slice(0,10)}.pdf`;
     doc.save(nomeArquivo);
   };
 
@@ -2751,30 +2929,54 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
             </label>
             <input type="text" inputMode="numeric" pattern="[0-9]*" value={filtroDataCirurgia} onChange={(e) => setFiltroDataCirurgia(maskDateInput(e.target.value))} placeholder="DD/MM/AAAA" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
           </div>
-          {/* Status AIH */}
-    <div>
-      <label className="block text-xs font-medium text-gray-700 mb-1">
-        🧾 Status AIH
-      </label>
-      <select
-        value={filtroAih}
-        onChange={(e) => setFiltroAih(e.target.value)}
-        className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
-          filtroAih 
-            ? 'border-amber-500 bg-amber-50' 
-            : 'border-gray-300'
-        }`}
-      >
-        <option value="">📊 Todos</option>
-        <option value="Autorizado">Autorizado</option>
-        <option value="Pendência Hospital">Pendência Hospital</option>
-        <option value="Pendência Faturamento">Pendência Faturamento</option>
-        <option value="Auditor Externo">Auditor Externo</option>
-        <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
-        <option value="Ag. Correção">Ag. Correção</option>
-        <option value="N/A - Urgência">N/A - Urgência</option>
-      </select>
-    </div>
+          {/* Status AIH (acúmulo via dropdown) */}
+          <div>
+            <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <span>🧾 Status AIH</span>
+              <span className="flex flex-wrap gap-1">
+                {(Array.isArray(filtroAih) && filtroAih.length > 0) ? (
+                  filtroAih.map(st => (
+                    <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      {st}
+                      <button
+                        onClick={() => setFiltroAih(prev => prev.filter(x => x !== st))}
+                        className="text-amber-700 hover:text-amber-900"
+                        title="Remover"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+                )}
+              </span>
+            </label>
+            <select
+              value={filtroAihSelecionado}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) {
+                  setFiltroAih(prev => prev.includes(v) ? prev : [...prev, v]);
+                  setFiltroAihSelecionado('');
+                }
+              }}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
+                (Array.isArray(filtroAih) && filtroAih.length > 0) 
+                  ? 'border-amber-500 bg-amber-50' 
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="">📊 Adicionar status...</option>
+              <option value="Autorizado">Autorizado</option>
+              <option value="Pendência Hospital">Pendência Hospital</option>
+              <option value="Pendência Faturamento">Pendência Faturamento</option>
+              <option value="Auditor Externo">Auditor Externo</option>
+              <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+              <option value="Ag. Correção">Ag. Correção</option>
+              <option value="N/A - Urgência">N/A - Urgência</option>
+            </select>
+          </div>
           
           {/* 2ª linha: Status Interno, Confirmado, Avaliação, Médico, Status Exames */}
           {/* Status Interno */}
@@ -3036,6 +3238,13 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       </span>
                     </div>
                   <div className="hidden sm:flex items-center gap-2 ml-4">
+                    <button
+                      onClick={handleAbrirModalRelatorioAih}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                      title="Emitir relatório por Status AIH"
+                    >
+                      Relatório Status AIH
+                    </button>
                     <button
                       onClick={handleAbrirModalRelatorioInterno}
                       className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
@@ -3798,6 +4007,100 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
         </div>
       </Modal>
       
+      <Modal
+        isOpen={reportAihModalAberto}
+        onClose={() => {
+          setReportAihModalAberto(false);
+        }}
+        title="Emitir Relatório por Status AIH"
+        size="small"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <span>Status AIH</span>
+              <span className="flex flex-wrap gap-1">
+                {(Array.isArray(reportAihStatuses) && reportAihStatuses.length > 0) ? (
+                  reportAihStatuses.map(st => (
+                    <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      {st}
+                      <button
+                        onClick={() => setReportAihStatuses(prev => prev.filter(x => x !== st))}
+                        className="text-emerald-700 hover:text-emerald-900"
+                        title="Remover"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+                )}
+              </span>
+            </label>
+            <select
+              value={reportAihSelecionado}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) {
+                  setReportAihStatuses(prev => prev.includes(v) ? prev : [...prev, v]);
+                  setReportAihSelecionado('');
+                }
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+            >
+              <option value="">📊 Adicionar status...</option>
+              <option value="Autorizado">Autorizado</option>
+              <option value="Pendência Hospital">Pendência Hospital</option>
+              <option value="Pendência Faturamento">Pendência Faturamento</option>
+              <option value="Auditor Externo">Auditor Externo</option>
+              <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
+              <option value="Ag. Correção">Ag. Correção</option>
+              <option value="N/A - Urgência">N/A - Urgência</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+              <input
+                type="date"
+                value={reportAihStartDate}
+                onChange={(e) => setReportAihStartDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+              <input
+                type="date"
+                value={reportAihEndDate}
+                onChange={(e) => setReportAihEndDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setReportAihModalAberto(false)}
+              className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+            >
+              Fechar
+            </button>
+            <button
+              onClick={handleEmitirRelatorioAih}
+              className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Gerar Excel
+            </button>
+            <button
+              onClick={gerarPDFRelatorioAih}
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+            >
+              Gerar PDF
+            </button>
+          </div>
+        </div>
+      </Modal>
       
 
       
