@@ -780,17 +780,13 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       <React.Fragment key={ag.id}>
         <tr className="transition-colors hover:bg-gray-50">
           {/* Status AIH (PRIMEIRA COLUNA) */}
-          <td className="px-2 py-3 sm:w-28 md:w-32 lg:w-36 text-center">
-            {ag.status_aih ? (
-              <div className="flex items-center justify-center gap-1.5">
-                <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih)}`} />
-                <span className={`px-2 py-0.5 text-[10px] font-medium rounded border leading-tight ${getAihStatusStyle(ag.status_aih)}`}>
-                  {ag.status_aih}
-                </span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400">-</span>
-            )}
+          <td className="px-2 py-3 w-28">
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
+              <span className={`px-2 py-1 text-xs font-semibold rounded ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}>
+                {ag.status_aih || 'Pendência Faturamento'}
+              </span>
+            </div>
           </td>
 
           {/* Paciente */}
