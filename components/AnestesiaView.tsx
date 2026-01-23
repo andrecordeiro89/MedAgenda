@@ -775,6 +775,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
 
     // Sinalização verde: paciente com exames E ficha pré-anestésica (igual tela Documentação)
     const temExamesEPreOp = ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
+    const obsAg = (ag.observacao_agendamento || '').trim();
+    const obsFat = ((ag.faturamento_observacao || ag.observacao_faturamento || '') as string).trim();
+    const justTxt = (ag.justificativa_alteracao_agendamento || '').trim();
+    const justNome = (ag.justificativa_alteracao_agendamento_nome || '').trim();
+    const justHora = ag.justificativa_alteracao_agendamento_nome_hora || '';
 
     return (
       <React.Fragment key={ag.id}>
@@ -996,7 +1001,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         {
           expandida && (
             <tr className="bg-gray-50">
-              <td colSpan={8} className="px-4 py-4">
+              <td colSpan={12} className="px-4 py-4">
                 {/* Dados do Paciente */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
                   <div>
@@ -1180,6 +1185,135 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* ========== TIMELINE DE STATUS AIH (Visual) ========== */}
+                <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-bold text-blue-800">Timeline do Processo AIH</span>
+                    <span className="text-xs text-blue-600 ml-2">
+                      {ag.status_aih ? `Status atual: ${ag.status_aih}` : 'Nenhum status definido'}
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute top-5 left-0 right-0 h-0.5 bg-gray-300" style={{ zIndex: 0 }}></div>
+                    <div className="flex justify-between relative" style={{ zIndex: 1 }}>
+                      {[
+                        { key: 'aih_dt_pendencia_faturamento', label: 'Pend. Faturamento', color: 'rose', icon: '📋', statusMatch: 'Pendência Faturamento' },
+                        { key: 'aih_dt_pendencia_hospital', label: 'Pend. Hospital', color: 'orange', icon: '🏥', statusMatch: 'Pendência Hospital' },
+                        { key: 'aih_dt_auditor_externo', label: 'Auditor Externo', color: 'indigo', icon: '👤', statusMatch: 'Auditor Externo' },
+                        { key: 'aih_dt_ag_ciencia_sms', label: 'Ag. Ciência SMS', color: 'blue', icon: '📩', statusMatch: 'Aguardando Ciência SMS' },
+                        { key: 'aih_dt_ag_correcao', label: 'Ag. Correção', color: 'teal', icon: '🔧', statusMatch: 'Ag. Correção' },
+                        { key: 'aih_dt_autorizado', label: 'Autorizado', color: 'green', icon: '✅', statusMatch: 'Autorizado' },
+                      ].map((step) => {
+                        const timestamp = (ag as any)[step.key];
+                        const isActive = !!timestamp;
+                        const statusAtual = (ag.status_aih || '').toLowerCase().trim();
+                        const statusMatch = step.statusMatch.toLowerCase().trim();
+                        const isCurrent = statusAtual === statusMatch;
+
+                        let tempoNoStatus = '';
+                        if (timestamp) {
+                          const dataEntrada = new Date(timestamp);
+                          const agora = new Date();
+                          const diffMs = agora.getTime() - dataEntrada.getTime();
+                          const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+                          const diffDias = Math.floor(diffHoras / 24);
+                          if (diffDias > 0) {
+                            tempoNoStatus = `há ${diffDias}d ${diffHoras % 24}h`;
+                          } else if (diffHoras > 0) {
+                            tempoNoStatus = `há ${diffHoras}h`;
+                          } else {
+                            const diffMin = Math.floor(diffMs / (1000 * 60));
+                            tempoNoStatus = `há ${diffMin}min`;
+                          }
+                        }
+
+                        return (
+                          <div key={step.key} className="flex flex-col items-center" style={{ flex: 1 }}>
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 transition-all ${isCurrent
+                                ? `bg-${step.color}-500 border-${step.color}-600 text-white shadow-lg ring-4 ring-${step.color}-200`
+                                : isActive
+                                  ? `bg-${step.color}-100 border-${step.color}-400 text-${step.color}-700`
+                                  : 'bg-gray-100 border-gray-300 text-gray-400'
+                                }`}
+                              title={timestamp ? `Entrou em ${new Date(timestamp).toLocaleString('pt-BR')}` : 'Ainda não passou por este status'}
+                              style={{
+                                backgroundColor: isCurrent ? (step.color === 'green' ? '#22c55e' : step.color === 'rose' ? '#f43f5e' : step.color === 'orange' ? '#f97316' : step.color === 'indigo' ? '#6366f1' : step.color === 'blue' ? '#3b82f6' : step.color === 'teal' ? '#14b8a6' : '#6b7280') : (isActive ? (step.color === 'green' ? '#dcfce7' : step.color === 'rose' ? '#ffe4e6' : step.color === 'orange' ? '#ffedd5' : step.color === 'indigo' ? '#e0e7ff' : step.color === 'blue' ? '#dbeafe' : step.color === 'teal' ? '#ccfbf1' : '#f3f4f6') : '#f3f4f6'),
+                                borderColor: isActive ? (step.color === 'green' ? '#16a34a' : step.color === 'rose' ? '#e11d48' : step.color === 'orange' ? '#ea580c' : step.color === 'indigo' ? '#4f46e5' : step.color === 'blue' ? '#2563eb' : step.color === 'teal' ? '#0d9488' : '#9ca3af') : '#d1d5db',
+                                color: isCurrent ? 'white' : (isActive ? (step.color === 'green' ? '#15803d' : step.color === 'rose' ? '#be123c' : step.color === 'orange' ? '#c2410c' : step.color === 'indigo' ? '#4338ca' : step.color === 'blue' ? '#1d4ed8' : step.color === 'teal' ? '#0f766e' : '#4b5563') : '#9ca3af'),
+                                boxShadow: isCurrent ? '0 0 0 4px rgba(59, 130, 246, 0.3)' : 'none'
+                              }}
+                            >
+                              {step.icon}
+                            </div>
+
+                            <div className={`mt-2 text-xs font-semibold text-center ${isCurrent ? 'text-blue-800' : isActive ? 'text-gray-700' : 'text-gray-400'}`}>
+                              {step.label}
+                            </div>
+
+                            {timestamp ? (
+                              <div className="mt-1 text-center">
+                                <div className="text-[10px] text-gray-500">
+                                  {new Date(timestamp).toLocaleDateString('pt-BR')}
+                                </div>
+                                <div className="text-[10px] text-gray-400">
+                                  {new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                {isCurrent && tempoNoStatus && (
+                                  <div className="mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-semibold rounded-full">
+                                    {tempoNoStatus}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-[10px] text-gray-400 text-center">—</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {(ag as any).aih_dt_na_urgencia && (
+                    <div className="mt-4 p-2 bg-purple-100 border border-purple-300 rounded-lg flex items-center gap-2">
+                      <span className="text-lg">🚨</span>
+                      <span className="text-xs font-semibold text-purple-800">N/A - Urgência</span>
+                      <span className="text-xs text-purple-600">
+                        em {new Date((ag as any).aih_dt_na_urgencia).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-bold text-gray-800 mb-3">Observações e Justificativa</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="text-xs font-semibold text-slate-600 uppercase mb-1">Observação do Agendamento</div>
+                      <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">{obsAg || '-'}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="text-xs font-semibold text-slate-600 uppercase mb-1">Observação de Faturamento</div>
+                      <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">{obsFat || '-'}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="text-xs font-semibold text-slate-600 uppercase mb-1">Justificativa de Alteração</div>
+                      <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">{justTxt || '-'}</div>
+                      {(justNome || justHora) && (
+                        <div className="text-xs text-slate-500 mt-1">
+                          {justNome && <>Por: {justNome}</>}
+                          {justHora && (
+                            <> {justNome ? ' • ' : ''}{new Date(justHora).toLocaleDateString('pt-BR')} às {new Date(justHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </td>
             </tr>
