@@ -2381,7 +2381,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-stretch">
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
                   <textarea
@@ -2473,15 +2473,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 {(() => {
                   const justificativaSalva = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
                   return (
-                    <div className={`p-3 border rounded-lg ${justificativaSalva ? 'bg-violet-50/70 border-violet-200 opacity-80' : 'bg-violet-50 border-violet-200'}`}>
+                    <div className={`p-3 border rounded-lg ${justificativaSalva ? 'bg-violet-50/70 border-violet-200 opacity-80' : 'bg-violet-50 border-violet-200'} md:row-span-3 md:h-full md:min-h-[28rem] xl:min-h-[32rem] flex flex-col`}>
                       <div className="flex items-center gap-2 mb-2"><span className="text-violet-600">✍️</span><label className="text-sm font-semibold text-gray-700">Justificativa de Alteração</label></div>
-                      <div className="space-y-2">
+                      <div className="space-y-2 flex-1 flex flex-col">
                         <textarea
                           defaultValue={ag.justificativa_alteracao_agendamento ?? ''}
                           ref={(el) => { justificativaTextoRefs.current[ag.id!] = el; }}
                           placeholder="Descreva a justificativa da alteração..."
-                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
-                          rows={2}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors bg-white flex-1"
+                          rows={8}
                           disabled={salvandoJustificativaId === ag.id}
                         />
                         <input
@@ -2490,10 +2490,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           ref={(el) => { justificativaNomeRefs.current[ag.id!] = el; }}
                           required
                           placeholder="Nome do colaborador"
-                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors bg-white"
                           disabled={salvandoJustificativaId === ag.id}
                         />
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mt-2">
                           <span className="text-xs text-gray-500">{justificativaSalva ? 'Justificativa salva' : 'Nenhuma justificativa registrada'}</span>
                           <div className="flex items-center gap-2">
                             <button
@@ -2544,13 +2544,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     </div>
                   );
                 })()}
-              </div>
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-blue-600">📄</span>
                   <label className="text-sm font-semibold text-gray-700">Observação (Documentação)</label>
                 </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                <div className="text-sm text-gray-700 whitespace-pre-wrap max-w-md">
                   {(ag.observacao_agendamento || '').trim() || '-'}
                 </div>
               </div>
@@ -2559,7 +2558,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <span className="text-indigo-600">🩺</span>
                   <label className="text-sm font-semibold text-gray-700">Observação (Anestesista)</label>
                 </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                <div className="text-sm text-gray-700 whitespace-pre-wrap max-w-md">
                   {(() => {
                     const status = (ag.avaliacao_anestesista || '').toLowerCase();
                     if (status === 'aprovado') {
@@ -2579,6 +2578,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     Marcado em: {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 )}
+              </div>
               </div>
               {ag.faturamento_liberado === false && ag.faturamento_observacao && (
                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded">
