@@ -9,27 +9,27 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const { success, error: toastError } = useToast();
-  
+
   // Sistema de toasts
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: ToastType }>>([]);
-  
+
   // Estado para controlar filtro de status (era abas, agora é filtro)
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendentes' | 'concluidos'>('todos');
-  
+
   // Função para mostrar toast
   const mostrarToast = (message: string, type: ToastType) => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, message, type }]);
   };
-  
+
   // Função para remover toast
   const removerToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
-  
+
   // Estado para controlar linhas expandidas
   const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
-  
+
   // Estados para filtros de busca
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
@@ -38,20 +38,20 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [filtroMedicoId, setFiltroMedicoId] = useState<string>('');
   const [medicosDisponiveis, setMedicosDisponiveis] = useState<Medico[]>([]);
   const [filtroAvaliacaoAnestesista, setFiltroAvaliacaoAnestesista] = useState<string>('');
-  
+
   // Estados para ordenação por data
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
-  
+
   // Estados do modal
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
   const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
-  
+
   // Estados para Ficha Pré-Operatória (Anestesista)
   const [arquivoFichaSelecionado, setArquivoFichaSelecionado] = useState<File | null>(null);
   const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
   const fileInputFichaRef = useRef<HTMLInputElement>(null);
-  
+
   // Estados para Avaliação do Anestesista
   const [avaliacaoEmEdicao, setAvaliacaoEmEdicao] = useState<string | null>(null); // ID do agendamento sendo avaliado
   const [avaliacaoTipo, setAvaliacaoTipo] = useState<'aprovado' | 'reprovado' | 'complementares' | null>(null);
@@ -59,13 +59,43 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const [avaliacaoMotivoReprovacao, setAvaliacaoMotivoReprovacao] = useState('');
   const [avaliacaoComplementares, setAvaliacaoComplementares] = useState('');
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
-  
+
   // Estados para visualização de documentos
   const [documentosExames, setDocumentosExames] = useState<string[]>([]);
   const [documentosComplementares, setDocumentosComplementares] = useState<string[]>([]);
-  
+
+  // ALTERAÇÃO PARA MODAL COMPLETO (Tipo Documentação)
+  const [modalDocumentosAberto, setModalDocumentosAberto] = useState(false);
+  const [abaAtivaDocs, setAbaAtivaDocs] = useState<'exames' | 'preop' | 'complementares'>('exames');
+
   const [uploading, setUploading] = useState(false);
-  
+
+  // Abrir modal completo de documentos (Exames + Pre-Op + Complementares)
+  const handleAbrirModalDocumentos = (ag: Agendamento) => {
+    setAgendamentoSelecionado(ag);
+    setAbaAtivaDocs('exames');
+
+    // Carregar exames
+    try {
+      const examesUrls = ag.documentos_urls ? JSON.parse(ag.documentos_urls) : [];
+      setDocumentosExames(Array.isArray(examesUrls) ? examesUrls : []);
+    } catch {
+      setDocumentosExames([]);
+    }
+
+    // Ficha Pré-Op já vem no objeto (ag.ficha_pre_anestesica_url)
+
+    // Carregar complementares
+    try {
+      const compUrls = ag.complementares_urls ? JSON.parse(ag.complementares_urls) : [];
+      setDocumentosComplementares(Array.isArray(compUrls) ? compUrls : []);
+    } catch {
+      setDocumentosComplementares([]);
+    }
+
+    setModalDocumentosAberto(true);
+  };
+
   // Estados de Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [itensPorPagina, setItensPorPagina] = useState(20);
@@ -83,7 +113,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       try {
         const medicos = await medicoService.getAll(hospitalId);
         setMedicosDisponiveis(medicos || []);
-      } catch {}
+      } catch { }
     };
     if (hospitalId) carregarMedicos();
   }, [hospitalId]);
@@ -95,37 +125,37 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         const novo = payload?.new;
         if (!novo) return;
         if (hospitalId && novo.hospital_id && novo.hospital_id !== hospitalId) return;
-        setAgendamentos(prev => prev.map(a => 
-          a.id === novo.id 
+        setAgendamentos(prev => prev.map(a =>
+          a.id === novo.id
             ? {
-                ...a,
-                nome_paciente: novo.nome_paciente || '',
-                data_nascimento: novo.data_nascimento || '',
-                cidade_natal: novo.cidade_natal ?? null,
-                telefone: novo.telefone ?? null,
-                data_agendamento: novo.data_agendamento,
-                data_consulta: novo.data_consulta ?? null,
-                hospital_id: novo.hospital_id ?? null,
-                especialidade: novo.especialidade ?? null,
-                medico: novo.medico ?? null,
-                procedimentos: novo.procedimentos ?? null,
-                procedimento_especificacao: novo.procedimento_especificacao ?? null,
-                documentos_ok: novo.documentos_ok ?? false,
-                documentos_urls: novo.documentos_urls ?? null,
-                documentos_data: novo.documentos_data ?? null,
-                ficha_pre_anestesica_ok: novo.ficha_pre_anestesica_ok ?? false,
-                ficha_pre_anestesica_url: novo.ficha_pre_anestesica_url ?? null,
-                ficha_pre_anestesica_data: novo.ficha_pre_anestesica_data ?? null,
-                complementares_ok: novo.complementares_ok ?? false,
-                complementares_urls: novo.complementares_urls ?? null,
-                complementares_data: novo.complementares_data ?? null,
-                avaliacao_anestesista: novo.avaliacao_anestesista ?? null,
-                avaliacao_anestesista_observacao: novo.avaliacao_anestesista_observacao ?? null,
-                avaliacao_anestesista_motivo_reprovacao: novo.avaliacao_anestesista_motivo_reprovacao ?? null,
-                avaliacao_anestesista_complementares: novo.avaliacao_anestesista_complementares ?? null,
-                avaliacao_anestesista_data: novo.avaliacao_anestesista_data ?? null,
-                updated_at: novo.updated_at ?? a.updated_at
-              }
+              ...a,
+              nome_paciente: novo.nome_paciente || '',
+              data_nascimento: novo.data_nascimento || '',
+              cidade_natal: novo.cidade_natal ?? null,
+              telefone: novo.telefone ?? null,
+              data_agendamento: novo.data_agendamento,
+              data_consulta: novo.data_consulta ?? null,
+              hospital_id: novo.hospital_id ?? null,
+              especialidade: novo.especialidade ?? null,
+              medico: novo.medico ?? null,
+              procedimentos: novo.procedimentos ?? null,
+              procedimento_especificacao: novo.procedimento_especificacao ?? null,
+              documentos_ok: novo.documentos_ok ?? false,
+              documentos_urls: novo.documentos_urls ?? null,
+              documentos_data: novo.documentos_data ?? null,
+              ficha_pre_anestesica_ok: novo.ficha_pre_anestesica_ok ?? false,
+              ficha_pre_anestesica_url: novo.ficha_pre_anestesica_url ?? null,
+              ficha_pre_anestesica_data: novo.ficha_pre_anestesica_data ?? null,
+              complementares_ok: novo.complementares_ok ?? false,
+              complementares_urls: novo.complementares_urls ?? null,
+              complementares_data: novo.complementares_data ?? null,
+              avaliacao_anestesista: novo.avaliacao_anestesista ?? null,
+              avaliacao_anestesista_observacao: novo.avaliacao_anestesista_observacao ?? null,
+              avaliacao_anestesista_motivo_reprovacao: novo.avaliacao_anestesista_motivo_reprovacao ?? null,
+              avaliacao_anestesista_complementares: novo.avaliacao_anestesista_complementares ?? null,
+              avaliacao_anestesista_data: novo.avaliacao_anestesista_data ?? null,
+              updated_at: novo.updated_at ?? a.updated_at
+            }
             : a
         ));
       });
@@ -139,38 +169,38 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setLoading(true);
     try {
       const dados = await agendamentoService.getAll(hospitalId);
-      
+
       console.log('🩺 ANESTESIA - Total de agendamentos retornados:', dados.length);
-      
+
       // Filtrar apenas registros válidos (MESMA LÓGICA que Documentação e Faturamento)
       const agendamentosFiltrados = dados.filter(ag => {
         const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
         const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
-        
+
         // CASO 1: Tem paciente E procedimento → SEMPRE MOSTRAR (mesmo se is_grade_cirurgica = true)
         if (temPaciente && temProcedimento) {
           return true; // ✅ Incluir
         }
-        
+
         // CASO 2: Registro estrutural de grade (sem paciente) → OCULTAR
         if (ag.is_grade_cirurgica === true && !temPaciente) {
           return false; // ❌ Excluir (é apenas estrutura)
         }
-        
+
         // CASO 3: Registro vazio (sem procedimento E sem paciente) → OCULTAR
         if (!temProcedimento && !temPaciente) {
           return false; // ❌ Excluir
         }
-        
+
         // CASO 4: Demais casos (registros parcialmente preenchidos) → OCULTAR
         return false; // ❌ Excluir para manter consistência
       });
-      
+
       // DEBUG: Análise detalhada e contagem de pacientes únicos
       const totalOriginal = dados.length;
       const totalFiltrado = agendamentosFiltrados.length;
       const totalExcluidos = totalOriginal - totalFiltrado;
-      
+
       // Contar pacientes ÚNICOS no total filtrado
       const pacientesUnicos = new Set<string>();
       agendamentosFiltrados.forEach(ag => {
@@ -179,13 +209,13 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           pacientesUnicos.add(nomePaciente);
         }
       });
-      
+
       console.log('🩺 ANESTESIA - CONTAGEM:');
       console.log(`  Total de REGISTROS no banco: ${totalOriginal}`);
       console.log(`  Total de REGISTROS após filtro: ${totalFiltrado}`);
       console.log(`  Total de REGISTROS excluídos: ${totalExcluidos}`);
       console.log(`  🎯 PACIENTES ÚNICOS (final): ${pacientesUnicos.size}`);
-      
+
       setAgendamentos(agendamentosFiltrados);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
@@ -223,16 +253,16 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   // Agrupar por paciente único (para a tabela)
   const agruparPorPacienteUnico = (agendamentosList: Agendamento[]): Agendamento[] => {
     const pacientesMap = new Map<string, Agendamento>();
-    
+
     agendamentosList.forEach(ag => {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
       if (!nomePaciente || nomePaciente === '') return;
-      
+
       if (pacientesMap.has(nomePaciente)) {
         const existente = pacientesMap.get(nomePaciente)!;
         const dataExistente = new Date(existente.created_at || 0).getTime();
         const dataAtual = new Date(ag.created_at || 0).getTime();
-        
+
         if (dataAtual > dataExistente) {
           pacientesMap.set(nomePaciente, ag);
         }
@@ -240,10 +270,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         pacientesMap.set(nomePaciente, ag);
       }
     });
-    
+
     return Array.from(pacientesMap.values());
   };
-  
+
   // Calcular contadores para os filtros (PACIENTES ÚNICOS usando Set)
   const totalTodos = getPacientesUnicos(agendamentos);
   const totalPendentes = getPacientesUnicos(
@@ -252,12 +282,12 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const totalConcluidos = getPacientesUnicos(
     agendamentos.filter(ag => ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true)
   );
-  
+
   // Filtrar agendamentos por status (substituindo a lógica de abas)
   const agendamentosPorStatus = agendamentos.filter(ag => {
     const temExames = ag.documentos_ok === true;
     const temPreOperatorio = ag.ficha_pre_anestesica_ok === true;
-    
+
     if (filtroStatus === 'todos') {
       // Todos: mostrar todos os agendamentos
       return true;
@@ -270,24 +300,24 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     }
     return true;
   });
-  
+
   // Filtrar agendamentos por texto
   const agendamentosFiltradosCompletos = agendamentosPorStatus.filter(ag => {
     if (filtroPaciente) {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').toLowerCase();
       if (!nomePaciente.includes(filtroPaciente.toLowerCase())) return false;
     }
-    
+
     if (filtroDataConsulta) {
       const dataConsulta = formatarData(ag.data_consulta).toLowerCase();
       if (!dataConsulta.includes(filtroDataConsulta.toLowerCase())) return false;
     }
-    
+
     if (filtroDataCirurgia) {
       const dataCirurgia = formatarData(ag.data_agendamento).toLowerCase();
       if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
     }
-    
+
     // Filtro por mês da cirurgia (formato: "YYYY-MM")
     if (filtroMesCirurgia) {
       const dataCirurgiaRaw = ag.data_agendamento;
@@ -295,7 +325,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       const mesCirurgia = dataCirurgiaRaw.substring(0, 7);
       if (mesCirurgia !== filtroMesCirurgia) return false;
     }
-    
+
     if (filtroMedicoId) {
       const sel = medicosDisponiveis.find(m => m.id === filtroMedicoId);
       if (!sel) return false;
@@ -314,12 +344,12 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
         if (val !== f) return false;
       }
     }
-    
+
     return true;
   });
-  
+
   let agendamentosFiltrados = agruparPorPacienteUnico(agendamentosFiltradosCompletos);
-  
+
   // Alternar ordenação ao clicar no cabeçalho
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_cirurgia' | 'data_consulta'>('data_cirurgia');
   const handleOrdenacao = (coluna: 'data_cirurgia' | 'data_consulta') => {
@@ -330,7 +360,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       setDirecaoOrdenacao(prev => prev === 'asc' ? 'desc' : 'asc');
     }
   };
-  
+
   const parseDateStr = (s?: string | null) => {
     if (!s || s === '9999-12-31') return null;
     const d = new Date(s);
@@ -365,25 +395,25 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     const cmp = sA.localeCompare(sB);
     return direcaoOrdenacao === 'asc' ? cmp : -cmp;
   });
-  
+
   // Total e paginação
   const totalRegistros = agendamentosFiltrados.length;
   const totalPaginas = Math.ceil(totalRegistros / itensPorPagina);
-  
+
   useEffect(() => {
     setPaginaAtual(1);
   }, [filtroPaciente, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAvaliacaoAnestesista, filtroStatus]);
-  
+
   useEffect(() => {
     if (tabelaRef.current && paginaAtual > 1) {
       tabelaRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [paginaAtual]);
-  
+
   const indexInicio = (paginaAtual - 1) * itensPorPagina;
   const indexFim = indexInicio + itensPorPagina;
   const agendamentosPaginados = agendamentosFiltrados.slice(indexInicio, indexFim);
-  
+
   const limparFiltros = () => {
     setFiltroStatus('todos');
     setFiltroPaciente('');
@@ -393,7 +423,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setFiltroMedicoId('');
     setFiltroAvaliacaoAnestesista('');
   };
-  
+
   const temFiltrosAtivos = filtroStatus !== 'todos' || filtroPaciente || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || filtroAvaliacaoAnestesista;
 
   // Toggle expandir linha
@@ -425,7 +455,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   // Abrir modal para visualizar documentos (aba concluídos)
   const handleAbrirModalVisualizacao = async (ag: Agendamento) => {
     setAgendamentoSelecionado(ag);
-    
+
     // Carregar documentos de exames
     try {
       const examesUrls = ag.documentos_urls ? JSON.parse(ag.documentos_urls) : [];
@@ -433,10 +463,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     } catch {
       setDocumentosExames([]);
     }
-    
+
     // Carregar ficha pré-operatória
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
-    
+
     // Carregar documentos complementares
     try {
       const complementaresUrls = ag.complementares_urls ? JSON.parse(ag.complementares_urls) : [];
@@ -444,7 +474,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     } catch {
       setDocumentosComplementares([]);
     }
-    
+
     setModalVisualizacaoAberto(true);
   };
 
@@ -503,13 +533,24 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
 
       await agendamentoService.update(agendamentoSelecionado.id, updateData);
 
-      // Remover da lista (já tem ficha agora)
-      setAgendamentos(prev => prev.filter(ag => ag.id !== agendamentoSelecionado.id));
-      
+      // ATUALIZAÇÃO: Atualizar o item na lista em vez de remover
+      setAgendamentos(prev => prev.map(ag =>
+        ag.id === agendamentoSelecionado.id
+          ? { ...ag, ficha_pre_anestesica_url: urlData.publicUrl, ficha_pre_anestesica_ok: true, ficha_pre_anestesica_data: new Date().toISOString() }
+          : ag
+      ));
+
+      // Atualizar globalmente
+      applyUpdateEverywhere(agendamentoSelecionado.id, {
+        ficha_pre_anestesica_url: urlData.publicUrl,
+        ficha_pre_anestesica_ok: true,
+        ficha_pre_anestesica_data: new Date().toISOString()
+      });
+
       setArquivoFichaSelecionado(null);
       setFichaAnexada(urlData.publicUrl);
       setModalUploadAberto(false);
-      
+
       success('Ficha pré-anestésica anexada com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
@@ -542,7 +583,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     setAvaliacaoObservacao('');
     setAvaliacaoMotivoReprovacao('');
     setAvaliacaoComplementares('');
-    
+
     // Recolher a linha se um ID foi fornecido
     if (agendamentoId) {
       setLinhasExpandidas(prev => {
@@ -581,7 +622,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       console.log('🔍 DEBUG - Iniciando salvamento de avaliação');
       console.log('🔍 DEBUG - ID do agendamento:', agendamentoId);
       console.log('🔍 DEBUG - Tipo de avaliação:', avaliacaoTipo);
-      
+
       const updateData: Partial<Agendamento> = {
         avaliacao_anestesista: avaliacaoTipo,
         avaliacao_anestesista_data: new Date().toISOString()
@@ -619,7 +660,86 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
       setSalvandoAvaliacao(false);
     }
   };
-  
+
+  const getAihStatusStyle = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-orange-50 border-orange-400 text-orange-800';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-rose-50 border-rose-400 text-rose-800';
+      case 'auditor externo':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'aguardando ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'agendado':
+        return 'bg-slate-100 border-slate-400 text-slate-900';
+      case 'ag regulação':
+        return 'bg-indigo-50 border-indigo-400 text-indigo-800';
+      case 'solicitar':
+        return 'bg-amber-50 border-amber-400 text-amber-800';
+      case 'emitida':
+        return 'bg-green-50 border-green-400 text-green-800';
+      case 'aih represada':
+        return 'bg-red-50 border-red-400 text-red-800';
+      case 'ag ciência sms':
+        return 'bg-blue-50 border-blue-400 text-blue-800';
+      case 'ag. correção':
+        return 'bg-teal-50 border-teal-400 text-teal-800';
+      case 'n/a - urgência':
+        return 'bg-purple-50 border-purple-400 text-purple-800';
+      default:
+        return 'bg-white border-gray-300 text-gray-600';
+    }
+  };
+
+  const getAihDotColor = (status: string | null | undefined) => {
+    switch ((status || '').toLowerCase()) {
+      case 'autorizado':
+        return 'bg-green-500';
+      case 'pendência hospital':
+      case 'pendencia hospital':
+        return 'bg-orange-500';
+      case 'pendência faturamento':
+      case 'pendencia faturamento':
+        return 'bg-rose-500';
+      case 'auditor externo':
+        return 'bg-indigo-500';
+      case 'aguardando ciência sms':
+        return 'bg-blue-500';
+      case 'agendado':
+        return 'bg-slate-500';
+      case 'ag regulação':
+        return 'bg-indigo-500';
+      case 'solicitar':
+        return 'bg-amber-500';
+      case 'emitida':
+        return 'bg-green-500';
+      case 'aih represada':
+        return 'bg-red-500';
+      case 'ag ciência sms':
+        return 'bg-blue-500';
+      case 'ag. correção':
+        return 'bg-teal-500';
+      case 'n/a - urgência':
+        return 'bg-purple-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
+
+  const getConfirmacaoStyle = (status: string | null | undefined) => {
+    const s = (status || '').toLowerCase().trim();
+    if (s === 'confirmado') return 'bg-green-100 text-green-800 border-green-200';
+    if (s === 'aguardando') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    if (s === 'cancelado') return 'bg-red-100 text-red-800 border-red-200';
+    return 'bg-gray-100 text-gray-600 border-gray-200';
+  };
+
+
   // Limpar/Remover avaliação do anestesista
   const handleLimparAvaliacao = async (agendamentoId: string) => {
     setSalvandoAvaliacao(true);
@@ -652,16 +772,30 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   const renderizarLinhaAgendamento = (ag: Agendamento) => {
     const expandida = isLinhaExpandida(ag.id);
     const estaEditando = avaliacaoEmEdicao === ag.id;
-    
+
     // Sinalização verde: paciente com exames E ficha pré-anestésica (igual tela Documentação)
     const temExamesEPreOp = ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true;
-    
+
     return (
       <React.Fragment key={ag.id}>
         <tr className="transition-colors hover:bg-gray-50">
+          {/* Status AIH (PRIMEIRA COLUNA) */}
+          <td className="px-2 py-3 sm:w-28 md:w-32 lg:w-36 text-center">
+            {ag.status_aih ? (
+              <div className="flex items-center justify-center gap-1.5">
+                <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih)}`} />
+                <span className={`px-2 py-0.5 text-[10px] font-medium rounded border leading-tight ${getAihStatusStyle(ag.status_aih)}`}>
+                  {ag.status_aih}
+                </span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400">-</span>
+            )}
+          </td>
+
           {/* Paciente */}
           <td className="px-2 py-3 sm:w-auto md:w-auto lg:w-auto">
-            <div 
+            <div
               className="text-sm sm:text-xs font-medium text-gray-900 whitespace-normal break-words leading-tight"
               title={ag.nome_paciente || ag.nome || '-'}
             >
@@ -672,27 +806,27 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           <td className="px-2 py-3 sm:w-28 md:w-32 lg:w-40">
             <span className="text-sm sm:text-xs text-gray-700">{ag.n_prontuario || '-'}</span>
           </td>
-          
+
           {/* Procedimento */}
           <td className="px-2 py-3 sm:w-auto md:w-auto lg:w-auto">
-            <div 
+            <div
               className="text-sm sm:text-xs text-gray-700 whitespace-normal break-words leading-tight"
               title={ag.procedimentos || '-'}
             >
               {ag.procedimentos || '-'}
             </div>
           </td>
-          
+
           {/* Data Cirurgia */}
           <td className="px-2 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 sm:w-28 md:w-32 lg:w-36">
             {formatarData(ag.data_agendamento || ag.dataAgendamento)}
           </td>
-          
+
           {/* Data Consulta */}
           <td className="px-2 py-3 whitespace-nowrap text-sm sm:text-xs text-gray-500 sm:w-28 md:w-32 lg:w-36">
             {formatarData(ag.data_consulta)}
           </td>
-          
+
           {/* Médico */}
           <td className="px-2 py-3 sm:w-40 md:w-48 lg:w-56">
             <div className="text-sm sm:text-xs text-gray-700 whitespace-normal break-words leading-tight" title={ag.medico || '-'}>
@@ -704,12 +838,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           <td className="px-3 py-3 sm:w-56 md:w-64 lg:w-72">
             <div className="flex items-center gap-2">
               {/* Checkbox APROVADO */}
-              <label 
-                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${
-                  (estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'aprovado'
-                    ? 'bg-green-100 text-green-800 border-2 border-green-500'
-                    : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-green-400'
-                }`}
+              <label
+                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${(estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'aprovado'
+                  ? 'bg-green-100 text-green-800 border-2 border-green-500'
+                  : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-green-400'
+                  }`}
                 title="Aprovado"
               >
                 <input
@@ -730,12 +863,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               </label>
 
               {/* Checkbox REPROVADO */}
-              <label 
-                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${
-                  (estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'reprovado'
-                    ? 'bg-red-100 text-red-800 border-2 border-red-500'
-                    : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-red-400'
-                }`}
+              <label
+                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${(estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'reprovado'
+                  ? 'bg-red-100 text-red-800 border-2 border-red-500'
+                  : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-red-400'
+                  }`}
                 title="Reprovado"
               >
                 <input
@@ -756,12 +888,11 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               </label>
 
               {/* Checkbox COMPLEMENTARES */}
-              <label 
-                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${
-                  (estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'complementares'
-                    ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
-                    : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-blue-400'
-                }`}
+              <label
+                className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all text-xs font-medium ${(estaEditando ? avaliacaoTipo : ag.avaliacao_anestesista) === 'complementares'
+                  ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
+                  : 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-blue-400'
+                  }`}
                 title="Complementares"
               >
                 <input
@@ -782,60 +913,82 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               </label>
             </div>
           </td>
-          
+
+          {/* Confirmado (APÓS AVALIAÇÃO) */}
+          <td className="px-2 py-3 text-center sm:w-24 md:w-28 lg:w-32">
+            {ag.confirmacao ? (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-semibold uppercase ${getConfirmacaoStyle(ag.confirmacao)}`}>
+                {ag.confirmacao}
+              </span>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )}
+          </td>
+
           {/* Status Exames */}
           <td className="px-4 py-3 text-center sm:w-28 md:w-32 lg:w-36">
-            {ag.documentos_ok === true ? (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">
+            {ag.documentos_ok && ag.ficha_pre_anestesica_ok ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded border border-green-200" title="Exames e Ficha OK">
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
-                Com Exames
+                Completo
+              </span>
+            ) : ag.documentos_ok ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded border border-blue-200" title="Apenas Exames (Recepção)">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Só Exames
+              </span>
+            ) : ag.ficha_pre_anestesica_ok ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded border border-orange-200" title="Apenas Ficha Pré-Operatória">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Só Ficha
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded border border-red-200" title="Pendência de Documentação">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                Sem Exames
+                Pendente
               </span>
             )}
           </td>
-          
+
           {/* Ação */}
           <td className="px-4 py-3 text-center sm:w-32 md:w-36 lg:w-40">
-            {/* Se não tem ficha, mostrar botão de anexar. Se tem ficha, mostrar botão de visualizar */}
-            {ag.ficha_pre_anestesica_ok !== true ? (
-              <button
-                onClick={() => handleAbrirModal(ag)}
-                className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded transition-colors"
-              >
-                📋 Anexar Ficha
-              </button>
-            ) : (
-              <button
-                onClick={() => handleAbrirModalVisualizacao(ag)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1 mx-auto"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                Ver Docs
-              </button>
-            )}
+            <button
+              onClick={() => handleAbrirModalDocumentos(ag)}
+              className={`px-3 py-1.5 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1 mx-auto ${(ag.documentos_ok && ag.ficha_pre_anestesica_ok)
+                ? 'bg-green-600 hover:bg-green-700'
+                : ag.documentos_ok
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : ag.ficha_pre_anestesica_ok
+                    ? 'bg-orange-600 hover:bg-orange-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              Ver Docs
+            </button>
           </td>
-          
+
           {/* Expandir */}
           <td className="px-2 py-3 whitespace-nowrap text-center w-12">
             <button
               onClick={() => toggleExpandirLinha(ag.id)}
               className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
             >
-              <svg 
+              <svg
                 className={`w-4 h-4 transition-transform ${expandida ? 'rotate-90' : ''}`}
-                fill="none" 
-                stroke="currentColor" 
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -843,200 +996,200 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
             </button>
           </td>
         </tr>
-        
-        {expandida && (
-          <tr className="bg-gray-50">
-            <td colSpan={8} className="px-4 py-4">
-              {/* Dados do Paciente */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Nascimento</div>
-                  <div className="text-sm text-gray-900">{formatarData(ag.data_nascimento || ag.dataNascimento)}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Cidade</div>
-                  <div className="text-sm text-gray-900">{ag.cidade_natal || ag.cidadeNatal || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Telefone</div>
-                  <div className="text-sm text-gray-900">{ag.telefone || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Data Consulta</div>
-                  <div className="text-sm text-gray-900">{formatarData(ag.data_consulta)}</div>
-                </div>
-              </div>
 
-              {/* Seção de Avaliação do Anestesista - SIMPLIFICADA */}
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-3">
-                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Observações da Avaliação
-                </h4>
-
-                {/* Mostrar avaliação existente (se não estiver em edição) */}
-                {ag.avaliacao_anestesista && avaliacaoEmEdicao !== ag.id && (
-                  <div className={`p-4 rounded-lg ${
-                    ag.avaliacao_anestesista === 'aprovado' ? 'bg-green-50 border-l-4 border-green-500' :
-                    ag.avaliacao_anestesista === 'reprovado' ? 'bg-red-50 border-l-4 border-red-500' :
-                    'bg-blue-50 border-l-4 border-blue-500'
-                  }`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <div className={`text-sm font-bold mb-2 ${
-                          ag.avaliacao_anestesista === 'aprovado' ? 'text-green-800' :
-                          ag.avaliacao_anestesista === 'reprovado' ? 'text-red-800' :
-                          'text-blue-800'
-                        }`}>
-                          {ag.avaliacao_anestesista === 'aprovado' && '✅ APROVADO'}
-                          {ag.avaliacao_anestesista === 'reprovado' && '❌ REPROVADO'}
-                          {ag.avaliacao_anestesista === 'complementares' && 'ℹ️ OBSERVAÇÕES COMPLEMENTARES'}
-                        </div>
-                        <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {ag.avaliacao_anestesista === 'aprovado' && ag.avaliacao_anestesista_observacao}
-                          {ag.avaliacao_anestesista === 'reprovado' && ag.avaliacao_anestesista_motivo_reprovacao}
-                          {ag.avaliacao_anestesista === 'complementares' && ag.avaliacao_anestesista_complementares}
-                        </div>
-                        {ag.avaliacao_anestesista_data && (
-                          <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleIniciarAvaliacao(ag)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 flex-shrink-0"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Editar
-                      </button>
-                    </div>
+        {
+          expandida && (
+            <tr className="bg-gray-50">
+              <td colSpan={8} className="px-4 py-4">
+                {/* Dados do Paciente */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Nascimento</div>
+                    <div className="text-sm text-gray-900">{formatarData(ag.data_nascimento || ag.dataNascimento)}</div>
                   </div>
-                )}
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Cidade</div>
+                    <div className="text-sm text-gray-900">{ag.cidade_natal || ag.cidadeNatal || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Telefone</div>
+                    <div className="text-sm text-gray-900">{ag.telefone || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Data Consulta</div>
+                    <div className="text-sm text-gray-900">{formatarData(ag.data_consulta)}</div>
+                  </div>
+                </div>
 
-                {/* Formulário de avaliação (se estiver em edição ou não tiver avaliação) */}
-                {(!ag.avaliacao_anestesista || avaliacaoEmEdicao === ag.id) && (
-                  <div className="space-y-4">
-                    {/* Campos de texto baseados na opção selecionada NA LINHA */}
-                    {avaliacaoEmEdicao === ag.id && avaliacaoTipo && (
-                      <div className="mt-4">
-                        {avaliacaoTipo === 'aprovado' && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Observações sobre a Aprovação <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
-                              value={avaliacaoObservacao}
-                              onChange={(e) => setAvaliacaoObservacao(e.target.value)}
-                              placeholder="Ex: Paciente em boas condições gerais, exames dentro da normalidade..."
-                              rows={4}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
-                            />
+                {/* Seção de Avaliação do Anestesista - SIMPLIFICADA */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-3">
+                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Observações da Avaliação
+                  </h4>
+
+                  {/* Mostrar avaliação existente (se não estiver em edição) */}
+                  {ag.avaliacao_anestesista && avaliacaoEmEdicao !== ag.id && (
+                    <div className={`p-4 rounded-lg ${ag.avaliacao_anestesista === 'aprovado' ? 'bg-green-50 border-l-4 border-green-500' :
+                      ag.avaliacao_anestesista === 'reprovado' ? 'bg-red-50 border-l-4 border-red-500' :
+                        'bg-blue-50 border-l-4 border-blue-500'
+                      }`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className={`text-sm font-bold mb-2 ${ag.avaliacao_anestesista === 'aprovado' ? 'text-green-800' :
+                            ag.avaliacao_anestesista === 'reprovado' ? 'text-red-800' :
+                              'text-blue-800'
+                            }`}>
+                            {ag.avaliacao_anestesista === 'aprovado' && '✅ APROVADO'}
+                            {ag.avaliacao_anestesista === 'reprovado' && '❌ REPROVADO'}
+                            {ag.avaliacao_anestesista === 'complementares' && 'ℹ️ OBSERVAÇÕES COMPLEMENTARES'}
                           </div>
-                        )}
-
-                        {avaliacaoTipo === 'reprovado' && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Motivo da Reprovação <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
-                              value={avaliacaoMotivoReprovacao}
-                              onChange={(e) => setAvaliacaoMotivoReprovacao(e.target.value)}
-                              placeholder="Ex: Hipertensão não controlada, exames alterados, necessita avaliação cardiológica..."
-                              rows={4}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
-                            />
+                          <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                            {ag.avaliacao_anestesista === 'aprovado' && ag.avaliacao_anestesista_observacao}
+                            {ag.avaliacao_anestesista === 'reprovado' && ag.avaliacao_anestesista_motivo_reprovacao}
+                            {ag.avaliacao_anestesista === 'complementares' && ag.avaliacao_anestesista_complementares}
                           </div>
-                        )}
-
-                        {avaliacaoTipo === 'complementares' && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Observações Complementares <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
-                              value={avaliacaoComplementares}
-                              onChange={(e) => setAvaliacaoComplementares(e.target.value)}
-                              placeholder="Ex: Solicitar avaliação cardiológica adicional, aguardar resultado de exame pendente..."
-                              rows={4}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                            />
-                          </div>
-                        )}
-
-                        {/* Botões de ação */}
-                        <div className="flex gap-3 mt-4">
-                          <button
-                            onClick={() => handleSalvarAvaliacao(ag.id!)}
-                            disabled={salvandoAvaliacao}
-                            className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                          >
-                            {salvandoAvaliacao ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                                Salvando...
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Salvar Avaliação
-                              </>
-                            )}
-                          </button>
-                          
-                          {/* Botão Limpar: só mostra se já existe avaliação salva */}
-                          {ag.avaliacao_anestesista && (
-                            <button
-                              onClick={() => handleLimparAvaliacao(ag.id!)}
-                              disabled={salvandoAvaliacao}
-                              className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-                              title="Remover avaliação completamente"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          {ag.avaliacao_anestesista_data && (
+                            <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              Limpar
-                            </button>
+                              {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           )}
-                          
-                          <button
-                            onClick={() => handleCancelarAvaliacao(ag.id)}
-                            disabled={salvandoAvaliacao}
-                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            Cancelar
-                          </button>
                         </div>
+                        <button
+                          onClick={() => handleIniciarAvaliacao(ag)}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 flex-shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Editar
+                        </button>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* Mensagem inicial se não houver avaliação e não estiver em edição */}
-                    {!avaliacaoEmEdicao && !ag.avaliacao_anestesista && (
-                      <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                        <svg className="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <p className="font-medium">Selecione uma das opções na linha acima para avaliar</p>
-                        <p className="text-xs text-gray-400 mt-1">(✅ Aprovado / ❌ Reprovado / ℹ️ Complementares)</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </td>
-          </tr>
-        )}
-      </React.Fragment>
+                  {/* Formulário de avaliação (se estiver em edição ou não tiver avaliação) */}
+                  {(!ag.avaliacao_anestesista || avaliacaoEmEdicao === ag.id) && (
+                    <div className="space-y-4">
+                      {/* Campos de texto baseados na opção selecionada NA LINHA */}
+                      {avaliacaoEmEdicao === ag.id && avaliacaoTipo && (
+                        <div className="mt-4">
+                          {avaliacaoTipo === 'aprovado' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Observações sobre a Aprovação <span className="text-red-500">*</span>
+                              </label>
+                              <textarea
+                                value={avaliacaoObservacao}
+                                onChange={(e) => setAvaliacaoObservacao(e.target.value)}
+                                placeholder="Ex: Paciente em boas condições gerais, exames dentro da normalidade..."
+                                rows={4}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                              />
+                            </div>
+                          )}
+
+                          {avaliacaoTipo === 'reprovado' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Motivo da Reprovação <span className="text-red-500">*</span>
+                              </label>
+                              <textarea
+                                value={avaliacaoMotivoReprovacao}
+                                onChange={(e) => setAvaliacaoMotivoReprovacao(e.target.value)}
+                                placeholder="Ex: Hipertensão não controlada, exames alterados, necessita avaliação cardiológica..."
+                                rows={4}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                              />
+                            </div>
+                          )}
+
+                          {avaliacaoTipo === 'complementares' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Observações Complementares <span className="text-red-500">*</span>
+                              </label>
+                              <textarea
+                                value={avaliacaoComplementares}
+                                onChange={(e) => setAvaliacaoComplementares(e.target.value)}
+                                placeholder="Ex: Solicitar avaliação cardiológica adicional, aguardar resultado de exame pendente..."
+                                rows={4}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                              />
+                            </div>
+                          )}
+
+                          {/* Botões de ação */}
+                          <div className="flex gap-3 mt-4">
+                            <button
+                              onClick={() => handleSalvarAvaliacao(ag.id!)}
+                              disabled={salvandoAvaliacao}
+                              className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                              {salvandoAvaliacao ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                                  Salvando...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Salvar Avaliação
+                                </>
+                              )}
+                            </button>
+
+                            {/* Botão Limpar: só mostra se já existe avaliação salva */}
+                            {ag.avaliacao_anestesista && (
+                              <button
+                                onClick={() => handleLimparAvaliacao(ag.id!)}
+                                disabled={salvandoAvaliacao}
+                                className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                                title="Remover avaliação completamente"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Limpar
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleCancelarAvaliacao(ag.id)}
+                              disabled={salvandoAvaliacao}
+                              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mensagem inicial se não houver avaliação e não estiver em edição */}
+                      {!avaliacaoEmEdicao && !ag.avaliacao_anestesista && (
+                        <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <svg className="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <p className="font-medium">Selecione uma das opções na linha acima para avaliar</p>
+                          <p className="text-xs text-gray-400 mt-1">(✅ Aprovado / ❌ Reprovado / ℹ️ Complementares)</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          )
+        }
+      </React.Fragment >
     );
   };
 
@@ -1055,10 +1208,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
         >
-          <svg 
-            className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1083,7 +1236,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
             </button>
           )}
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           {/* Filtro de Status (substituindo abas) */}
           <div>
@@ -1098,7 +1251,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               <option value="concluidos">🟢 Concluídos ({totalConcluidos})</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
             <input
@@ -1109,7 +1262,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Data Cirurgia</label>
             <input
@@ -1121,7 +1274,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Data Consulta</label>
             <input
@@ -1133,7 +1286,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
-          
+
           {/* Filtro Mês da Cirurgia */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1142,11 +1295,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
             <select
               value={filtroMesCirurgia}
               onChange={(e) => setFiltroMesCirurgia(e.target.value)}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${
-                filtroMesCirurgia 
-                  ? 'border-teal-500 bg-teal-50' 
-                  : 'border-gray-300'
-              }`}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-colors bg-white font-medium ${filtroMesCirurgia
+                ? 'border-teal-500 bg-teal-50'
+                : 'border-gray-300'
+                }`}
             >
               <option value="">Todos os meses</option>
               <option value="2025-10">Outubro/2025</option>
@@ -1166,7 +1318,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               <option value="2026-12">Dezembro/2026</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Médico</label>
             <select
@@ -1198,17 +1350,16 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
             </select>
           </div>
         </div>
-        
+
         {temFiltrosAtivos && (
           <div className="mt-3 pt-3 border-t border-gray-200">
             <p className="text-xs text-gray-600">
               Mostrando <span className="font-semibold text-gray-800">{agendamentosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{totalTodos}</span> pacientes
               {filtroStatus !== 'todos' && (
-                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  filtroStatus === 'pendentes' ? 'bg-orange-100 text-orange-800' :
+                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${filtroStatus === 'pendentes' ? 'bg-orange-100 text-orange-800' :
                   filtroStatus === 'concluidos' ? 'bg-green-100 text-green-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>
+                    'bg-blue-100 text-blue-800'
+                  }`}>
                   {filtroStatus === 'pendentes' && '🟠 Pendentes'}
                   {filtroStatus === 'concluidos' && '🟢 Concluídos'}
                 </span>
@@ -1231,124 +1382,149 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           {totalRegistros > 0 && (
             <div ref={tabelaRef} className="mb-4 bg-white rounded-lg shadow overflow-hidden">
               <div className="p-4">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <div className="flex flex-col items-start gap-1">
-                    <p className="text-sm text-gray-700">
-                      Mostrando <span className="font-semibold">{Math.min(indexInicio + 1, totalRegistros)}</span> a{' '}
-                      <span className="font-semibold">{Math.min(indexFim, totalRegistros)}</span> de{' '}
-                      <span className="font-semibold">{totalRegistros}</span> pacientes
-                    </p>
-                    {agendamentosPaginados.length > 0 && (
-                      <p className="text-xs text-orange-600 font-medium">
-                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)} 
-                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento && 
-                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
-                        }
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="flex flex-col items-start gap-1">
+                      <p className="text-sm text-gray-700">
+                        Mostrando <span className="font-semibold">{Math.min(indexInicio + 1, totalRegistros)}</span> a{' '}
+                        <span className="font-semibold">{Math.min(indexFim, totalRegistros)}</span> de{' '}
+                        <span className="font-semibold">{totalRegistros}</span> pacientes
                       </p>
-                    )}
+                      {agendamentosPaginados.length > 0 && (
+                        <p className="text-xs text-orange-600 font-medium">
+                          📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)}
+                          {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento &&
+                            ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600">Por página:</label>
+                      <select
+                        value={itensPorPagina}
+                        onChange={(e) => {
+                          setItensPorPagina(Number(e.target.value));
+                          setPaginaAtual(1);
+                        }}
+                        className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      >
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
                   </div>
+
+                  {/* Navegação */}
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Por página:</label>
-                    <select
-                      value={itensPorPagina}
-                      onChange={(e) => {
-                        setItensPorPagina(Number(e.target.value));
-                        setPaginaAtual(1);
-                      }}
-                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    <button
+                      onClick={() => setPaginaAtual(prev => Math.max(1, prev - 1))}
+                      disabled={paginaAtual === 1}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      <option value="10">10</option>
-                      <option value="20">20</option>
-                      <option value="50">50</option>
-                      <option value="100">100</option>
-                    </select>
-                  </div>
-                </div>
+                      Anterior
+                    </button>
 
-                {/* Navegação */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPaginaAtual(prev => Math.max(1, prev - 1))}
-                    disabled={paginaAtual === 1}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Anterior
-                  </button>
+                    <div className="flex items-center gap-1">
+                      {(() => {
+                        const pages = [];
+                        const maxVisible = 5;
+                        let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
+                        let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
 
-                  <div className="flex items-center gap-1">
-                    {(() => {
-                      const pages = [];
-                      const maxVisible = 5;
-                      let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
-                      let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
-                      
-                      if (endPage - startPage < maxVisible - 1) {
-                        startPage = Math.max(1, endPage - maxVisible + 1);
-                      }
-
-                      if (startPage > 1) {
-                        pages.push(
-                          <button
-                            key={1}
-                            onClick={() => setPaginaAtual(1)}
-                            className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            1
-                          </button>
-                        );
-                        if (startPage > 2) {
-                          pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>);
+                        if (endPage - startPage < maxVisible - 1) {
+                          startPage = Math.max(1, endPage - maxVisible + 1);
                         }
-                      }
 
-                      for (let i = startPage; i <= endPage; i++) {
-                        pages.push(
-                          <button
-                            key={i}
-                            onClick={() => setPaginaAtual(i)}
-                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                              paginaAtual === i
+                        if (startPage > 1) {
+                          pages.push(
+                            <button
+                              key={1}
+                              onClick={() => setPaginaAtual(1)}
+                              className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              1
+                            </button>
+                          );
+                          if (startPage > 2) {
+                            pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>);
+                          }
+                        }
+
+                        for (let i = startPage; i <= endPage; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => setPaginaAtual(i)}
+                              className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${paginaAtual === i
                                 ? 'bg-orange-600 text-white'
                                 : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            {i}
-                          </button>
-                        );
-                      }
-
-                      if (endPage < totalPaginas) {
-                        if (endPage < totalPaginas - 1) {
-                          pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>);
+                                }`}
+                            >
+                              {i}
+                            </button>
+                          );
                         }
-                        pages.push(
-                          <button
-                            key={totalPaginas}
-                            onClick={() => setPaginaAtual(totalPaginas)}
-                            className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            {totalPaginas}
-                          </button>
-                        );
-                      }
 
-                      return pages;
-                    })()}
+                        if (endPage < totalPaginas) {
+                          if (endPage < totalPaginas - 1) {
+                            pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>);
+                          }
+                          pages.push(
+                            <button
+                              key={totalPaginas}
+                              onClick={() => setPaginaAtual(totalPaginas)}
+                              className="w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              {totalPaginas}
+                            </button>
+                          );
+                        }
+
+                        return pages;
+                      })()}
+                    </div>
+
+                    <button
+                      onClick={() => setPaginaAtual(prev => Math.min(totalPaginas, prev + 1))}
+                      disabled={paginaAtual === totalPaginas}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Próxima
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => setPaginaAtual(prev => Math.min(totalPaginas, prev + 1))}
-                    disabled={paginaAtual === totalPaginas}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Próxima
-                  </button>
                 </div>
-              </div>
               </div>
             </div>
           )}
+
+          {/* LEGENDA DE STATUS DE DOCUMENTOS */}
+          <div className="flex flex-wrap gap-4 mb-4 px-2 py-3 bg-white rounded-lg border border-gray-100 shadow-sm text-xs">
+            <span className="font-bold text-gray-700 mr-2 flex items-center gap-1">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Legenda Docs:
+            </span>
+            <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded border border-green-100">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-green-200"></span>
+              <span className="text-gray-700 font-medium">Completo (Exames + Ficha)</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-200"></span>
+              <span className="text-gray-700 font-medium">Só Exames</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded border border-orange-100">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-orange-200"></span>
+              <span className="text-gray-700 font-medium">Só Ficha Pré-Op</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-red-50 px-2 py-1 rounded border border-red-100">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-200"></span>
+              <span className="text-gray-700 font-medium">Pendente</span>
+            </div>
+          </div>
 
           {/* Tabela */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -1356,6 +1532,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
               <table className="w-full divide-y divide-gray-200 table-auto">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
+                    {/* Status AIH (PRIMEIRA COLUNA) */}
+                    <th className="px-2 py-3 text-left pl-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                      Status AIH
+                    </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Paciente
                     </th>
@@ -1365,7 +1545,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Procedimento
                     </th>
-                    <th 
+                    <th
                       className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
@@ -1377,7 +1557,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                         </span>
                       </div>
                     </th>
-                    <th 
+                    <th
                       className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_consulta')}
                       title="Clique para ordenar por Data Consulta"
@@ -1394,6 +1574,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     </th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-56 md:w-64 lg:w-72">
                       🩺 Avaliação Anestesista
+                    </th>
+                    {/* Confirmado (LOGÓ APÓS AVALIAÇÃO) */}
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                      Confirmado
                     </th>
                     <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36">
                       Status Exames
@@ -1448,8 +1632,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                     </p>
                     {agendamentosPaginados.length > 0 && (
                       <p className="text-xs text-orange-600 font-medium">
-                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)} 
-                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento && 
+                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)}
+                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento &&
                           ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
                         }
                       </p>
@@ -1488,7 +1672,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                       const maxVisible = 5;
                       let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
                       let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
-                      
+
                       if (endPage - startPage < maxVisible - 1) {
                         startPage = Math.max(1, endPage - maxVisible + 1);
                       }
@@ -1513,11 +1697,10 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                           <button
                             key={i}
                             onClick={() => setPaginaAtual(i)}
-                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                              paginaAtual === i
-                                ? 'bg-orange-600 text-white'
-                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                            }`}
+                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${paginaAtual === i
+                              ? 'bg-orange-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                              }`}
                           >
                             {i}
                           </button>
@@ -1601,7 +1784,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           ) : (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2">📤 Anexar ficha pré-anestésica:</h3>
-              
+
               <input
                 ref={fileInputFichaRef}
                 type="file"
@@ -1816,7 +1999,185 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           </div>
         </div>
       </Modal>
-      
+
+      {/* Modal COMPLETO de Visualização de Documentos (Estilo DocumentacaoView) */}
+      <Modal
+        isOpen={modalDocumentosAberto}
+        onClose={() => {
+          setModalDocumentosAberto(false);
+          setAgendamentoSelecionado(null);
+          setDocumentosExames([]);
+          setDocumentosComplementares([]);
+        }}
+        title={`📄 Documentos - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
+        size="large"
+      >
+        <div className="space-y-4">
+          {/* Informações do Paciente */}
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Procedimento:</strong> {agendamentoSelecionado?.procedimentos || '-'}
+            </p>
+            <p className="text-sm text-gray-700">
+              <strong>Data Cirurgia:</strong> {formatarData(agendamentoSelecionado?.data_agendamento)}
+            </p>
+          </div>
+
+          {/* Abas */}
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => setAbaAtivaDocs('exames')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${abaAtivaDocs === 'exames'
+                ? 'border-b-2 border-blue-500 text-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              Exames (Recepção)
+            </button>
+            <button
+              onClick={() => setAbaAtivaDocs('preop')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${abaAtivaDocs === 'preop'
+                ? 'border-b-2 border-orange-500 text-orange-600'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              Ficha Pré-Op
+            </button>
+            <button
+              onClick={() => setAbaAtivaDocs('complementares')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${abaAtivaDocs === 'complementares'
+                ? 'border-b-2 border-purple-500 text-purple-600'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              Docs Complementares
+            </button>
+          </div>
+
+          {/* Conteúdo das Abas */}
+          <div className="pt-2 min-h-[200px]">
+            {/* ABA 1: EXAMES (Recepção) */}
+            {abaAtivaDocs === 'exames' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-gray-700">Exames Anexados (Recepção)</h4>
+                </div>
+
+                {documentosExames.length > 0 ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {documentosExames.map((url, index) => {
+                      const fileName = url.split('/').pop() || `Exame ${index + 1}`;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded hover:bg-green-100 transition-colors border border-green-100">
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1 truncate"
+                          >
+                            <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="truncate">{fileName}</span>
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-lg dashed border-2 border-gray-200">
+                    <p className="text-sm text-gray-400">Nenhum exame anexado pela recepção.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ABA 2: FICHA PRÉ-OP */}
+            {abaAtivaDocs === 'preop' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-gray-700">Ficha Pré-Anestésica</h4>
+                </div>
+
+                {agendamentoSelecionado?.ficha_pre_anestesica_url ? (
+                  <div className="p-3 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-colors">
+                    <a
+                      href={agendamentoSelecionado.ficha_pre_anestesica_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 text-blue-600 hover:underline"
+                    >
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <svg className="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm text-gray-900">
+                          {agendamentoSelecionado.ficha_pre_anestesica_url.split('/').pop()}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Clique para visualizar
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-lg dashed border-2 border-gray-200">
+                    <p className="text-sm text-gray-400">Nenhuma ficha pré-anestésica anexada.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ABA 3: COMPLEMENTARES */}
+            {abaAtivaDocs === 'complementares' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-gray-700">Documentos Complementares</h4>
+                </div>
+
+                {documentosComplementares.length > 0 ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {documentosComplementares.map((url, index) => {
+                      const fileName = url.split('/').pop() || `Complementar ${index + 1}`;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 bg-purple-50 rounded hover:bg-purple-100 transition-colors border border-purple-100">
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1 truncate"
+                          >
+                            <svg className="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="truncate">{fileName}</span>
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-lg dashed border-2 border-gray-200">
+                    <p className="text-sm text-gray-400">Nenhum documento complementar anexado.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-4 border-t mt-2">
+            <button
+              onClick={() => setModalDocumentosAberto(false)}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium text-sm"
+            >
+              Fechar Visualização
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Sistema de Toasts */}
       <ToastContainer toasts={toasts} onRemoveToast={removerToast} />
     </div>
