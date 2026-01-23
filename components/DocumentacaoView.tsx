@@ -1129,32 +1129,34 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   
   const handleSalvarJustificativa = async (ag: Agendamento) => {
     if (!ag.id) return;
-    if ((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim()) {
-      warning('Justificativa já registrada; altere pela tela de Faturamento');
-      return;
-    }
-    const texto = (justificativaTextoRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento ?? '').trim();
-    const nome = (justificativaNomeRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento_nome ?? '').trim();
+    const texto = (justificativaTextoRefs.current[ag.id!]?.value ?? '').trim();
+    const nome = (justificativaNomeRefs.current[ag.id!]?.value ?? '').trim();
     if (!nome) {
       toastError('Informe o Nome do Colaborador para registrar a justificativa');
       justificativaNomeRefs.current[ag.id!]?.focus();
       return;
     }
+    const existente = (ag.justificativa_alteracao_agendamento || '').trim();
+    const agora = new Date();
+    const dtBr = `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const entrada = texto ? `[${dtBr}] ${nome}\n${texto}` : `[${dtBr}] ${nome}`;
+    const novoTexto = existente ? `${existente}\n\n${entrada}` : entrada;
     const payload: Partial<Agendamento> = {
-      justificativa_alteracao_agendamento: texto || null,
-      justificativa_alteracao_agendamento_nome: nome || null,
-      justificativa_alteracao_agendamento_nome_hora: new Date().toISOString()
+      justificativa_alteracao_agendamento: novoTexto,
+      justificativa_alteracao_agendamento_nome: nome,
+      justificativa_alteracao_agendamento_nome_hora: agora.toISOString()
     };
     try {
       setSalvandoJustificativaId(ag.id);
-      const atualizado = await agendamentoService.update(ag.id, payload);
+      await agendamentoService.update(ag.id, payload);
       setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
       if (justificativaTextoRefs.current[ag.id!]) {
-        justificativaTextoRefs.current[ag.id!]!.value = texto || '';
+        justificativaTextoRefs.current[ag.id!]!.value = '';
       }
       if (justificativaNomeRefs.current[ag.id!]) {
-        justificativaNomeRefs.current[ag.id!]!.value = nome || '';
+        justificativaNomeRefs.current[ag.id!]!.value = '';
       }
+      setJustificativaNomePreenchida(prev => ({ ...prev, [ag.id!]: false }));
       success('Justificativa salva');
     } catch (error) {
       console.error('Erro ao salvar justificativa:', error);
@@ -2396,7 +2398,10 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 </div>
                 </div>
               
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Observação do Agendamento (compacto, mesmo tamanho do Faturamento) */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-blue-600">📝</span>
                   <label className="text-sm font-semibold text-gray-700">
@@ -2459,10 +2464,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                       Apagar
                     </button>
                   </div>
+                </div>
               </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-amber-600">💳</span>
@@ -2477,26 +2480,27 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               {(() => {
                 const justificativaSalva = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
                 return (
-                  <div className={`p-3 border rounded-lg ${justificativaSalva ? 'bg-violet-50/70 border-violet-200 opacity-80' : 'bg-violet-50 border-violet-200'}`}>
+                  <div className={`p-3 border rounded-lg ${justificativaSalva ? 'bg-violet-50/70 border-violet-200 opacity-80' : 'bg-violet-50 border-violet-200'} md:col-span-2`}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-violet-600">✍️</span>
                       <label className="text-sm font-semibold text-gray-700">
                         Justificativa de Alteração
                       </label>
                     </div>
+                    <div className="text-xs text-gray-500 mb-2">Adicionar nova justificativa</div>
                     <div className="space-y-2">
                       <textarea
-                        defaultValue={ag.justificativa_alteracao_agendamento ?? ''}
+                        defaultValue={''}
                         ref={(el) => { justificativaTextoRefs.current[ag.id!] = el; }}
                         placeholder="Descreva a justificativa da alteração..."
-                        className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none transition-colors bg-white"
                         rows={2}
-                        readOnly={justificativaSalva}
+                        readOnly={false}
                         disabled={salvandoJustificativaId === ag.id}
                       />
                       <input
                         type="text"
-                        defaultValue={ag.justificativa_alteracao_agendamento_nome ?? ''}
+                        defaultValue={''}
                         ref={(el) => { justificativaNomeRefs.current[ag.id!] = el; }}
                           required
                           onInput={(e) => {
@@ -2504,19 +2508,19 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                             setJustificativaNomePreenchida(prev => ({ ...prev, [ag.id!]: !!v }));
                           }}
                         placeholder="Nome do colaborador"
-                        className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors ${justificativaSalva ? 'bg-violet-50 text-gray-700 border-violet-100' : 'border-gray-300'}`}
-                        readOnly={justificativaSalva}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-colors bg-white"
+                        readOnly={false}
                         disabled={salvandoJustificativaId === ag.id}
                       />
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-500">
-                          {justificativaSalva ? 'Justificativa salva' : 'Nenhuma justificativa registrada'}
+                          {justificativaSalva ? 'Justificativas registradas' : 'Nenhuma justificativa registrada'}
                         </span>
                         <button
                           onClick={() => handleSalvarJustificativa(ag)}
-                            disabled={justificativaSalva || salvandoJustificativaId === ag.id}
+                            disabled={salvandoJustificativaId === ag.id}
                           className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                              justificativaSalva || salvandoJustificativaId === ag.id
+                              salvandoJustificativaId === ag.id
                                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                 : 'bg-violet-600 text-white hover:bg-violet-700'
                           }`}
@@ -2536,12 +2540,9 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                           )}
                         </button>
                       </div>
-                      {(ag.justificativa_alteracao_agendamento_nome || ag.justificativa_alteracao_agendamento_nome_hora) && (
-                        <div className="text-xs text-gray-500">
-                          {ag.justificativa_alteracao_agendamento_nome && <>Por: {ag.justificativa_alteracao_agendamento_nome}</>}
-                          {ag.justificativa_alteracao_agendamento_nome_hora && (
-                            <> • {new Date(ag.justificativa_alteracao_agendamento_nome_hora).toLocaleDateString('pt-BR')} às {new Date(ag.justificativa_alteracao_agendamento_nome_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
-                          )}
+                      {ag.justificativa_alteracao_agendamento && (
+                        <div className="text-xs text-gray-700 bg-white border border-violet-100 rounded p-2 whitespace-pre-wrap">
+                          {ag.justificativa_alteracao_agendamento}
                         </div>
                       )}
                     </div>
