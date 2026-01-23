@@ -14,10 +14,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null); // ID do agendamento sendo baixado
-  
+
   // Estado para controlar linhas expandidas
   const [linhasExpandidas, setLinhasExpandidas] = useState<Set<string>>(new Set());
-  
+
   // Estados para filtros de busca
   const [filtroPaciente, setFiltroPaciente] = useState<string>('');
   const [filtroDataConsulta, setFiltroDataConsulta] = useState<string>('');
@@ -35,17 +35,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [filtroDataInsercao, setFiltroDataInsercao] = useState<string>('');
   const [cancelInfoOpen, setCancelInfoOpen] = useState<{ [id: string]: boolean }>({});
   const [aihDropdownOpen, setAihDropdownOpen] = useState<{ [id: string]: boolean }>({});
-  
+
   // Estados para ordenação
   const [colunaOrdenacao, setColunaOrdenacao] = useState<'data_consulta' | 'data_cirurgia' | null>('data_cirurgia');
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('asc');
-  
+
   // Estados para modal de NÃO LIBERADO
   const [modalNaoLiberadoAberto, setModalNaoLiberadoAberto] = useState(false);
   const [agendamentoNaoLiberado, setAgendamentoNaoLiberado] = useState<Agendamento | null>(null);
   const [observacaoNaoLiberado, setObservacaoNaoLiberado] = useState<string>('');
   const [salvandoNaoLiberado, setSalvandoNaoLiberado] = useState(false);
-  
+
   // Estados de Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [itensPorPagina, setItensPorPagina] = useState(20);
@@ -69,7 +69,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     'Ag. Correção',
     'N/A - Urgência'
   ];
-  
+
   const normalizeAih = (s?: string | null) => {
     const v = (s || '').toString().trim().toLowerCase();
     const noAccents = v
@@ -85,7 +85,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     if (cleaned.includes('ag') && cleaned.includes('correcao')) return 'ag correcao';
     return cleaned;
   };
-  
+
   // Estado para controlar visualização de pendências
   const [mostrarPendencias, setMostrarPendencias] = useState(false);
   const { success, error: toastError, warning } = useToast();
@@ -97,7 +97,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [justificadosHojeLista, setJustificadosHojeLista] = useState<Agendamento[]>([]);
   const [bellDate, setBellDate] = useState<string>('');
   const confirmActionRef = useRef<(() => void) | null>(null);
-  
+
   const hojeLocalStr = () => {
     const d = new Date();
     const y = d.getFullYear();
@@ -113,13 +113,13 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   useEffect(() => {
     carregarAgendamentos();
   }, [hospitalId]);
-  
+
   useEffect(() => {
     const carregarMedicos = async () => {
       try {
         const medicos = await medicoService.getAll(hospitalId);
         setMedicosDisponiveis(medicos || []);
-      } catch {}
+      } catch { }
     };
     if (hospitalId) carregarMedicos();
   }, [hospitalId]);
@@ -134,37 +134,37 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         faturamento_liberado: dados[0].faturamento_liberado,
         faturamento_observacao: dados[0].faturamento_observacao
       } : 'Nenhum registro');
-      
+
       // Filtrar registros de grade cirúrgica (MESMA LÓGICA que Documentação e Anestesia)
       const semGradeCirurgica = dados.filter(ag => {
         const temPaciente = ag.nome_paciente && ag.nome_paciente.trim() !== '';
         const temProcedimento = ag.procedimentos && ag.procedimentos.trim() !== '';
-        
+
         // CASO 1: Tem paciente E procedimento → SEMPRE MOSTRAR (mesmo se is_grade_cirurgica = true)
         if (temPaciente && temProcedimento) {
           return true; // ✅ Incluir
         }
-        
+
         // CASO 2: Registro estrutural de grade (sem paciente) → OCULTAR
         if (ag.is_grade_cirurgica === true && !temPaciente) {
           return false; // ❌ Excluir (é apenas estrutura)
         }
-        
+
         // CASO 3: Registro vazio (sem procedimento E sem paciente) → OCULTAR
         if (!temProcedimento && !temPaciente) {
           return false; // ❌ Excluir
         }
-        
+
         // CASO 4: Demais casos → MOSTRAR (mesma lógica da Documentação)
         return true;
       });
       const agendamentosFiltrados = semGradeCirurgica;
-      
+
       // DEBUG: Análise detalhada e contagem de pacientes únicos
       const totalOriginal = dados.length;
       const totalFiltrado = agendamentosFiltrados.length;
       const totalExcluidos = totalOriginal - totalFiltrado;
-      
+
       // Contar pacientes ÚNICOS no total filtrado
       const pacientesUnicos = new Set<string>();
       agendamentosFiltrados.forEach(ag => {
@@ -173,29 +173,29 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           pacientesUnicos.add(nomePaciente);
         }
       });
-      
+
       console.log('💰 FATURAMENTO - CONTAGEM:');
       console.log(`  Total de REGISTROS no banco: ${totalOriginal}`);
       console.log(`  Total de REGISTROS após filtro: ${totalFiltrado}`);
       console.log(`  Total de REGISTROS excluídos: ${totalExcluidos}`);
       console.log(`  🎯 PACIENTES ÚNICOS (final): ${pacientesUnicos.size}`);
-      
+
       // Estatísticas (apenas pacientes reais, não procedimentos vazios)
-      const comPaciente = agendamentosFiltrados.filter(ag => 
+      const comPaciente = agendamentosFiltrados.filter(ag =>
         ag.nome_paciente && ag.nome_paciente.trim() !== '' &&
         ag.procedimentos && ag.procedimentos.trim() !== ''
       );
-      const prontos = comPaciente.filter(ag => 
+      const prontos = comPaciente.filter(ag =>
         ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true
       ).length;
-      const pendentes = comPaciente.filter(ag => 
+      const pendentes = comPaciente.filter(ag =>
         !(ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true)
       ).length;
-      
+
       console.log('  Total de REGISTROS (com paciente e procedimento):', comPaciente.length);
       console.log('   - Prontos (exames + pré-op):', prontos);
       console.log('   - Pendentes:', pendentes);
-      
+
       setAgendamentos(agendamentosFiltrados);
       const hoje = hojeLocalStr();
       const countHoje = agendamentosFiltrados.filter(a => {
@@ -218,7 +218,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setLoading(false);
     }
   };
-  
+
   const [agendamentosBuscaExtra, setAgendamentosBuscaExtra] = useState<Agendamento[]>([]);
   const [agendamentosBuscaConsulta, setAgendamentosBuscaConsulta] = useState<Agendamento[]>([]);
   const [agendamentosBuscaCirurgia, setAgendamentosBuscaCirurgia] = useState<Agendamento[]>([]);
@@ -600,15 +600,15 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     }
     return dataStr;
   };
-  
+
   // Formatar procedimento com especificação (se houver)
   const formatarProcedimento = (ag: Agendamento): string => {
     const base = ag.procedimentos || '';
     const especificacao = ag.procedimento_especificacao || '';
-    
+
     if (!base) return '-';
     if (!especificacao) return base;
-    
+
     return `${base} - ${especificacao}`;
   };
 
@@ -658,16 +658,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Agrupar por paciente único (para relatórios, se necessário no futuro)
   const agruparPorPacienteUnico = (agendamentosList: Agendamento[]): Agendamento[] => {
     const pacientesMap = new Map<string, Agendamento>();
-    
+
     agendamentosList.forEach(ag => {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').trim().toLowerCase();
       if (!nomePaciente || nomePaciente === '') return;
-      
+
       if (pacientesMap.has(nomePaciente)) {
         const existente = pacientesMap.get(nomePaciente)!;
         const dataExistente = new Date(existente.created_at || 0).getTime();
         const dataAtual = new Date(ag.created_at || 0).getTime();
-        
+
         if (dataAtual > dataExistente) {
           pacientesMap.set(nomePaciente, ag);
         }
@@ -675,7 +675,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         pacientesMap.set(nomePaciente, ag);
       }
     });
-    
+
     return Array.from(pacientesMap.values());
   };
 
@@ -699,11 +699,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   });
   const agendamentosProntos = agendamentosComPaciente.filter(ag => ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true);
   const agendamentosPendentes = agendamentosComPaciente.filter(ag => !(ag.documentos_ok === true && ag.ficha_pre_anestesica_ok === true));
-  
+
   // Calcular pacientes únicos para os KPIs (usando Set - mais simples e direto)
   const totalPacientesUnicos = getPacientesUnicos(agendamentosComPaciente);
   const totalPendentesUnicos = getPacientesUnicos(agendamentosPendentes);
-  
+
   // Aplicar filtros (mantidos)
   const aplicarFiltros = (lista: Agendamento[]) => {
     return lista.filter(ag => {
@@ -712,32 +712,32 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         const statusEx = getStatusPaciente(ag);
         if (statusEx.texto.toUpperCase() !== filtroStatusExames.toUpperCase()) return false;
       }
-      
+
       // Filtro por paciente
       if (filtroPaciente) {
         const nomePaciente = (ag.nome_paciente || ag.nome || '').toLowerCase();
         if (!nomePaciente.includes(filtroPaciente.toLowerCase())) return false;
       }
-      
+
       // Filtro por Nº Prontuário
       if (filtroProntuario) {
         const filtroDigits = (filtroProntuario || '').replace(/\D/g, '');
         const prDigits = (ag.n_prontuario || '').toString().replace(/\D/g, '');
         if (!prDigits.includes(filtroDigits)) return false;
       }
-      
+
       // Filtro por data consulta
       if (filtroDataConsulta) {
         const dataConsulta = formatarData(ag.data_consulta).toLowerCase();
         if (!dataConsulta.includes(filtroDataConsulta.toLowerCase())) return false;
       }
-      
+
       // Filtro por data cirurgia
       if (filtroDataCirurgia) {
         const dataCirurgia = formatarData(ag.data_agendamento).toLowerCase();
         if (!dataCirurgia.includes(filtroDataCirurgia.toLowerCase())) return false;
       }
-      
+
       // Filtro por mês da cirurgia (formato: "YYYY-MM")
       if (filtroMesCirurgia) {
         const dataCirurgiaRaw = ag.data_agendamento;
@@ -745,7 +745,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         const mesCirurgia = dataCirurgiaRaw.substring(0, 7);
         if (mesCirurgia !== filtroMesCirurgia) return false;
       }
-      
+
       // Filtro por médico
       if (filtroMedicoId) {
         const agMedicoId = ag.medico_id || (ag as any).medicoId || '';
@@ -758,20 +758,20 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           if (!nomeSel || nomeAg !== nomeSel) return false;
         }
       }
-      
+
       // Filtro por Status AIH (multi-seleção)
       if (Array.isArray(filtroAih) && filtroAih.length > 0) {
         const aih = normalizeAih(ag.status_aih);
         const selecionados = filtroAih.map(s => normalizeAih(s));
         if (!selecionados.includes(aih)) return false;
       }
-      
+
       // Filtro por Status Interno
       if (filtroStatusInterno) {
         const interno = (ag.status_de_liberacao || '').toString().toLowerCase();
         if (interno !== filtroStatusInterno.toLowerCase()) return false;
       }
-      
+
       // Filtro por Confirmado
       if (filtroConfirmado) {
         const c = (ag.confirmacao || '').toString().toLowerCase();
@@ -781,7 +781,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           if (c === 'confirmado') return false;
         }
       }
-      
+
       // Filtro por observação (Agendamento e Faturamento)
       if (filtroObservacao) {
         const obsAg = (ag.observacao_agendamento || '').trim();
@@ -793,7 +793,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         if (filtroObservacao === 'obs_ambos' && !(hasAg && hasFat)) return false;
         if (filtroObservacao === 'sem_observacao' && (hasAg || hasFat)) return false;
       }
-      
+
       if (filtroJustificativa) {
         const hasJust = !!((ag.justificativa_alteracao_agendamento || '').trim() || (ag.justificativa_alteracao_agendamento_nome || '').trim());
         if (filtroJustificativa === 'com_justificativa' && !hasJust) return false;
@@ -803,22 +803,22 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           if (aihRaw === 'autorizado' || aihRaw === 'n/a - urgência' || aihRaw === 'n/a - urgencia') return false;
         }
       }
-      
+
       // Filtro por Data de Inserção (created_at, formato YYYY-MM-DD)
       if (filtroDataInsercao) {
         const created = (ag.created_at || '').toString();
         const datePart = created.includes('T') ? created.split('T')[0] : created.substring(0, 10);
         if (!datePart || datePart !== filtroDataInsercao) return false;
       }
-      
+
       return true;
     });
   };
-  
+
   const agendamentosComAnexosFiltrados = aplicarFiltros(agendamentosComPaciente);
   const agendamentosPendentesFiltrados = aplicarFiltros(agendamentosPendentes);
   const agendamentosTodosFiltrados = aplicarFiltros(fonteAgendamentos);
-  
+
   // Limpar todos os filtros
   const limparFiltros = () => {
     setFiltroStatusExames('');
@@ -874,10 +874,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const periodoTxt = `${start ? start.toLocaleDateString('pt-BR') : '-'} a ${end ? end.toLocaleDateString('pt-BR') : '-'}`;
     const statusTxt = selecionados.join(', ');
     const headers = [
-      'STATUS AIH','PACIENTE','PRONTUÁRIO','DATA NASCIMENTO','PROCEDIMENTO','CIRURGIÃO','MUNICÍPIO',
-      'DATA CONSULTA','DATA CIRURGIA','STATUS INTERNO','CONFIRMADO',
-      'OBS AGENDAMENTO','OBS FATURAMENTO','JUSTIFICATIVA','JUSTIFICATIVA POR','JUSTIFICATIVA DATA/HORA',
-      'EXAMES OK','PRÉ-OP OK','COMPLEMENTAR OK'
+      'STATUS AIH', 'PACIENTE', 'PRONTUÁRIO', 'DATA NASCIMENTO', 'PROCEDIMENTO', 'CIRURGIÃO', 'MUNICÍPIO',
+      'DATA CONSULTA', 'DATA CIRURGIA', 'STATUS INTERNO', 'CONFIRMADO',
+      'OBS AGENDAMENTO', 'OBS FATURAMENTO', 'JUSTIFICATIVA', 'JUSTIFICATIVA POR', 'JUSTIFICATIVA DATA/HORA',
+      'EXAMES OK', 'PRÉ-OP OK', 'COMPLEMENTAR OK'
     ];
     const aoaRows = lista.map(ag => {
       return [
@@ -927,29 +927,29 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     resumoData.push([`Resumo • Status: ${statusTxt} • Período: ${periodoTxt} • Total: ${lista.length}`]);
     resumoData.push([]);
     resumoData.push(['Por Status AIH']);
-    resumoData.push(['Status AIH','Qtd']);
-    Object.entries(statusMap).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>resumoData.push([k,String(v)]));
+    resumoData.push(['Status AIH', 'Qtd']);
+    Object.entries(statusMap).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => resumoData.push([k, String(v)]));
     resumoData.push([]);
     resumoData.push(['Por Médico']);
-    resumoData.push(['Médico','Qtd']);
-    Object.entries(medicoMap).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>resumoData.push([k,String(v)]));
+    resumoData.push(['Médico', 'Qtd']);
+    Object.entries(medicoMap).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => resumoData.push([k, String(v)]));
     resumoData.push([]);
     resumoData.push(['Por Especialidade']);
-    resumoData.push(['Especialidade','Qtd']);
-    Object.entries(espMap).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>resumoData.push([k,String(v)]));
+    resumoData.push(['Especialidade', 'Qtd']);
+    Object.entries(espMap).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => resumoData.push([k, String(v)]));
     resumoData.push([]);
     resumoData.push(['Por Confirmado']);
-    resumoData.push(['Confirmado','Qtd']);
-    Object.entries(confirmadoMap).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>resumoData.push([k,String(v)]));
+    resumoData.push(['Confirmado', 'Qtd']);
+    Object.entries(confirmadoMap).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => resumoData.push([k, String(v)]));
     resumoData.push([]);
     resumoData.push(['Por Status Interno']);
-    resumoData.push(['Status Interno','Qtd']);
-    Object.entries(internoMap).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>resumoData.push([k,String(v)]));
+    resumoData.push(['Status Interno', 'Qtd']);
+    Object.entries(internoMap).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => resumoData.push([k, String(v)]));
     const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
     wsResumo['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: 5, r: 0 } }];
     XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
     const now = new Date();
-    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s=>s.replace(/\s+/g,'_')).join('-')}_${now.toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s => s.replace(/\s+/g, '_')).join('-')}_${now.toISOString().slice(0, 19).replace(/[:T]/g, '-')}.xlsx`;
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -1065,7 +1065,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       }
     });
-    const nomeArquivo = `Relatorio_Confirmado_${statusSelecionado}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const nomeArquivo = `Relatorio_Confirmado_${statusSelecionado}_${new Date().toISOString().slice(0, 10)}.pdf`;
     doc.save(nomeArquivo);
   };
   const gerarPDFRelatorioAIH = async () => {
@@ -1162,12 +1162,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       }
     });
-    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s=>s.replace(/\s+/g,'_')).join('-')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const nomeArquivo = `Relatorio_AIH_${selecionados.map(s => s.replace(/\s+/g, '_')).join('-')}_${new Date().toISOString().slice(0, 10)}.pdf`;
     doc.save(nomeArquivo);
   };
   // Verificar se há filtros ativos
   const temFiltrosAtivos = filtroStatusExames || filtroPaciente || filtroProntuario || filtroDataConsulta || filtroDataCirurgia || filtroMesCirurgia || filtroMedicoId || (Array.isArray(filtroAih) && filtroAih.length > 0) || filtroStatusInterno || filtroConfirmado || filtroObservacao || filtroJustificativa || filtroDataInsercao;
-  
+
   // Alternar ordenação ao clicar no cabeçalho
   const handleOrdenacao = (coluna: 'data_consulta' | 'data_cirurgia') => {
     if (colunaOrdenacao === coluna) {
@@ -1179,7 +1179,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setDirecaoOrdenacao('asc');
     }
   };
-  
+
   const parseDateStr = (s?: string | null) => {
     if (!s || s === '9999-12-31') return null;
     const d = s.includes('T') ? new Date(s) : new Date(`${s}T00:00:00`);
@@ -1216,16 +1216,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         const cmp = sA.localeCompare(sB);
         return direcaoOrdenacao === 'asc' ? cmp : -cmp;
       }
-      
+
       const medicoA = (a.medico || '').trim().toUpperCase();
       const medicoB = (b.medico || '').trim().toUpperCase();
-      
+
       if (medicoA !== medicoB) {
         if (!medicoA) return 1;
         if (!medicoB) return -1;
         return medicoA.localeCompare(medicoB, 'pt-BR');
       }
-      
+
       return 0;
     });
   };
@@ -1235,28 +1235,28 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
     return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
   };
-  
+
   // Aplicar ordenação
   const agendamentosComAnexosOrdenados = ordenarPorDataEMedico(agendamentosComAnexosFiltrados);
   const agendamentosPendentesOrdenados = ordenarPorDataEMedico(agendamentosPendentesFiltrados);
-  
+
   // Paginação
   const totalRegistros = agendamentosComAnexosOrdenados.length;
   const totalProcedimentosAgendados = agendamentosTodosFiltrados.length;
   const totalPaginas = Math.ceil(totalRegistros / itensPorPagina);
-  
+
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
   }, [filtroStatusExames, filtroPaciente, filtroProntuario, filtroDataConsulta, filtroDataCirurgia, filtroMesCirurgia, filtroMedicoId, filtroAih, filtroStatusInterno, filtroConfirmado, filtroObservacao, filtroJustificativa, filtroDataInsercao]);
-  
+
   // Rolar para o topo da tabela quando mudar de página
   useEffect(() => {
     if (tabelaRef.current && paginaAtual > 1) {
       tabelaRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [paginaAtual]);
-  
+
   // Aplicar paginação
   const indexInicio = (paginaAtual - 1) * itensPorPagina;
   const indexFim = indexInicio + itensPorPagina;
@@ -1275,31 +1275,31 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       return novo;
     });
   };
-  
+
   // Abrir modal para marcar como NÃO LIBERADO
   const handleAbrirModalNaoLiberado = (ag: Agendamento) => {
     setAgendamentoNaoLiberado(ag);
     setObservacaoNaoLiberado(ag.faturamento_observacao || '');
     setModalNaoLiberadoAberto(true);
   };
-  
+
   // Fechar modal de NÃO LIBERADO
   const handleFecharModalNaoLiberado = () => {
     setModalNaoLiberadoAberto(false);
     setAgendamentoNaoLiberado(null);
     setObservacaoNaoLiberado('');
   };
-  
+
   // Salvar marcação de NÃO LIBERADO (com observação)
   const handleSalvarNaoLiberado = async () => {
     if (!agendamentoNaoLiberado?.id) return;
-    
+
     // Validar observação obrigatória
     if (!observacaoNaoLiberado.trim()) {
       warning('A observação é obrigatória para marcar como NÃO LIBERADO');
       return;
     }
-    
+
     setSalvandoNaoLiberado(true);
     try {
       const updateData: Partial<Agendamento> = {
@@ -1307,11 +1307,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         faturamento_observacao: observacaoNaoLiberado.trim(),
         faturamento_data: new Date().toISOString()
       };
-      
+
       await agendamentoService.update(agendamentoNaoLiberado.id, updateData);
-      
+
       applyUpdateEverywhere(agendamentoNaoLiberado.id, updateData);
-      
+
       handleFecharModalNaoLiberado();
       success('Marcado como NÃO LIBERADO');
     } catch (error) {
@@ -1321,11 +1321,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setSalvandoNaoLiberado(false);
     }
   };
-  
+
   // Marcar como LIBERADO
   const handleMarcarLiberado = async (ag: Agendamento) => {
     if (!ag.id) return;
-    
+
     // Se já está marcado como NÃO LIBERADO, limpar a marcação
     if (ag.faturamento_liberado === false) {
       setConfirmMessage('Este paciente está marcado como NÃO LIBERADO. Deseja limpar esta marcação e marcar como LIBERADO?');
@@ -1353,7 +1353,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           faturamento_observacao: null,
           faturamento_data: null
         };
-        
+
         await agendamentoService.update(ag.id, updateData);
         applyUpdateEverywhere(ag.id, updateData);
       } catch (error) {
@@ -1367,7 +1367,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           faturamento_liberado: true,
           faturamento_data: new Date().toISOString()
         };
-        
+
         await agendamentoService.update(ag.id, updateData);
         applyUpdateEverywhere(ag.id, updateData);
       } catch (error) {
@@ -1376,7 +1376,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       }
     }
   };
-  
+
   // Obter cor do checkbox LIBERADO
   const getCorLiberado = (ag: Agendamento) => {
     if (ag.faturamento_liberado === true) {
@@ -1388,7 +1388,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     // null = sem seleção
     return 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-green-400';
   };
-  
+
   // Obter cor do checkbox NÃO LIBERADO
   const getCorNaoLiberado = (ag: Agendamento) => {
     if (ag.faturamento_liberado === false) {
@@ -1400,25 +1400,25 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     // null = sem seleção
     return 'bg-gray-50 text-gray-600 border border-gray-300 hover:border-red-400';
   };
-  
+
   // Atualizar status do faturamento
   const handleAtualizarStatus = async (ag: Agendamento, novoStatus: 'pendente' | 'auditor' | 'autorizado' | null) => {
     if (!ag.id) return;
-    
+
     try {
       const updateData: Partial<Agendamento> = {
         faturamento_status: novoStatus
       };
-      
+
       await agendamentoService.update(ag.id, updateData);
-      
+
       // Atualizar lista local
-      setAgendamentos(prev => prev.map(agItem => 
-        agItem.id === ag.id 
+      setAgendamentos(prev => prev.map(agItem =>
+        agItem.id === ag.id
           ? { ...agItem, ...updateData }
           : agItem
       ));
-      
+
       if (novoStatus) {
         success(`Status atualizado para "${novoStatus.charAt(0).toUpperCase() + novoStatus.slice(1)}"`);
       }
@@ -1427,7 +1427,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       toastError('Erro ao atualizar status. Tente novamente');
     }
   };
-  
+
   // Obter estilo do select de status (faturamento)
   const getStatusSelectStyle = (status: string | null | undefined) => {
     switch (status) {
@@ -1720,7 +1720,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const [justificativaNomePreenchida, setJustificativaNomePreenchida] = useState<{ [id: string]: boolean }>({});
   const [observacaoDirty, setObservacaoDirty] = useState<{ [id: string]: boolean }>({});
   const [salvandoFlagsId, setSalvandoFlagsId] = useState<string | null>(null);
-  
+
   const applyUpdateEverywhere = (id: string, patch: Partial<Agendamento>) => {
     setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
     setAgendamentosBuscaExtra(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
@@ -1728,11 +1728,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setAgendamentosBuscaCirurgia(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
     setAgendamentosBuscaProntuario(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
   };
-  
+
   // Salvar observação do faturamento
   const handleSalvarObservacao = async (ag: Agendamento) => {
     if (!ag.id) return;
-    
+
     const original = ag.observacao_faturamento || '';
     const novaObservacao = (observacaoRefs.current[ag.id!]?.value ?? ag.observacao_faturamento ?? '').trim();
     if (!novaObservacao) {
@@ -1742,16 +1742,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const agora = new Date();
     const stamp = `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
     const textoComData = (original?.trim() ? `${original}\n[${stamp}] ${novaObservacao}` : `[${stamp}] ${novaObservacao}`).trim();
-    
+
     setSalvandoObservacao(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
         observacao_faturamento: textoComData || null,
         faturamento_observacao: textoComData || null
       };
-      
+
       await agendamentoService.update(ag.id, updateData);
-      
+
       applyUpdateEverywhere(ag.id, updateData);
       if (observacaoRefs.current[ag.id!]) {
         observacaoRefs.current[ag.id!]!.value = textoComData;
@@ -1765,7 +1765,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setSalvandoObservacao(null);
     }
   };
-  
+
   const handleApagarObservacao = async (ag: Agendamento) => {
     if (!ag.id) return;
     setSalvandoObservacao(ag.id);
@@ -1788,7 +1788,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setSalvandoObservacao(null);
     }
   };
-  
+
   // Verificar se a observação foi modificada
   const observacaoModificada = (ag: Agendamento) => {
     if (!ag.id) return false;
@@ -1796,7 +1796,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const atual = (observacaoRefs.current[ag.id!]?.value ?? original) as string;
     return (atual || '').trim() !== (original || '').trim();
   };
-  
+
   const handleSalvarJustificativa = async (ag: Agendamento) => {
     if (!ag.id) return;
     const texto = (justificativaTextoRefs.current[ag.id!]?.value ?? ag.justificativa_alteracao_agendamento ?? '').trim();
@@ -1829,7 +1829,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setSalvandoJustificativaId(null);
     }
   };
-  
+
   const handleApagarJustificativa = async (ag: Agendamento) => {
     if (!ag.id) return;
     try {
@@ -1873,9 +1873,9 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Download de todos os documentos em um ZIP
   const handleDownloadTodos = async (ag: Agendamento) => {
     if (!ag.id) return;
-    
+
     setDownloading(ag.id);
-    
+
     try {
       // Verificar se há documentos para baixar
       const temDocumentos = ag.documentos_urls && ag.documentos_urls.trim() !== '';
@@ -1886,11 +1886,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         setDownloading(null);
         return;
       }
-      
+
       // Se não tem ficha, avisar mas permitir download dos documentos
       if (!temFicha) {
         setConfirmMessage('Ficha pré-anestésica ainda não foi anexada. Deseja baixar apenas os documentos disponíveis?');
-        confirmActionRef.current = () => {};
+        confirmActionRef.current = () => { };
         setConfirmOpen(true);
       }
 
@@ -1942,7 +1942,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Limpar a URL do objeto
       URL.revokeObjectURL(link.href);
 
@@ -1959,7 +1959,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   const renderizarLinhaAgendamento = (ag: Agendamento) => {
     const expandida = isLinhaExpandida(ag.id);
     const status = getStatusPaciente(ag);
-    
+
     return (
       <React.Fragment key={ag.id}>
         {/* Linha principal - estrutura igual à Documentação */}
@@ -1973,14 +1973,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   type="button"
                   onClick={() => ag.id && setAihDropdownOpen(prev => ({ ...prev, [ag.id!]: !prev[ag.id!] }))}
                   disabled={ag.id ? salvandoAIH.has(ag.id) : false}
-                  className={`w-full px-2 py-1 text-xs border rounded text-left ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}
+                  className={`w-full px-2 py-1 text-xs border rounded text-left ${ag.status_aih ? getAihStatusStyle(ag.status_aih) : 'bg-gray-50 border-gray-300 text-gray-500'}`}
                   title="Atualizar Status AIH"
                 >
                   <span
                     className="block"
                     style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                   >
-                    {ag.status_aih || 'Pendência Faturamento'}
+                    {ag.status_aih || 'Selecione...'}
                   </span>
                 </button>
                 {ag.id && aihDropdownOpen[ag.id!] && (
@@ -2004,10 +2004,31 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           try {
                             if (!ag.id) return;
                             setSalvandoAIH(prev => new Set(prev).add(ag.id!));
-                            await agendamentoService.update(ag.id, { status_aih: novo });
-                            applyUpdateEverywhere(ag.id!, { status_aih: novo });
+
+                            // Mapear status para campo de timestamp correspondente
+                            const timestampAgora = new Date().toISOString();
+                            const timestampField: Record<string, string> = {
+                              'Autorizado': 'aih_dt_autorizado',
+                              'Pendência Hospital': 'aih_dt_pendencia_hospital',
+                              'Pendência Faturamento': 'aih_dt_pendencia_faturamento',
+                              'Auditor Externo': 'aih_dt_auditor_externo',
+                              'Aguardando Ciência SMS': 'aih_dt_ag_ciencia_sms',
+                              'Ag. Correção': 'aih_dt_ag_correcao',
+                              'N/A - Urgência': 'aih_dt_na_urgencia',
+                            };
+
+                            // Preparar dados de atualização
+                            const updateData: any = { status_aih: novo };
+
+                            // Se o status tem timestamp, adicionar o campo correspondente
+                            if (novo && timestampField[novo]) {
+                              updateData[timestampField[novo]] = timestampAgora;
+                            }
+
+                            await agendamentoService.update(ag.id, updateData);
+                            applyUpdateEverywhere(ag.id!, updateData);
                             success('Status AIH atualizado');
-                          } catch (err) {}
+                          } catch (err) { }
                           finally {
                             setSalvandoAIH(prev => {
                               const next = new Set(prev);
@@ -2106,9 +2127,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               const confirmado = (ag.confirmacao || '').toLowerCase() === 'confirmado';
               return (
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
-                    confirmado ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
-                  }`}>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${confirmado ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+                    }`}>
                     {confirmado ? 'Confirmado' : 'Aguardando'}
                   </span>
                   <button
@@ -2188,11 +2208,125 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </button>
           </td>
         </tr>
-        
+
         {/* Linha expandida com detalhes (mantendo bloco de observação de faturamento) */}
         {expandida && (
           <tr className="bg-gray-50">
             <td colSpan={12} className="px-4 py-4">
+              {/* ========== TIMELINE DE STATUS AIH ========== */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-bold text-blue-800">Timeline do Processo AIH</span>
+                  <span className="text-xs text-blue-600 ml-2">
+                    {ag.status_aih ? `Status atual: ${ag.status_aih}` : 'Nenhum status definido'}
+                  </span>
+                </div>
+
+                {/* Timeline Visual */}
+                <div className="relative">
+                  {/* Linha de conexão */}
+                  <div className="absolute top-5 left-0 right-0 h-0.5 bg-gray-300" style={{ zIndex: 0 }}></div>
+
+                  <div className="flex justify-between relative" style={{ zIndex: 1 }}>
+                    {[
+                      { key: 'aih_dt_pendencia_faturamento', label: 'Pend. Faturamento', color: 'rose', icon: '📋', statusMatch: 'Pendência Faturamento' },
+                      { key: 'aih_dt_pendencia_hospital', label: 'Pend. Hospital', color: 'orange', icon: '🏥', statusMatch: 'Pendência Hospital' },
+                      { key: 'aih_dt_auditor_externo', label: 'Auditor Externo', color: 'indigo', icon: '👤', statusMatch: 'Auditor Externo' },
+                      { key: 'aih_dt_ag_ciencia_sms', label: 'Ag. Ciência SMS', color: 'blue', icon: '📩', statusMatch: 'Aguardando Ciência SMS' },
+                      { key: 'aih_dt_ag_correcao', label: 'Ag. Correção', color: 'teal', icon: '🔧', statusMatch: 'Ag. Correção' },
+                      { key: 'aih_dt_autorizado', label: 'Autorizado', color: 'green', icon: '✅', statusMatch: 'Autorizado' },
+                    ].map((step, idx) => {
+                      const timestamp = (ag as any)[step.key];
+                      const isActive = !!timestamp;
+                      // Comparação direta com o status atual (case-insensitive)
+                      const statusAtual = (ag.status_aih || '').toLowerCase().trim();
+                      const statusMatch = step.statusMatch.toLowerCase().trim();
+                      const isCurrent = statusAtual === statusMatch;
+
+                      // Calcular tempo desde que entrou neste status
+                      let tempoNoStatus = '';
+                      if (timestamp) {
+                        const dataEntrada = new Date(timestamp);
+                        const agora = new Date();
+                        const diffMs = agora.getTime() - dataEntrada.getTime();
+                        const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+                        const diffDias = Math.floor(diffHoras / 24);
+                        if (diffDias > 0) {
+                          tempoNoStatus = `há ${diffDias}d ${diffHoras % 24}h`;
+                        } else if (diffHoras > 0) {
+                          tempoNoStatus = `há ${diffHoras}h`;
+                        } else {
+                          const diffMin = Math.floor(diffMs / (1000 * 60));
+                          tempoNoStatus = `há ${diffMin}min`;
+                        }
+                      }
+
+                      return (
+                        <div key={step.key} className="flex flex-col items-center" style={{ flex: 1 }}>
+                          {/* Círculo do status */}
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 transition-all ${isCurrent
+                              ? `bg-${step.color}-500 border-${step.color}-600 text-white shadow-lg ring-4 ring-${step.color}-200`
+                              : isActive
+                                ? `bg-${step.color}-100 border-${step.color}-400 text-${step.color}-700`
+                                : 'bg-gray-100 border-gray-300 text-gray-400'
+                              }`}
+                            title={timestamp ? `Entrou em ${new Date(timestamp).toLocaleString('pt-BR')}` : 'Ainda não passou por este status'}
+                            style={{
+                              backgroundColor: isCurrent ? (step.color === 'green' ? '#22c55e' : step.color === 'rose' ? '#f43f5e' : step.color === 'orange' ? '#f97316' : step.color === 'indigo' ? '#6366f1' : step.color === 'blue' ? '#3b82f6' : step.color === 'teal' ? '#14b8a6' : '#6b7280') : (isActive ? (step.color === 'green' ? '#dcfce7' : step.color === 'rose' ? '#ffe4e6' : step.color === 'orange' ? '#ffedd5' : step.color === 'indigo' ? '#e0e7ff' : step.color === 'blue' ? '#dbeafe' : step.color === 'teal' ? '#ccfbf1' : '#f3f4f6') : '#f3f4f6'),
+                              borderColor: isActive ? (step.color === 'green' ? '#16a34a' : step.color === 'rose' ? '#e11d48' : step.color === 'orange' ? '#ea580c' : step.color === 'indigo' ? '#4f46e5' : step.color === 'blue' ? '#2563eb' : step.color === 'teal' ? '#0d9488' : '#9ca3af') : '#d1d5db',
+                              color: isCurrent ? 'white' : (isActive ? (step.color === 'green' ? '#15803d' : step.color === 'rose' ? '#be123c' : step.color === 'orange' ? '#c2410c' : step.color === 'indigo' ? '#4338ca' : step.color === 'blue' ? '#1d4ed8' : step.color === 'teal' ? '#0f766e' : '#4b5563') : '#9ca3af'),
+                              boxShadow: isCurrent ? '0 0 0 4px rgba(59, 130, 246, 0.3)' : 'none'
+                            }}
+                          >
+                            {step.icon}
+                          </div>
+
+                          {/* Label */}
+                          <div className={`mt-2 text-xs font-semibold text-center ${isCurrent ? 'text-blue-800' : isActive ? 'text-gray-700' : 'text-gray-400'}`}>
+                            {step.label}
+                          </div>
+
+                          {/* Data/hora */}
+                          {timestamp ? (
+                            <div className="mt-1 text-center">
+                              <div className="text-[10px] text-gray-500">
+                                {new Date(timestamp).toLocaleDateString('pt-BR')}
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                              {isCurrent && tempoNoStatus && (
+                                <div className="mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-semibold rounded-full">
+                                  {tempoNoStatus}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-[10px] text-gray-400 text-center">—</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Status Especial: N/A - Urgência */}
+                {(ag as any).aih_dt_na_urgencia && (
+                  <div className="mt-4 p-2 bg-purple-100 border border-purple-300 rounded-lg flex items-center gap-2">
+                    <span className="text-lg">🚨</span>
+                    <span className="text-xs font-semibold text-purple-800">N/A - Urgência</span>
+                    <span className="text-xs text-purple-600">
+                      em {new Date((ag as any).aih_dt_na_urgencia).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {/* ========== FIM TIMELINE ========== */}
+
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
                 <div>
                   <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Nascimento</div>
@@ -2266,40 +2400,40 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-gray-500">{(ag.observacao_faturamento || ag.faturamento_observacao) ? 'Observação salva' : 'Nenhuma observação salva'}</span>
                     <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleSalvarObservacao(ag)}
-                      disabled={salvandoObservacao === ag.id || !(observacaoDirty[ag.id!] === true)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(observacaoDirty[ag.id!] === true) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
-                    >
-                      {salvandoObservacao === ag.id ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
-                          Salvando...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                          Salvar Observação
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleApagarObservacao(ag)}
-                      disabled={salvandoObservacao === ag.id || !(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim())}
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim()) ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
-                    >
-                      {salvandoObservacao === ag.id ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
-                          Apagando...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          Apagar Observação
-                        </>
-                      )}
-                    </button>
+                      <button
+                        onClick={() => handleSalvarObservacao(ag)}
+                        disabled={salvandoObservacao === ag.id || !(observacaoDirty[ag.id!] === true)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(observacaoDirty[ag.id!] === true) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                      >
+                        {salvandoObservacao === ag.id ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            Salvar Observação
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleApagarObservacao(ag)}
+                        disabled={salvandoObservacao === ag.id || !(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim())}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim()) ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                      >
+                        {salvandoObservacao === ag.id ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                            Apagando...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            Apagar Observação
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2476,7 +2610,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           </a>
                         ));
                       }
-                    } catch {}
+                    } catch { }
                     return null;
                   })()}
                   {ag.ficha_pre_anestesica_url && (
@@ -2520,10 +2654,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             title="Atualizar lista"
           >
-            <svg 
-              className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -2549,7 +2683,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             </button>
           )}
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* 1ª linha: Paciente, Prontuário, Data Consulta, Data Cirurgia, Status AIH */}
           <div>
@@ -2599,9 +2733,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   setFiltroAihSelecionado('');
                 }
               }}
-              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${
-                (Array.isArray(filtroAih) && filtroAih.length > 0) ? 'border-amber-500 bg-amber-50' : 'border-gray-300'
-              }`}
+              className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-colors bg-white font-medium ${(Array.isArray(filtroAih) && filtroAih.length > 0) ? 'border-amber-500 bg-amber-50' : 'border-gray-300'
+                }`}
             >
               <option value="">📊 Adicionar status...</option>
               {aihStatusOptions.map(op => (<option key={op} value={op}>{op}</option>))}
@@ -2689,21 +2822,21 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             <input type="date" value={filtroDataInsercao} onChange={(e) => setFiltroDataInsercao(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors bg-white" />
           </div>
         </div>
-        
+
         {/* Observação movida para a barra de paginação */}
-        
+
         {/* Indicador de resultados filtrados */}
         {temFiltrosAtivos && (
           <div className="mt-3 pt-3 border-t border-gray-200">
             <p className="text-xs text-gray-600">
-              Com anexos: <span className="font-semibold text-gray-800">{agendamentosComAnexosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosComPaciente.length}</span> • 
+              Com anexos: <span className="font-semibold text-gray-800">{agendamentosComAnexosFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosComPaciente.length}</span> •
               Pendências: <span className="font-semibold text-gray-800">{agendamentosPendentesFiltrados.length}</span> de <span className="font-semibold text-gray-800">{agendamentosPendentes.length}</span>
             </p>
           </div>
         )}
       </div>
-      
-      
+
+
 
       {/* Loading */}
       {loading ? (
@@ -2715,10 +2848,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
         </div>
       ) : (
         <>
-      {/* Controles de Paginação - Topo */}
-      {totalPaginas > 1 && (
-        <div ref={tabelaRef} className="bg-white rounded-lg shadow p-4 mb-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Controles de Paginação - Topo */}
+          {totalPaginas > 1 && (
+            <div ref={tabelaRef} className="bg-white rounded-lg shadow p-4 mb-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex flex-col sm:flex-row items-center gap-3">
                   <div className="flex flex-col items-start gap-1">
                     <p className="text-sm text-gray-700">
@@ -2758,34 +2891,34 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       </span>
                     </div>
                     <div className="hidden sm:flex items-center gap-2 ml-4">
-                    <button
-                      onClick={handleAbrirModalRelatorio}
-                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
-                      title="Emitir relatório por Status AIH"
-                    >
-                      Relatório Status AIH
-                    </button>
-                    <button
-                      onClick={handleAbrirModalRelatorioConfirmado}
-                      className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
-                      title="Emitir relatório por Confirmado"
-                    >
-                      Relatório Confirmado
-                    </button>
-                    {agendamentosPaginados.length > 0 && (
-                      <p className="text-xs text-blue-600 font-medium">
-                        📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)}
-                        {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento &&
-                          ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
-                        }
-                      </p>
-                    )}
+                      <button
+                        onClick={handleAbrirModalRelatorio}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                        title="Emitir relatório por Status AIH"
+                      >
+                        Relatório Status AIH
+                      </button>
+                      <button
+                        onClick={handleAbrirModalRelatorioConfirmado}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                        title="Emitir relatório por Confirmado"
+                      >
+                        Relatório Confirmado
+                      </button>
+                      {agendamentosPaginados.length > 0 && (
+                        <p className="text-xs text-blue-600 font-medium">
+                          📅 Cirurgias: {formatarData(agendamentosPaginados[0]?.data_agendamento || agendamentosPaginados[0]?.dataAgendamento)}
+                          {agendamentosPaginados.length > 1 && agendamentosPaginados[0]?.data_agendamento !== agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento &&
+                            ` até ${formatarData(agendamentosPaginados[agendamentosPaginados.length - 1]?.data_agendamento || agendamentosPaginados[agendamentosPaginados.length - 1]?.dataAgendamento)}`
+                          }
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-                </div>
 
-      {/* Navegação de páginas */}
-      <div className="flex items-center gap-2">
+                {/* Navegação de páginas */}
+                <div className="flex items-center gap-2">
                   {/* Botão Anterior */}
                   <button
                     onClick={() => setPaginaAtual(prev => Math.max(1, prev - 1))}
@@ -2802,7 +2935,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       const maxVisible = 5;
                       let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
                       let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
-                      
+
                       if (endPage - startPage < maxVisible - 1) {
                         startPage = Math.max(1, endPage - maxVisible + 1);
                       }
@@ -2829,11 +2962,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           <button
                             key={i}
                             onClick={() => setPaginaAtual(i)}
-                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                              paginaAtual === i
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                            }`}
+                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${paginaAtual === i
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                              }`}
                           >
                             {i}
                           </button>
@@ -2868,160 +3000,160 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   >
                     Próxima
                   </button>
-      </div>
-    </div>
-  </div>
-)}
-
-<Modal
-  isOpen={reportModalAberto}
-  onClose={() => {
-    setReportModalAberto(false);
-  }}
-  title="Emitir Relatório por Status AIH"
-  size="small"
->
-  <div className="space-y-3">
-    <div>
-      <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
-        <span>Status AIH</span>
-        <span className="flex flex-wrap gap-1">
-          {(Array.isArray(reportAihStatuses) && reportAihStatuses.length > 0) ? (
-            reportAihStatuses.map(st => (
-              <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                {st}
-                <button
-                  onClick={() => setReportAihStatuses(prev => prev.filter(x => x !== st))}
-                  className="text-emerald-700 hover:text-emerald-900"
-                  title="Remover"
-                >
-                  ×
-                </button>
-              </span>
-            ))
-          ) : (
-            <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+                </div>
+              </div>
+            </div>
           )}
-        </span>
-      </label>
-      <select
-        value={reportAihSelecionado}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v) {
-            setReportAihStatuses(prev => prev.includes(v) ? prev : [...prev, v]);
-            setReportAihSelecionado('');
-          }
-        }}
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
-      >
-        <option value="">📊 Adicionar status...</option>
-        {aihStatusOptions.map(op => (
-          <option key={op} value={op}>{op}</option>
-        ))}
-      </select>
-    </div>
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
-        <input
-          type="date"
-          value={reportStartDate}
-          onChange={(e) => setReportStartDate(e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
-        <input
-          type="date"
-          value={reportEndDate}
-          onChange={(e) => setReportEndDate(e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-        />
-      </div>
-    </div>
-    <div className="flex justify-end gap-2 pt-2">
-      <button
-        onClick={() => setReportModalAberto(false)}
-        className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-      >
-        Fechar
-      </button>
-      <button
-        onClick={handleEmitirRelatorio}
-        className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-      >
-        Gerar Excel
-      </button>
-      <button
-        onClick={gerarPDFRelatorioAIH}
-        className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
-      >
-        Gerar PDF
-      </button>
-    </div>
-  </div>
-</Modal>
 
-<Modal
-  isOpen={reportConfirmModalAberto}
-  onClose={() => {
-    setReportConfirmModalAberto(false);
-  }}
-  title="Emitir Relatório por Confirmado"
-  size="small"
->
-  <div className="space-y-3">
-    <div>
-      <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
-      <select
-        value={reportConfirmStatus}
-        onChange={(e) => setReportConfirmStatus(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
-      >
-        <option value="">Selecione</option>
-        {confirmStatusOptions.map(op => (
-          <option key={op} value={op}>{op}</option>
-        ))}
-      </select>
-    </div>
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
-        <input
-          type="date"
-          value={reportConfirmStartDate}
-          onChange={(e) => setReportConfirmStartDate(e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
-        <input
-          type="date"
-          value={reportConfirmEndDate}
-          onChange={(e) => setReportConfirmEndDate(e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-        />
-      </div>
-    </div>
-    <div className="flex justify-end gap-2 pt-2">
-      <button
-        onClick={() => setReportConfirmModalAberto(false)}
-        className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-      >
-        Fechar
-      </button>
-      <button
-        onClick={gerarPDFRelatorioConfirmado}
-        className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
-      >
-        Gerar PDF
-      </button>
-    </div>
-  </div>
-</Modal>
+          <Modal
+            isOpen={reportModalAberto}
+            onClose={() => {
+              setReportModalAberto(false);
+            }}
+            title="Emitir Relatório por Status AIH"
+            size="small"
+          >
+            <div className="space-y-3">
+              <div>
+                <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+                  <span>Status AIH</span>
+                  <span className="flex flex-wrap gap-1">
+                    {(Array.isArray(reportAihStatuses) && reportAihStatuses.length > 0) ? (
+                      reportAihStatuses.map(st => (
+                        <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {st}
+                          <button
+                            onClick={() => setReportAihStatuses(prev => prev.filter(x => x !== st))}
+                            className="text-emerald-700 hover:text-emerald-900"
+                            title="Remover"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+                    )}
+                  </span>
+                </label>
+                <select
+                  value={reportAihSelecionado}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) {
+                      setReportAihStatuses(prev => prev.includes(v) ? prev : [...prev, v]);
+                      setReportAihSelecionado('');
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+                >
+                  <option value="">📊 Adicionar status...</option>
+                  {aihStatusOptions.map(op => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+                  <input
+                    type="date"
+                    value={reportStartDate}
+                    onChange={(e) => setReportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+                  <input
+                    type="date"
+                    value={reportEndDate}
+                    onChange={(e) => setReportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setReportModalAberto(false)}
+                  className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={handleEmitirRelatorio}
+                  className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  Gerar Excel
+                </button>
+                <button
+                  onClick={gerarPDFRelatorioAIH}
+                  className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+                >
+                  Gerar PDF
+                </button>
+              </div>
+            </div>
+          </Modal>
+
+          <Modal
+            isOpen={reportConfirmModalAberto}
+            onClose={() => {
+              setReportConfirmModalAberto(false);
+            }}
+            title="Emitir Relatório por Confirmado"
+            size="small"
+          >
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Confirmado</label>
+                <select
+                  value={reportConfirmStatus}
+                  onChange={(e) => setReportConfirmStatus(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+                >
+                  <option value="">Selecione</option>
+                  {confirmStatusOptions.map(op => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">De</label>
+                  <input
+                    type="date"
+                    value={reportConfirmStartDate}
+                    onChange={(e) => setReportConfirmStartDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Até</label>
+                  <input
+                    type="date"
+                    value={reportConfirmEndDate}
+                    onChange={(e) => setReportConfirmEndDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setReportConfirmModalAberto(false)}
+                  className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={gerarPDFRelatorioConfirmado}
+                  className="px-4 py-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300"
+                >
+                  Gerar PDF
+                </button>
+              </div>
+            </div>
+          </Modal>
           {/* Tabela igual à Documentação + coluna de Download */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
@@ -3033,7 +3165,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-40">Nº Prontuário</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Procedimento</th>
                     <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-40 md:w-48 lg:w-56">Médico</th>
-                    <th 
+                    <th
                       className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_consulta')}
                       title="Clique para ordenar por Data Consulta"
@@ -3047,7 +3179,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                         </span>
                       </div>
                     </th>
-                    <th 
+                    <th
                       className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:w-28 md:w-32 lg:w-36 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                       onClick={() => handleOrdenacao('data_cirurgia')}
                       title="Clique para ordenar por Data Cirurgia"
@@ -3072,14 +3204,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 <tbody className="bg-white divide-y divide-gray-200 text-sm sm:text-xs">
                   {agendamentosPaginados.length === 0 ? (
                     <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center">
+                      <td colSpan={13} className="px-4 py-8 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                           <p className="text-gray-500 font-medium">Nenhum paciente com anexos encontrado</p>
                           <p className="text-sm text-gray-400">
-                            {temFiltrosAtivos 
+                            {temFiltrosAtivos
                               ? 'Nenhum paciente corresponde aos filtros aplicados.'
                               : 'Não há pacientes com anexos (exames ou pré-op).'
                             }
@@ -3094,7 +3226,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               </table>
             </div>
           </div>
-          
+
           {/* Controles de Paginação - Rodapé */}
           {totalPaginas > 1 && (
             <div className="bg-white rounded-lg shadow p-4 mt-4">
@@ -3143,7 +3275,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       const maxVisible = 5;
                       let startPage = Math.max(1, paginaAtual - Math.floor(maxVisible / 2));
                       let endPage = Math.min(totalPaginas, startPage + maxVisible - 1);
-                      
+
                       if (endPage - startPage < maxVisible - 1) {
                         startPage = Math.max(1, endPage - maxVisible + 1);
                       }
@@ -3168,11 +3300,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                           <button
                             key={i}
                             onClick={() => setPaginaAtual(i)}
-                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                              paginaAtual === i
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                            }`}
+                            className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${paginaAtual === i
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                              }`}
                           >
                             {i}
                           </button>
@@ -3230,7 +3361,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   </button>
                 </div>
               </div>
-              
+
               <div className="mb-3 p-3 bg-white rounded border border-yellow-300">
                 <p className="text-sm text-gray-700">
                   <strong>Atenção:</strong> Estes pacientes ainda não estão prontos para faturamento pois faltam:
@@ -3240,7 +3371,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <li>• Ficha pré-operatória do anestesista</li>
                 </ul>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full divide-y divide-gray-200 table-fixed">
@@ -3294,7 +3425,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               </div>
             </div>
           )}
-          
+
           {/* Legenda - Compacta e Discreta */}
           <div className="mt-6 p-3 bg-gray-50 rounded border border-gray-200">
             <div className="text-xs text-gray-600 space-y-1.5">
@@ -3589,36 +3720,36 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   <div className="px-2 py-1 text-xs font-semibold rounded bg-violet-100 text-violet-700">{rows.length} registro(s)</div>
                 </div>
                 <div className="max-h-[70vh] overflow-y-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Paciente</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Procedimento</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Data Cirurgia</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Observação Faturamento</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Justificativa</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Autor</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Hora</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {rows.map((ag) => (
-                      <tr key={ag.id} className="align-top odd:bg-white even:bg-gray-50 hover:bg-violet-50/50 transition-colors">
-                        <td className="px-3 py-2 text-sm font-medium text-gray-900">{ag.nome_paciente || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-gray-700">{ag.procedimentos || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-gray-700">{formatarData(ag.data_agendamento || ag.dataAgendamento)}</td>
-                        <td className="px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">{(ag.faturamento_observacao || ag.observacao_faturamento || '-')}</td>
-                        <td className="px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">{ag.justificativa_alteracao_agendamento || '-'}</td>
-                        <td className="px-3 py-2 text-xs text-gray-700">{ag.justificativa_alteracao_agendamento_nome || '-'}</td>
-                        <td className="px-3 py-2 text-xs text-gray-700">
-                          {(ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at)
-                            ? `${new Date((ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at) as string).toLocaleDateString('pt-BR')} ${new Date((ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at) as string).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                            : '-'}
-                        </td>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Paciente</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Procedimento</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Data Cirurgia</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Observação Faturamento</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Justificativa</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Autor</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Hora</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {rows.map((ag) => (
+                        <tr key={ag.id} className="align-top odd:bg-white even:bg-gray-50 hover:bg-violet-50/50 transition-colors">
+                          <td className="px-3 py-2 text-sm font-medium text-gray-900">{ag.nome_paciente || '-'}</td>
+                          <td className="px-3 py-2 text-sm text-gray-700">{ag.procedimentos || '-'}</td>
+                          <td className="px-3 py-2 text-sm text-gray-700">{formatarData(ag.data_agendamento || ag.dataAgendamento)}</td>
+                          <td className="px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">{(ag.faturamento_observacao || ag.observacao_faturamento || '-')}</td>
+                          <td className="px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">{ag.justificativa_alteracao_agendamento || '-'}</td>
+                          <td className="px-3 py-2 text-xs text-gray-700">{ag.justificativa_alteracao_agendamento_nome || '-'}</td>
+                          <td className="px-3 py-2 text-xs text-gray-700">
+                            {(ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at)
+                              ? `${new Date((ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at) as string).toLocaleDateString('pt-BR')} ${new Date((ag.justificativa_alteracao_agendamento_nome_hora || ag.updated_at) as string).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                              : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             );
@@ -3642,7 +3773,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               Cirurgia: {formatarData(agendamentoNaoLiberado?.data_agendamento || agendamentoNaoLiberado?.dataAgendamento)}
             </div>
           </div>
-          
+
           {/* Alerta */}
           <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded">
             <div className="flex items-start gap-2">
@@ -3654,7 +3785,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               </div>
             </div>
           </div>
-          
+
           {/* Campo de observação */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -3672,7 +3803,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               Este campo é obrigatório e será salvo no sistema.
             </div>
           </div>
-          
+
           {/* Botões */}
           <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
             <button

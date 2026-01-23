@@ -67,6 +67,15 @@ export interface Agendamento {
   justificativa_alteracao_agendamento_nome?: string | null;
   justificativa_alteracao_agendamento_nome_hora?: string | null;
   
+  // Timestamps de controle de Status AIH (para mensurar tempo em cada status)
+  aih_dt_autorizado?: string | null;
+  aih_dt_pendencia_hospital?: string | null;
+  aih_dt_pendencia_faturamento?: string | null;
+  aih_dt_auditor_externo?: string | null;
+  aih_dt_ag_ciencia_sms?: string | null;
+  aih_dt_ag_correcao?: string | null;
+  aih_dt_na_urgencia?: string | null;
+  
   // Campos auxiliares (compatibilidade antiga - podem ser removidos depois)
   idade?: number;
   procedimento_id?: string;

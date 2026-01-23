@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
-import { 
-  Agendamento, 
-  Medico, 
+import {
+  Agendamento,
+  Medico,
   Procedimento,
   Especialidade,
   Cidade,
   StatusLiberacao,
-  TipoAgendamento 
+  TipoAgendamento
 } from '../types'
 
 // ============================================
@@ -216,7 +216,7 @@ export const convertAgendamentoToSupabase = (agendamento: Omit<Agendamento, 'id'
 export const medicoService = {
   async getAll(hospitalId?: string, search?: string): Promise<Medico[]> {
     console.log('🔍 medicoService.getAll chamado com:', { hospitalId, search });
-    
+
     // Usar paginação automática para buscar TODOS os registros
     const allMedicos = await getAllRecordsWithPagination<SupabaseMedico>('medicos', {
       filter: (query) => {
@@ -237,15 +237,15 @@ export const medicoService = {
       orderBy: 'nome_medico',
       ascending: true
     });
-    
+
     console.log('📊 Médicos retornados do Supabase:', allMedicos.length);
     if (allMedicos.length > 0) {
       console.log('👨‍⚕️ Primeiros médicos:', allMedicos.slice(0, 3).map(m => ({ id: m.id, nome_medico: m.nome_medico, hospital_id: m.hospital_id })));
     }
-    
+
     return allMedicos.map(convertMedicoFromSupabase)
   },
-  
+
   // Função específica para buscar médicos por nome (para autocomplete)
   async searchByName(hospitalId: string, searchTerm: string): Promise<Medico[]> {
     let query = supabase
@@ -255,10 +255,10 @@ export const medicoService = {
       .ilike('nome_medico', `%${searchTerm}%`)
       .order('nome_medico')
       .limit(20) // Limitar resultados para performance
-    
+
     const { data, error } = await query
     if (error) throw new Error(error.message)
-    
+
     return (data || []).map(convertMedicoFromSupabase)
   },
 
@@ -268,10 +268,10 @@ export const medicoService = {
       .select('*')
       .eq('id', id)
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Médico não encontrado')
-    
+
     return convertMedicoFromSupabase(data)
   },
 
@@ -281,10 +281,10 @@ export const medicoService = {
       .insert(convertMedicoToSupabase(medico))
       .select()
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Erro ao criar médico')
-    
+
     return convertMedicoFromSupabase(data)
   },
 
@@ -303,10 +303,10 @@ export const medicoService = {
       .eq('id', id)
       .select()
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Médico não encontrado')
-    
+
     return convertMedicoFromSupabase(data)
   },
 
@@ -315,7 +315,7 @@ export const medicoService = {
       .from('medicos')
       .delete()
       .eq('id', id)
-    
+
     if (error) throw new Error(error.message)
   }
 }
@@ -340,7 +340,7 @@ export const procedimentoService = {
       orderBy: 'nome',
       ascending: true
     });
-    
+
     return allProcedimentos.map(convertProcedimentoFromSupabase)
   },
 
@@ -350,10 +350,10 @@ export const procedimentoService = {
       .select('*')
       .eq('id', id)
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Procedimento não encontrado')
-    
+
     return convertProcedimentoFromSupabase(data)
   },
 
@@ -363,10 +363,10 @@ export const procedimentoService = {
       .insert(convertProcedimentoToSupabase(procedimento))
       .select()
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Erro ao criar procedimento')
-    
+
     return convertProcedimentoFromSupabase(data)
   },
 
@@ -383,10 +383,10 @@ export const procedimentoService = {
       .eq('id', id)
       .select()
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Procedimento não encontrado')
-    
+
     return convertProcedimentoFromSupabase(data)
   },
 
@@ -395,7 +395,7 @@ export const procedimentoService = {
       .from('procedimentos')
       .delete()
       .eq('id', id)
-    
+
     if (error) throw new Error(error.message)
   }
 }
@@ -406,7 +406,7 @@ export const procedimentoService = {
 export const agendamentoService = {
   async getAll(hospitalId?: string): Promise<Agendamento[]> {
     console.log('🔍 agendamentoService.getAll chamado com hospitalId:', hospitalId);
-    
+
     // Usar paginação automática para buscar TODOS os registros
     const allAgendamentos = await getAllRecordsWithPagination<any>('agendamentos', {
       filter: (query) => {
@@ -419,7 +419,7 @@ export const agendamentoService = {
       orderBy: 'data_agendamento',
       ascending: true
     });
-    
+
     console.log('✅ agendamentoService.getAll retornou:', allAgendamentos.length, 'agendamentos');
     if (allAgendamentos.length > 0) {
       console.log('📋 Primeiro agendamento:', {
@@ -431,7 +431,7 @@ export const agendamentoService = {
         hospital_id: allAgendamentos[0].hospital_id
       });
     }
-    
+
     // Converter dados do Supabase para o formato esperado pelo frontend
     // Manter ambos os formatos (data_agendamento e dataAgendamento) para compatibilidade
     return allAgendamentos.map((item: any) => ({
@@ -470,10 +470,10 @@ export const agendamentoService = {
       .select('*')
       .eq('id', id)
       .single()
-    
+
     if (error) throw new Error(error.message)
     if (!data) throw new Error('Agendamento não encontrado')
-    
+
     return data as Agendamento
   },
 
@@ -482,9 +482,9 @@ export const agendamentoService = {
       .from('agendamentos')
       .select('*')
       .eq('data_agendamento', date)
-    
+
     if (error) throw new Error(error.message)
-    
+
     return data as Agendamento[]
   },
 
@@ -516,7 +516,7 @@ export const agendamentoService = {
     if (error) throw new Error(error.message);
     return data as Agendamento[];
   },
-  
+
   async getByDateRangeHospital(startIso: string, endIso: string, hospitalId?: string): Promise<Agendamento[]> {
     let query = supabase
       .from('agendamentos')
@@ -583,10 +583,10 @@ export const agendamentoService = {
 
   async create(agendamento: Omit<Agendamento, 'id' | 'created_at' | 'updated_at'>): Promise<Agendamento> {
     console.log('💾 Salvando agendamento no Supabase...', agendamento);
-    
+
     // Garantir que status_liberacao sempre tenha um valor padrão 'anestesista'
     const statusLiberacao = agendamento.status_liberacao || 'anestesista';
-    
+
     const insertData = {
       nome_paciente: agendamento.nome_paciente,
       data_nascimento: agendamento.data_nascimento,
@@ -605,27 +605,27 @@ export const agendamentoService = {
       status_liberacao: statusLiberacao, // Sempre define um valor (padrão: 'anestesista')
       confirmacao: agendamento.confirmacao || 'Aguardando' // Padrão: 'Aguardando'
     };
-    
+
     console.log('📋 Status liberação definido:', statusLiberacao);
-    
+
     const { data, error } = await supabase
       .from('agendamentos')
       .insert([insertData])
       .select()
       .single();
-    
+
     if (error) {
       console.error('❌ Erro ao salvar agendamento:', error);
       throw new Error(error.message);
     }
-    
+
     console.log('✅ Agendamento salvo com sucesso!', data);
     return data as Agendamento;
   },
 
   async update(id: string, agendamento: Partial<Omit<Agendamento, 'id' | 'idade' | 'tipo'>>): Promise<Agendamento> {
     console.log('🔄 Atualizando agendamento no Supabase...', { id, agendamento });
-    
+
     const updateData: any = {}
     // Campos antigos (compatibilidade)
     if (agendamento.nome !== undefined) updateData.nome_paciente = agendamento.nome
@@ -633,9 +633,9 @@ export const agendamentoService = {
     if (agendamento.cidadeNatal !== undefined) updateData.cidade_natal = agendamento.cidadeNatal
     if (agendamento.whatsapp !== undefined) updateData.whatsapp = agendamento.whatsapp
     if (agendamento.dataAgendamento !== undefined) updateData.data_agendamento = agendamento.dataAgendamento
-    
+
     // REMOVIDO: medicoId e procedimentoId - essas colunas não existem no schema
-    
+
     // Novos campos diretos
     if (agendamento.nome_paciente !== undefined) updateData.nome_paciente = agendamento.nome_paciente
     if (agendamento.data_nascimento !== undefined) updateData.data_nascimento = agendamento.data_nascimento
@@ -654,7 +654,7 @@ export const agendamentoService = {
     // REMOVIDO: medico_id não existe no schema
     if (agendamento.procedimentos !== undefined) updateData.procedimentos = agendamento.procedimentos
     if (agendamento.procedimento_especificacao !== undefined) updateData.procedimento_especificacao = agendamento.procedimento_especificacao
-    
+
     // Campos de documentação
     if (agendamento.documentos_ok !== undefined) updateData.documentos_ok = agendamento.documentos_ok
     if (agendamento.documentos_urls !== undefined) updateData.documentos_urls = agendamento.documentos_urls
@@ -663,23 +663,23 @@ export const agendamentoService = {
     if (agendamento.ficha_pre_anestesica_url !== undefined) updateData.ficha_pre_anestesica_url = agendamento.ficha_pre_anestesica_url
     if (agendamento.ficha_pre_anestesica_data !== undefined) updateData.ficha_pre_anestesica_data = agendamento.ficha_pre_anestesica_data
     if (agendamento.observacoes !== undefined) updateData.observacoes = agendamento.observacoes
-    
+
     // Campos de avaliação do anestesista
     if (agendamento.avaliacao_anestesista !== undefined) updateData.avaliacao_anestesista = agendamento.avaliacao_anestesista
     if (agendamento.avaliacao_anestesista_observacao !== undefined) updateData.avaliacao_anestesista_observacao = agendamento.avaliacao_anestesista_observacao
     if (agendamento.avaliacao_anestesista_motivo_reprovacao !== undefined) updateData.avaliacao_anestesista_motivo_reprovacao = agendamento.avaliacao_anestesista_motivo_reprovacao
     if (agendamento.avaliacao_anestesista_complementares !== undefined) updateData.avaliacao_anestesista_complementares = agendamento.avaliacao_anestesista_complementares
     if (agendamento.avaliacao_anestesista_data !== undefined) updateData.avaliacao_anestesista_data = agendamento.avaliacao_anestesista_data
-    
+
     // Status de liberação (campo direto)
     if (agendamento.status_liberacao !== undefined) updateData.status_liberacao = agendamento.status_liberacao
-    
+
     // Confirmação
     if (agendamento.confirmacao !== undefined) updateData.confirmacao = agendamento.confirmacao
-    
+
     // Campo de grade cirúrgica
     if (agendamento.is_grade_cirurgica !== undefined) updateData.is_grade_cirurgica = agendamento.is_grade_cirurgica
-    
+
     // Campos de faturamento G-SUS
     if (agendamento.faturamento_liberado !== undefined) updateData.faturamento_liberado = agendamento.faturamento_liberado
     if (agendamento.faturamento_observacao !== undefined) updateData.faturamento_observacao = agendamento.faturamento_observacao
@@ -692,17 +692,26 @@ export const agendamentoService = {
     if (agendamento.falta_registro_do_paciente_no_gsus !== undefined) updateData.falta_registro_do_paciente_no_gsus = agendamento.falta_registro_do_paciente_no_gsus
     if (agendamento.divergencia_no_cadastro_do_paciente !== undefined) updateData.divergencia_no_cadastro_do_paciente = agendamento.divergencia_no_cadastro_do_paciente
     if (agendamento.insuficiencia_de_dados_clinicos !== undefined) updateData.insuficiencia_de_dados_clinicos = agendamento.insuficiencia_de_dados_clinicos
-    
+
     // Justificativa de alteração no Agendamento (campos de auditoria)
     if (agendamento.justificativa_alteracao_agendamento !== undefined) updateData.justificativa_alteracao_agendamento = agendamento.justificativa_alteracao_agendamento
     if (agendamento.justificativa_alteracao_agendamento_nome !== undefined) updateData.justificativa_alteracao_agendamento_nome = agendamento.justificativa_alteracao_agendamento_nome
     if (agendamento.justificativa_alteracao_agendamento_nome_hora !== undefined) updateData.justificativa_alteracao_agendamento_nome_hora = agendamento.justificativa_alteracao_agendamento_nome_hora
 
+    // Timestamps de controle de Status AIH (para mensurar tempo em cada status)
+    if ((agendamento as any).aih_dt_autorizado !== undefined) updateData.aih_dt_autorizado = (agendamento as any).aih_dt_autorizado
+    if ((agendamento as any).aih_dt_pendencia_hospital !== undefined) updateData.aih_dt_pendencia_hospital = (agendamento as any).aih_dt_pendencia_hospital
+    if ((agendamento as any).aih_dt_pendencia_faturamento !== undefined) updateData.aih_dt_pendencia_faturamento = (agendamento as any).aih_dt_pendencia_faturamento
+    if ((agendamento as any).aih_dt_auditor_externo !== undefined) updateData.aih_dt_auditor_externo = (agendamento as any).aih_dt_auditor_externo
+    if ((agendamento as any).aih_dt_ag_ciencia_sms !== undefined) updateData.aih_dt_ag_ciencia_sms = (agendamento as any).aih_dt_ag_ciencia_sms
+    if ((agendamento as any).aih_dt_ag_correcao !== undefined) updateData.aih_dt_ag_correcao = (agendamento as any).aih_dt_ag_correcao
+    if ((agendamento as any).aih_dt_na_urgencia !== undefined) updateData.aih_dt_na_urgencia = (agendamento as any).aih_dt_na_urgencia
+
     try {
       console.log('📝 Dados que serão enviados ao banco:', updateData);
       console.log('📝 ID do agendamento:', id);
       console.log('📝 Tipo do ID:', typeof id);
-      
+
       // Log específico dos campos de avaliação
       if (updateData.avaliacao_anestesista !== undefined) {
         console.log('🔍 CAMPOS DE AVALIAÇÃO:', {
@@ -713,32 +722,32 @@ export const agendamentoService = {
           avaliacao_anestesista_data: updateData.avaliacao_anestesista_data
         });
       }
-      
+
       // Tentar UPDATE sem .select() primeiro (mais compatível com RLS)
       const { error, status, statusText, count } = await supabase
         .from('agendamentos')
         .update(updateData)
         .eq('id', id)
-      
+
       console.log('📊 Resposta do Supabase (UPDATE):', { error, status, statusText, count });
-      
+
       if (error) {
         console.error('❌ Erro ao atualizar agendamento:', error);
         console.error('❌ Detalhes do erro:', JSON.stringify(error, null, 2));
         throw new Error(error.message);
       }
-      
+
       // Se UPDATE funcionou (status 200-299), buscar os dados atualizados
       if (status >= 200 && status < 300) {
         console.log('✅ UPDATE executado com sucesso! Buscando dados atualizados...');
-        
+
         // Buscar o registro atualizado em uma query separada
         const { data: agendamentoAtualizado, error: selectError } = await supabase
           .from('agendamentos')
           .select('*')
           .eq('id', id)
           .single();
-        
+
         if (selectError) {
           console.warn('⚠️ Erro ao buscar dados atualizados:', selectError);
           // Mesmo com erro no SELECT, o UPDATE funcionou
@@ -746,15 +755,15 @@ export const agendamentoService = {
           console.log('✅ UPDATE foi bem-sucedido mesmo sem conseguir ler os dados de volta');
           return { id, ...updateData } as Agendamento;
         }
-        
+
         console.log('✅ Agendamento atualizado e recuperado com sucesso!', {
           id: agendamentoAtualizado?.id,
           nome_paciente: agendamentoAtualizado?.nome_paciente
         });
-        
+
         return agendamentoAtualizado as Agendamento;
       }
-      
+
       // Se chegou aqui, algo estranho aconteceu
       throw new Error(`Status inesperado: ${status} - ${statusText}`);
     } catch (error: any) {
@@ -788,17 +797,17 @@ export const agendamentoService = {
       // Se o erro for sobre updated_at, tentar sem trigger
       if (error.message?.includes('updated_at')) {
         console.warn('⚠️ Tentando UPDATE sem updated_at...');
-        
+
         // Tentar novamente com raw SQL se possível
         const { data, error: error2 } = await supabase
           .from('agendamentos')
           .update(updateData)
           .eq('id', id)
           .select()
-        
+
         if (error2) throw new Error(error2.message);
         if (!data || data.length === 0) throw new Error('Agendamento não encontrado')
-        
+
         return data[0] as Agendamento;
       }
       throw error;
@@ -810,7 +819,7 @@ export const agendamentoService = {
       .from('agendamentos')
       .delete()
       .eq('id', id)
-    
+
     if (error) throw new Error(error.message)
   },
 
@@ -820,14 +829,14 @@ export const agendamentoService = {
       .select('id')
       .eq('medico_id', medicoId)
       .eq('data_agendamento', dataAgendamento)
-    
+
     if (excludeId) {
       query = query.neq('id', excludeId)
     }
-    
+
     const { data, error } = await query
     if (error) throw new Error(error.message)
-    
+
     return (data || []).length > 0
   }
 }
@@ -910,9 +919,9 @@ export const estatisticasService = {
       .from('estatisticas_dashboard')
       .select('*')
       .single()
-    
+
     if (statsError) throw new Error(statsError.message)
-    
+
     // Buscar próximos agendamentos
     const { data: proximos, error: proximosError } = await supabase
       .from('agendamentos')
@@ -920,9 +929,9 @@ export const estatisticasService = {
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento')
       .limit(5)
-    
+
     if (proximosError) throw new Error(proximosError.message)
-    
+
     return {
       total: stats?.total_agendamentos || 0,
       pendentes: stats?.pendentes || 0,
@@ -941,15 +950,15 @@ export const especialidadeService = {
   // Buscar TODAS as especialidades da tabela
   async getAll(): Promise<Especialidade[]> {
     console.log('🔍 Buscando especialidades do Supabase...');
-    
+
     // Usar paginação automática para buscar TODAS as especialidades
     const allEspecialidades = await getAllRecordsWithPagination<Especialidade>('especialidades', {
       orderBy: 'nome',
       ascending: true
     });
-    
+
     console.log(`✅ ${allEspecialidades.length} especialidades encontradas no banco`);
-    
+
     return allEspecialidades;
   }
 };
@@ -961,40 +970,40 @@ export const cidadeService = {
   // Buscar TODAS as cidades
   async getAll(): Promise<Cidade[]> {
     console.log('🏙️ Buscando cidades do Supabase...');
-    
+
     const { data, error } = await supabase
       .from('cidades')
       .select('id, nome')
       .order('nome', { ascending: true });
-    
+
     if (error) {
       console.error('❌ Erro ao buscar cidades:', error);
       throw new Error(error.message);
     }
-    
+
     console.log(`✅ ${(data || []).length} cidades encontradas`);
     return data as Cidade[] || [];
   },
-  
+
   // Buscar cidades por nome (autocomplete)
   async searchByName(searchTerm: string, limit: number = 20): Promise<Cidade[]> {
     console.log('🔍 Buscando cidades por nome:', searchTerm);
-    
+
     const { data, error } = await supabase
       .from('cidades')
       .select('id, nome')
       .ilike('nome', `%${searchTerm}%`) // Case-insensitive
       .order('nome', { ascending: true })
       .limit(limit);
-    
+
     if (error) {
       console.error('❌ Erro ao buscar cidades:', error);
       throw new Error(error.message);
     }
-    
+
     return data as Cidade[] || [];
   },
-  
+
   // Buscar cidade por ID
   async getById(id: string): Promise<Cidade> {
     const { data, error } = await supabase
@@ -1002,10 +1011,10 @@ export const cidadeService = {
       .select('id, nome')
       .eq('id', id)
       .single();
-    
+
     if (error) throw new Error(error.message);
     if (!data) throw new Error('Cidade não encontrada');
-    
+
     return data as Cidade;
   }
 };
