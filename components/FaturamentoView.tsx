@@ -2234,8 +2234,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     {[
                       { key: 'aih_dt_pendencia_faturamento', label: 'Pend. Faturamento', color: 'rose', icon: '📋', statusMatch: 'Pendência Faturamento' },
                       { key: 'aih_dt_pendencia_hospital', label: 'Pend. Hospital', color: 'orange', icon: '🏥', statusMatch: 'Pendência Hospital' },
-                      { key: 'aih_dt_auditor_externo', label: 'Auditor Externo', color: 'indigo', icon: '👤', statusMatch: 'Auditor Externo' },
                       { key: 'aih_dt_ag_ciencia_sms', label: 'Ag. Ciência SMS', color: 'blue', icon: '📩', statusMatch: 'Aguardando Ciência SMS' },
+                      { key: 'aih_dt_auditor_externo', label: 'Auditor Externo', color: 'indigo', icon: '👤', statusMatch: 'Auditor Externo' },
                       { key: 'aih_dt_ag_correcao', label: 'Ag. Correção', color: 'teal', icon: '🔧', statusMatch: 'Ag. Correção' },
                       { key: 'aih_dt_autorizado', label: 'Autorizado', color: 'green', icon: '✅', statusMatch: 'Autorizado' },
                     ].map((step, idx) => {
