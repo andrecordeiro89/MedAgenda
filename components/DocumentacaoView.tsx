@@ -139,6 +139,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [reportAihSelecionado, setReportAihSelecionado] = useState<string>('');
   const [reportAihStartDate, setReportAihStartDate] = useState<string>('');
   const [reportAihEndDate, setReportAihEndDate] = useState<string>('');
+  const [reportObsFlags, setReportObsFlags] = useState<string[]>([]);
+  const [reportObsSelecionado, setReportObsSelecionado] = useState<string>('');
 
   // Carregar agendamentos
   useEffect(() => {
@@ -1500,6 +1502,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       toastError('Período inválido: data inicial maior que a final');
       return;
     }
+    const obsSelecionadas = Array.isArray(reportObsFlags) ? reportObsFlags.filter(s => (s || '').trim() !== '') : [];
+    const obsTodas = obsSelecionadas.includes('Todas');
     const lista = agendamentos.filter(ag => {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
       if (!nomePaciente) return false;
@@ -1508,6 +1512,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
+      if (!obsTodas && obsSelecionadas.length > 0) {
+        const match = obsSelecionadas.some(label => {
+          if (label === 'Falta Senha') return !!((ag.falta_senha || '').trim());
+          if (label === 'Falta de laudo de exame') return !!((ag.falta_de_laudo_de_exame || '').trim());
+          if (label === 'Divergência no cadastro do paciente') return !!((ag.divergencia_no_cadastro_do_paciente || '').trim());
+          if (label === 'Falta Retorno GSUS') return !!((ag.falta_retorno_gsus || '').trim());
+          if (label === 'Falta registro do paciente no GSUS') return !!((ag.falta_registro_do_paciente_no_gsus || '').trim());
+          if (label === 'Insuficiência de dados Clínicos') return !!((ag.insuficiencia_de_dados_clinicos || '').trim());
+          return false;
+        });
+        if (!match) return false;
+      }
       return true;
     });
     if (lista.length === 0) {
@@ -1565,6 +1581,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       toastError('Período inválido: data inicial maior que a final');
       return;
     }
+    const obsSelecionadas = Array.isArray(reportObsFlags) ? reportObsFlags.filter(s => (s || '').trim() !== '') : [];
+    const obsTodas = obsSelecionadas.includes('Todas');
     const lista = agendamentos.filter(ag => {
       const nomePaciente = (ag.nome_paciente || ag.nome || '').trim();
       if (!nomePaciente) return false;
@@ -1573,6 +1591,18 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
       const d = parseDateStr(ag.data_agendamento);
       if (start && (!d || d < start)) return false;
       if (end && (!d || d > end)) return false;
+      if (!obsTodas && obsSelecionadas.length > 0) {
+        const match = obsSelecionadas.some(label => {
+          if (label === 'Falta Senha') return !!((ag.falta_senha || '').trim());
+          if (label === 'Falta de laudo de exame') return !!((ag.falta_de_laudo_de_exame || '').trim());
+          if (label === 'Divergência no cadastro do paciente') return !!((ag.divergencia_no_cadastro_do_paciente || '').trim());
+          if (label === 'Falta Retorno GSUS') return !!((ag.falta_retorno_gsus || '').trim());
+          if (label === 'Falta registro do paciente no GSUS') return !!((ag.falta_registro_do_paciente_no_gsus || '').trim());
+          if (label === 'Insuficiência de dados Clínicos') return !!((ag.insuficiencia_de_dados_clinicos || '').trim());
+          return false;
+        });
+        if (!match) return false;
+      }
       return true;
     });
     if (lista.length === 0) {
@@ -2983,6 +3013,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
               <option value="Ag. Correção">Ag. Correção</option>
               <option value="N/A - Urgência">N/A - Urgência</option>
+              <option value="Processo Cancelado">Processo Cancelado</option>
             </select>
           </div>
           
@@ -4066,6 +4097,54 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
               <option value="Aguardando Ciência SMS">Aguardando Ciência SMS</option>
               <option value="Ag. Correção">Ag. Correção</option>
               <option value="N/A - Urgência">N/A - Urgência</option>
+            </select>
+          </div>
+          <div>
+            <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <span>Observações (Faturamento)</span>
+              <span className="flex flex-wrap gap-1">
+                {(Array.isArray(reportObsFlags) && reportObsFlags.length > 0) ? (
+                  reportObsFlags.map(st => (
+                    <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                      {st}
+                      <button
+                        onClick={() => setReportObsFlags(prev => prev.filter(x => x !== st))}
+                        className="text-blue-700 hover:text-blue-900"
+                        title="Remover"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-gray-500">Nenhum selecionado</span>
+                )}
+              </span>
+            </label>
+            <select
+              value={reportObsSelecionado}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) {
+                  if (v === 'Todas') {
+                    setReportObsFlags(['Todas']);
+                    setReportObsSelecionado('');
+                    return;
+                  }
+                  setReportObsFlags(prev => prev.includes(v) ? prev : [...prev.filter(x => x !== 'Todas'), v]);
+                  setReportObsSelecionado('');
+                }
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white"
+            >
+              <option value="">🔎 Adicionar observação...</option>
+              <option value="Todas">Todas</option>
+              <option value="Falta Senha">Falta Senha</option>
+              <option value="Falta de laudo de exame">Falta de laudo de exame</option>
+              <option value="Divergência no cadastro do paciente">Divergência no cadastro do paciente</option>
+              <option value="Falta Retorno GSUS">Falta Retorno GSUS</option>
+              <option value="Falta registro do paciente no GSUS">Falta registro do paciente no GSUS</option>
+              <option value="Insuficiência de dados Clínicos">Insuficiência de dados Clínicos</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
