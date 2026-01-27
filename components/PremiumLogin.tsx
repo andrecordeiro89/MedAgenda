@@ -562,6 +562,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
+      // Login Sabrina - Acesso a Dashboard, Grade e Faturamento para FRG e RBS
+      if (email === 'sabrina@medagenda.com') {
+        const hospitais: Hospital[] = [
+          { id: '933de4fb-ebfd-4838-bb43-153a7354d333', nome: 'Hospital Maternidade Nossa Senhora Aparecida', cidade: 'Fazenda Rio Grande', cnpj: '14.736.446/0010-84' },
+          { id: '4a2527c1-df09-4a36-a08f-adc63f555123', nome: 'Hospital Maternidade Rio Branco do Sul', cidade: 'Rio Branco do Sul', cnpj: '14.736.446/0012-46' }
+        ];
+        const usuarioSabrina: Usuario = {
+          id: `user-${Date.now()}`,
+          email,
+          hospital_id: hospitais[0].id,
+          hospital: hospitais[0],
+          role: 'faturamento_local' // Acesso: Dashboard + Grade + Faturamento
+        };
+        setUsuario(usuarioSabrina);
+        setHospitalSelecionado(hospitais[0]);
+        setHospitaisDisponiveis(hospitais);
+        setIsAuthenticated(true);
+        localStorage.setItem('medagenda-auth', JSON.stringify({
+          usuario: usuarioSabrina,
+          hospital: hospitais[0],
+          hospitais
+        }));
+        console.log('💾 Login Sabrina com acesso a FRG e RBS (Dashboard, Grade, Faturamento)');
+        setIsLoading(false);
+        return;
+      }
+
       const hospitalData = emailHospitalMap[email];
       
       if (!hospitalData) {
