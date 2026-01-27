@@ -257,6 +257,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cnpj: '14.736.446/0012-46',
           role: 'admin'
         },
+        'faturamento.rbs@medagenda.com': {
+          id: '4a2527c1-df09-4a36-a08f-adc63f555123',
+          nome: 'Hospital Maternidade Rio Branco do Sul',
+          cidade: 'Rio Branco do Sul',
+          cnpj: '14.736.446/0012-46',
+          role: 'faturamento_local'
+        },
         'agendamento.apu@medagenda.com': {
           id: '54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7',
           nome: 'Hospital Torao Tokuda',
