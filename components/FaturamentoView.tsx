@@ -1252,26 +1252,16 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     if (colunaOrdenacao === 'data_consulta') return parseDateStr(ag.data_consulta);
     return parseDateStr(ag.data_agendamento);
   };
-  const monthPriority = (d: Date | null) => {
-    if (!d) return 3;
-    const now = new Date();
-    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return 0;
-    if (d > now) return 1;
-    return 2;
-  };
   // Ordenar por data e médico
   const ordenarPorDataEMedico = (lista: Agendamento[]) => {
     return [...lista].sort((a, b) => {
       const dA = refDate(a);
       const dB = refDate(b);
-      const pA = monthPriority(dA);
-      const pB = monthPriority(dB);
-      if (pA !== pB) return pA - pB;
-      const sA = dA ? dA.toISOString().slice(0, 10) : '9999-12-31';
-      const sB = dB ? dB.toISOString().slice(0, 10) : '9999-12-31';
-      if (sA !== sB) {
-        const cmp = sA.localeCompare(sB);
-        return direcaoOrdenacao === 'asc' ? cmp : -cmp;
+      const tA = dA ? dA.getTime() : Number.POSITIVE_INFINITY;
+      const tB = dB ? dB.getTime() : Number.POSITIVE_INFINITY;
+
+      if (tA !== tB) {
+        return direcaoOrdenacao === 'asc' ? (tA - tB) : (tB - tA);
       }
 
       const medicoA = (a.medico || '').trim().toUpperCase();
