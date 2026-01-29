@@ -313,6 +313,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cnpj: '14.736.446/0010-84',
           role: 'admin'
         },
+        'cc.frg@medagenda.com': {
+          id: '933de4fb-ebfd-4838-bb43-153a7354d333',
+          nome: 'Hospital Maternidade Nossa Senhora Aparecida',
+          cidade: 'Fazenda Rio Grande',
+          cnpj: '14.736.446/0010-84',
+          role: 'agendamento_local'
+        },
+        'cf.frg@medagenda.com': {
+          id: '933de4fb-ebfd-4838-bb43-153a7354d333',
+          nome: 'Hospital Maternidade Nossa Senhora Aparecida',
+          cidade: 'Fazenda Rio Grande',
+          cnpj: '14.736.446/0010-84',
+          role: 'agendamento_local'
+        },
         'faturamento.frg@medagenda.com': {
           id: '933de4fb-ebfd-4838-bb43-153a7354d333',
           nome: 'Hospital Maternidade Nossa Senhora Aparecida',
@@ -676,6 +690,10 @@ export const useHospitalFilter = () => {
   // Verificar se usuário tem acesso a uma view
   const hasAccessToView = (viewName: string): boolean => {
     if (!userRole) return false;
+    const emailLower = usuario?.email?.toLowerCase();
+    if (emailLower === 'cc.frg@medagenda.com' || emailLower === 'cf.frg@medagenda.com') {
+      return viewName === 'dashboard' || viewName === 'calendar';
+    }
     
     // Admin tem acesso a tudo
     if (userRole === 'admin') return true;
