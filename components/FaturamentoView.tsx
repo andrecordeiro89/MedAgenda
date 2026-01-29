@@ -2014,20 +2014,20 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           {/* Status AIH */}
           <td className="px-3 py-3 w-44">
             <div className="flex items-center gap-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
+                <span className={`inline-block w-2 h-2 rounded-full ${getAihDotColor(ag.status_aih || 'Pendência Faturamento')}`} />
               <div className="relative w-full" ref={el => { if (ag.id) aihContainersRef.current[ag.id!] = el }}>
                 <button
                   type="button"
                   onClick={() => ag.id && setAihDropdownOpen(prev => ({ ...prev, [ag.id!]: !prev[ag.id!] }))}
                   disabled={ag.id ? salvandoAIH.has(ag.id) : false}
-                  className={`w-full px-2 py-1 text-xs border rounded text-left ${ag.status_aih ? getAihStatusStyle(ag.status_aih) : 'bg-gray-50 border-gray-300 text-gray-500'}`}
+                  className={`w-full px-2 py-1 text-xs border rounded text-left ${getAihStatusStyle(ag.status_aih || 'Pendência Faturamento')}`}
                   title="Atualizar Status AIH"
                 >
                   <span
                     className="block"
                     style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                   >
-                    {ag.status_aih || 'Selecione...'}
+                    {ag.status_aih || 'Pendência Faturamento'}
                   </span>
                 </button>
                 {ag.id && aihDropdownOpen[ag.id!] && (

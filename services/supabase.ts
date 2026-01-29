@@ -602,6 +602,7 @@ export const agendamentoService = {
       cidade_natal: agendamento.cidade_natal || null,
       telefone: agendamento.telefone || null,
       is_grade_cirurgica: agendamento.is_grade_cirurgica || false,
+      status_aih: agendamento.status_aih || 'Pendência Faturamento',
       status_liberacao: statusLiberacao, // Sempre define um valor (padrão: 'anestesista')
       confirmacao: agendamento.confirmacao || 'Aguardando' // Padrão: 'Aguardando'
     };
