@@ -47,18 +47,29 @@ const ManagementView: React.FC<ManagementViewProps> = ({
     try {
       // Adicionar hospital_id aos dados
       const dataWithHospital = { ...data, hospital_id: hospitalId };
+
+      // Calcular diff para atualizar somente campos modificados
+      const buildDiff = (original: any, updated: any) => {
+        const diff: any = {};
+        Object.entries(updated).forEach(([key, value]) => {
+          if (value !== undefined && value !== (original ? (original as any)[key] : undefined)) {
+            diff[key] = value;
+          }
+        });
+        return diff;
+      };
       
       if (editingItem) {
         // Editar item existente
         switch (activeTab) {
           case 'agendamentos':
-            await agendamentoService.update(editingItem.id, dataWithHospital);
+            await agendamentoService.update(editingItem.id, buildDiff(editingItem, dataWithHospital));
             break;
           case 'medicos':
-            await medicoService.update(editingItem.id, dataWithHospital);
+            await medicoService.update(editingItem.id, buildDiff(editingItem, dataWithHospital));
             break;
           case 'procedimentos':
-            await procedimentoService.update(editingItem.id, dataWithHospital);
+            await procedimentoService.update(editingItem.id, buildDiff(editingItem, dataWithHospital));
             break;
         }
       } else {

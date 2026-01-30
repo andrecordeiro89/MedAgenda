@@ -510,6 +510,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [pacienteTelefone, setPacienteTelefone] = useState('');
   const [pacienteDataConsulta, setPacienteDataConsulta] = useState('');
   const [pacienteProntuario, setPacienteProntuario] = useState('');
+  const [pacienteOriginal, setPacienteOriginal] = useState<any>(null);
   const [salvandoPaciente, setSalvandoPaciente] = useState(false);
 
   // Estado para modal de confirmação
@@ -2166,6 +2167,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setPacienteTelefone('');
     setPacienteDataConsulta('');
     setPacienteProntuario('');
+    setPacienteOriginal(null);
   };
 
   // NOVO: Editar paciente (ABRE MODAL PREENCHIDO)
@@ -2197,6 +2199,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     setPacienteTelefone(paciente.telefone || '');
     setPacienteDataConsulta(paciente.dataConsulta || '');
     setPacienteProntuario(paciente.prontuario || '');
+    setPacienteOriginal(paciente);
   };
 
   // Salvar paciente (UPDATE no banco)
@@ -2225,15 +2228,103 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         data_consulta: pacienteDataConsulta || null
       });
       
-      // UPDATE no banco usando o agendamentoId
-      await agendamentoService.update(procedimentoSelecionado.agendamentoId, {
-        nome_paciente: pacienteNome,
-        data_nascimento: pacienteDataNascimento,
-        cidade_natal: pacienteCidade || null,
-        telefone: pacienteTelefone || null,
-        data_consulta: pacienteDataConsulta || null,
-        n_prontuario: pacienteProntuario || null
-      });
+      // Atualizar somente campos modificados
+      const normalize = (v: any) => {
+        const s = typeof v === 'string' ? v.trim() : v;
+        return s === '' || s === undefined ? null : s;
+      };
+      const novo = {
+        nome: pacienteNome,
+        dataNascimento: pacienteDataNascimento,
+        cidade: normalize(pacienteCidade),
+        telefone: normalize(pacienteTelefone),
+        dataConsulta: normalize(pacienteDataConsulta),
+        prontuario: normalize(pacienteProntuario)
+      };
+      const antigo = pacienteOriginal || { nome: '', dataNascimento: '', cidade: null, telefone: null, dataConsulta: null, prontuario: null };
+      const updateData: any = {};
+      if (!modoEdicao) {
+        // Criação: enviar apenas campos preenchidos
+        if (novo.nome) updateData.nome_paciente = novo.nome;
+        if (novo.dataNascimento) updateData.data_nascimento = novo.dataNascimento;
+        if (novo.cidade !== null) updateData.cidade_natal = novo.cidade;
+        if (novo.telefone !== null) updateData.telefone = novo.telefone;
+        if (novo.dataConsulta !== null) updateData.data_consulta = novo.dataConsulta;
+        if (novo.prontuario !== null) updateData.n_prontuario = novo.prontuario;
+      } else {
+        // Edição: comparar e enviar somente diferenças
+        if (novo.nome !== antigo.nome) updateData.nome_paciente = novo.nome;
+        if (novo.dataNascimento !== antigo.dataNascimento) updateData.data_nascimento = novo.dataNascimento;
+        if (novo.cidade !== (antigo.cidade ?? null)) updateData.cidade_natal = novo.cidade;
+        if (novo.telefone !== (antigo.telefone ?? null)) updateData.telefone = novo.telefone;
+        if (novo.dataConsulta !== (antigo.dataConsulta ?? null)) updateData.data_consulta = novo.dataConsulta;
+        if (novo.prontuario !== (antigo.prontuario ?? null)) updateData.n_prontuario = novo.prontuario;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        // Montar carimbo de alterações para Observação do Agendamento (somente em edição)
+        const labels: Record<string, string> = {
+          nome_paciente: 'Paciente',
+          data_nascimento: 'Data Nascimento',
+          cidade_natal: 'Cidade',
+          telefone: 'Telefone',
+          data_consulta: 'Data Consulta',
+          n_prontuario: 'Prontuário'
+        };
+        const isDateKey = (k: string) => (k === 'data_consulta' || k === 'data_nascimento');
+        const toDateBR = (s: any) => {
+          const v = typeof s === 'string' ? s : String(s || '');
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+            const [y, m, d] = v.split('-');
+            return `${d}/${m}/${y}`;
+          }
+          return v;
+        };
+
+        const changedEntries = Object.keys(updateData)
+          .filter(k => labels[k])
+          .map(k => {
+            const oldVal = (pacienteOriginal ? (pacienteOriginal as any) : {})[
+              k === 'nome_paciente' ? 'nome' :
+              k === 'data_nascimento' ? 'dataNascimento' :
+              k === 'cidade_natal' ? 'cidade' :
+              k === 'telefone' ? 'telefone' :
+              k === 'data_consulta' ? 'dataConsulta' :
+              k === 'n_prontuario' ? 'prontuario' : k
+            ];
+            const newVal = (updateData as any)[k];
+            const norm = (v: any) => {
+              if (v === null || v === undefined) return '-';
+              const s = String(v).trim();
+              return s === '' ? '-' : s;
+            };
+            const oldFmt = isDateKey(k) ? toDateBR(norm(oldVal)) : norm(oldVal);
+            const newFmt = isDateKey(k) ? toDateBR(norm(newVal)) : norm(newVal);
+            return `${labels[k]}: ${oldFmt} → ${newFmt}`;
+          });
+
+        if (modoEdicao && changedEntries.length > 0) {
+          const agora = new Date();
+          const stamp = `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+          const carimboLinha = `[GRADE] [${stamp}] ${changedEntries.join(' | ')}`;
+          try {
+            const atual = await agendamentoService.getById(procedimentoSelecionado.agendamentoId);
+            const baseObs = (atual as any)?.observacao_agendamento || '';
+            (updateData as any).observacao_agendamento = baseObs
+              ? `${baseObs}
+${carimboLinha}`
+              : carimboLinha;
+          } catch (e) {
+            // Se falhar leitura, ainda assim escrever só o carimbo
+            (updateData as any).observacao_agendamento = carimboLinha;
+          }
+        }
+
+        // UPDATE no banco usando somente campos alterados
+        await agendamentoService.update(procedimentoSelecionado.agendamentoId, updateData);
+      } else {
+        console.log('ℹ️ Nenhuma alteração detectada. Nada a atualizar no banco.');
+      }
       
       console.log(`✅ Paciente ${modoEdicao ? 'atualizado' : 'cadastrado'} com sucesso!`);
       
