@@ -864,6 +864,20 @@ export const usuarioService = {
   }
 }
 
+export const usuarioHospitaisService = {
+  async getByUsuarioId(usuarioId: string): Promise<{ hospital: { id: string; nome: string; cidade: string; cnpj: string }, role: string }[]> {
+    const { data, error } = await supabase
+      .from('usuario_hospitais')
+      .select('role, hospitais ( id, nome, cidade, cnpj )')
+      .eq('usuario_id', usuarioId)
+    if (error) throw new Error(error.message)
+    const rows = Array.isArray(data) ? data : []
+    return rows
+      .filter((r: any) => r.hospitais && r.hospitais.id)
+      .map((r: any) => ({ hospital: r.hospitais, role: r.role }))
+  }
+}
+
 export const triagemPreAnestesicaService = {
   async create(payload: Record<string, string>): Promise<any> {
     const { data, error } = await supabase

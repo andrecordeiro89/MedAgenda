@@ -1776,12 +1776,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setAgendamentosBuscaProntuario(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
   };
 
-  // Salvar observação do agendamento (com timestamp)
+  // Salvar observação do faturamento (com timestamp)
   const handleSalvarObservacao = async (ag: Agendamento) => {
     if (!ag.id) return;
 
-    const original = ag.observacao_agendamento || '';
-    const novaObservacao = (observacaoRefs.current[ag.id!]?.value ?? ag.observacao_agendamento ?? '').trim();
+    const original = ag.observacao_faturamento || '';
+    const novaObservacao = (observacaoRefs.current[ag.id!]?.value ?? ag.observacao_faturamento ?? '').trim();
     if (!novaObservacao) {
       toastError('Digite a observação para salvar');
       return;
@@ -1793,7 +1793,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setSalvandoObservacao(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
-        observacao_agendamento: textoComData || null
+        observacao_faturamento: textoComData || null,
+        faturamento_observacao: textoComData || null
       };
 
       await agendamentoService.update(ag.id, updateData);
@@ -1817,7 +1818,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setSalvandoObservacao(ag.id);
     try {
       const updateData: Partial<Agendamento> = {
-        observacao_agendamento: null
+        observacao_faturamento: null,
+        faturamento_observacao: null
       };
       await agendamentoService.update(ag.id, updateData);
       applyUpdateEverywhere(ag.id, updateData);
@@ -2428,32 +2430,28 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-stretch">
-                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-purple-600">📝</span>
-                    <label className="text-sm font-semibold text-gray-700">Observação do Agendamento</label>
-                    <span className="text-[11px] text-gray-500" title="Prioridade de edição na tela Agendamentos">(prioridade: Agendamentos)</span>
-                  </div>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
                   <textarea
-                    defaultValue={ag.observacao_agendamento ?? ''}
+                    defaultValue={ag.observacao_faturamento ?? ag.faturamento_observacao ?? ''}
                     ref={(el) => { observacaoRefs.current[ag.id!] = el; }}
                     onInput={(e) => {
                       const val = (e.currentTarget.value || '').trim();
-                      const original = ((ag.observacao_agendamento || '') as string).trim();
+                      const original = ((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim();
                       setObservacaoDirty(prev => ({ ...prev, [ag.id!]: val !== original }));
                     }}
-                    placeholder="Digite uma observação do agendamento..."
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none resize-none transition-colors"
+                    placeholder="Digite uma observação sobre este paciente..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
                     rows={2}
                     disabled={salvandoObservacao === ag.id}
                   />
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-gray-500">{(ag.observacao_agendamento) ? 'Observação salva' : 'Nenhuma observação salva'}</span>
+                    <span className="text-xs text-gray-500">{(ag.observacao_faturamento || ag.faturamento_observacao) ? 'Observação salva' : 'Nenhuma observação salva'}</span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleSalvarObservacao(ag)}
                         disabled={salvandoObservacao === ag.id || !(observacaoDirty[ag.id!] === true)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(observacaoDirty[ag.id!] === true) ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(observacaoDirty[ag.id!] === true) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                       >
                         {salvandoObservacao === ag.id ? (
                           <>
@@ -2469,8 +2467,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       </button>
                       <button
                         onClick={() => handleApagarObservacao(ag)}
-                        disabled={salvandoObservacao === ag.id || !(((ag.observacao_agendamento || '') as string).trim())}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(((ag.observacao_agendamento || '') as string).trim()) ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                        disabled={salvandoObservacao === ag.id || !(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim())}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 ${(((ag.observacao_faturamento || ag.faturamento_observacao || '') as string).trim()) ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                       >
                         {salvandoObservacao === ag.id ? (
                           <>
@@ -3971,5 +3969,4 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
 };
 
 export default FaturamentoView;
-
 

@@ -1,4 +1,5 @@
 import React, { useState, createContext, useContext, ReactNode, useEffect } from 'react';
+import { usuarioService, usuarioHospitaisService, supabase } from '../services/supabase';
 import ImageWithFallback from './ImageWithFallback';
 import { Button, Input, Card } from './ui';
 
@@ -70,6 +71,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hospitaisDisponiveis, setHospitaisDisponiveis] = useState<Hospital[]>([]);
+  const [rolesPorHospital, setRolesPorHospital] = useState<Record<string, UserRole>>({});
 
   // PERSISTÊNCIA: Carregar dados do localStorage ao inicializar
   useEffect(() => {
@@ -80,6 +82,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUsuario(authData.usuario);
         setHospitalSelecionado(authData.hospital);
         setHospitaisDisponiveis(authData.hospitais || []);
+        setRolesPorHospital(authData.roles || {});
         setIsAuthenticated(true);
         console.log('🔄 Login restaurado do localStorage:', authData.hospital.nome);
       } catch (error) {
@@ -92,6 +95,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string): Promise<void> => {
     setIsLoading(true);
     try {
+      const usuarioDb = await usuarioService.getByEmail(email);
+      if (usuarioDb?.id) {
+        const vinculos = await usuarioHospitaisService.getByUsuarioId(usuarioDb.id);
+        let hospitais = vinculos.map(v => ({ id: v.hospital.id, nome: v.hospital.nome, cidade: v.hospital.cidade, cnpj: v.hospital.cnpj }));
+        let rolesMap: Record<string, UserRole> = {};
+        vinculos.forEach(v => { rolesMap[v.hospital.id] = v.role as UserRole; });
+
+        if (hospitais.length < 2) {
+          const MULTI_EMAIL_HOSPITAL_IDS: Record<string, { ids: string[]; role: UserRole }> = {
+            'coordenacao@medagenda.com': { ids: [
+              '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba','4111b99d-8b4a-4b51-9561-a2fbd14e776e','4a2527c1-df09-4a36-a08f-adc63f555123','54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7','8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a','933de4fb-ebfd-4838-bb43-153a7354d333','bbe11a40-2689-48af-9aa8-5c6e7f2e48da','ece028c8-3c6d-4d0a-98aa-efaa3565b55f','09ab26a8-8c2c-4a67-94f7-d450a1be328e' ], role: 'coordenacao' },
+            'diretoria@medagenda.com': { ids: [
+              '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba','4111b99d-8b4a-4b51-9561-a2fbd14e776e','4a2527c1-df09-4a36-a08f-adc63f555123','54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7','8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a','933de4fb-ebfd-4838-bb43-153a7354d333','bbe11a40-2689-48af-9aa8-5c6e7f2e48da','ece028c8-3c6d-4d0a-98aa-efaa3565b55f','09ab26a8-8c2c-4a67-94f7-d450a1be328e' ], role: 'diretoria' },
+            'helluany@medagenda.com': { ids: ['933de4fb-ebfd-4838-bb43-153a7354d333','ece028c8-3c6d-4d0a-98aa-efaa3565b55f'], role: 'diretoria' },
+            'sabrina@medagenda.com': { ids: ['933de4fb-ebfd-4838-bb43-153a7354d333','4a2527c1-df09-4a36-a08f-adc63f555123'], role: 'faturamento_local' },
+            'faturamento@medagenda.com': { ids: [
+              '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba','4111b99d-8b4a-4b51-9561-a2fbd14e776e','4a2527c1-df09-4a36-a08f-adc63f555123','54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7','8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a','933de4fb-ebfd-4838-bb43-153a7354d333','bbe11a40-2689-48af-9aa8-5c6e7f2e48da','ece028c8-3c6d-4d0a-98aa-efaa3565b55f','09ab26a8-8c2c-4a67-94f7-d450a1be328e' ], role: 'faturamento' },
+            'faturamento01@medagenda.com': { ids: [
+              '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba','4111b99d-8b4a-4b51-9561-a2fbd14e776e','4a2527c1-df09-4a36-a08f-adc63f555123','54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7','8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a','933de4fb-ebfd-4838-bb43-153a7354d333','bbe11a40-2689-48af-9aa8-5c6e7f2e48da','ece028c8-3c6d-4d0a-98aa-efaa3565b55f','09ab26a8-8c2c-4a67-94f7-d450a1be328e' ], role: 'faturamento' },
+          };
+          const fallback = MULTI_EMAIL_HOSPITAL_IDS[email.toLowerCase()];
+          if (fallback) {
+            const { data: allHosp } = await supabase
+              .from('hospitais')
+              .select('id, nome, cidade, cnpj');
+            const map = new Map<string, any>();
+            (allHosp || []).forEach((h: any) => map.set(h.id, h));
+            hospitais = fallback.ids.map(id => map.get(id)).filter(Boolean);
+            hospitais.forEach(h => { rolesMap[h.id] = fallback.role; });
+          }
+        }
+
+        if (hospitais.length > 0) {
+          setRolesPorHospital(rolesMap);
+          const hospitalInicial = hospitais[0];
+          const roleInicial = rolesMap[hospitalInicial.id] || 'admin';
+          const usuarioSupabase: Usuario = {
+            id: usuarioDb.id,
+            email: usuarioDb.email,
+            hospital_id: hospitalInicial.id,
+            hospital: hospitalInicial,
+            role: roleInicial
+          };
+          setUsuario(usuarioSupabase);
+          setHospitalSelecionado(hospitalInicial);
+          setHospitaisDisponiveis(hospitais);
+          setIsAuthenticated(true);
+          localStorage.setItem('medagenda-auth', JSON.stringify({
+            usuario: usuarioSupabase,
+            hospital: hospitalInicial,
+            hospitais,
+            roles: rolesMap
+          }));
+          setIsLoading(false);
+          return;
+        }
+      }
       // Sistema simples sem autenticação real - mapear email para hospital + role
       const emailHospitalMap: { [key: string]: { id: string; nome: string; cidade: string; cnpj: string; role: UserRole } } = {
         // Hospitais de exemplo (manter para compatibilidade)
@@ -643,6 +703,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const selecionarHospital = (hospital: Hospital) => {
     setHospitalSelecionado(hospital);
     setIsAuthenticated(true);
+    setUsuario(prev => prev ? { ...prev, hospital_id: hospital.id, hospital, role: rolesPorHospital[hospital.id] || prev.role } : prev);
   };
 
   const logout = () => {
@@ -751,7 +812,7 @@ const PremiumLoginForm = ({ onSuccess }: PremiumLoginFormProps) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, hospitaisDisponiveis } = useAuth();
 
   // Animação de digitação
   useEffect(() => {
@@ -777,9 +838,14 @@ const PremiumLoginForm = ({ onSuccess }: PremiumLoginFormProps) => {
 
     try {
       await login(email);
-      
-      // Login bem-sucedido - usuário já está logado e hospital selecionado
-      // Não precisa chamar onSuccess pois o login já fez tudo
+      try {
+        const saved = localStorage.getItem('medagenda-auth');
+        const parsed = saved ? JSON.parse(saved) : {};
+        const hs: Hospital[] = parsed.hospitais || hospitaisDisponiveis || [];
+        onSuccess(hs);
+      } catch {
+        onSuccess(hospitaisDisponiveis || []);
+      }
     } catch (err: any) {
       const msg = (err?.message || '').toLowerCase();
       const isRls = msg.includes('permission') || msg.includes('rls') || msg.includes('unauthorized') || msg.includes('401') || msg.includes('api key');
@@ -958,8 +1024,15 @@ export const PremiumLoginSystem = () => {
   const { selecionarHospital } = useAuth();
 
   const handleLoginSuccess = (hospitais: Hospital[]) => {
-    setHospitaisDisponiveis(hospitais);
-    if (hospitais.length > 1) {
+    let hs = hospitais;
+    try {
+      const saved = localStorage.getItem('medagenda-auth');
+      const parsed = saved ? JSON.parse(saved) : {};
+      const lsHosp: Hospital[] = parsed.hospitais || [];
+      if ((lsHosp || []).length > hs.length) hs = lsHosp;
+    } catch {}
+    setHospitaisDisponiveis(hs);
+    if ((hs || []).length > 1) {
       setShowHospitalSelector(true);
     }
     // Se tem apenas 1 hospital, o AuthProvider já seleciona automaticamente
@@ -1018,8 +1091,8 @@ export const PremiumHospitalHeader = () => {
             </div>
           </div>
           
-          {usuario.role === 'coordenacao' && hospitaisDisponiveis.length > 0 && (
-            <div className="hidden md:flex items-center gap-3">
+          {hospitaisDisponiveis.length > 1 && (
+            <div className="flex items-center gap-3">
               <select
                 value={hospitalSelecionado.id}
                 onChange={(e) => {

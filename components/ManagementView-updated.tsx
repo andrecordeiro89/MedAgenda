@@ -217,8 +217,8 @@ const ManagementView: React.FC<ManagementViewProps> = ({
               {procedimento?.nome || 'Procedimento não encontrado'}
             </td>
             <td className="px-6 py-4 whitespace-nowrap">
-              <Badge variant={agendamento.statusLiberacao === 'v' ? 'success' : 'warning'}>
-                {agendamento.statusLiberacao === 'v' ? 'Liberado' : 'Pendente'}
+              <Badge variant={(agendamento as any).status_liberacao === 'v' ? 'success' : 'warning'}>
+                {(agendamento as any).status_liberacao === 'v' ? 'Liberado' : 'Pendente'}
               </Badge>
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
