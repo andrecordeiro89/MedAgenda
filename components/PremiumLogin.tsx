@@ -765,6 +765,10 @@ export const useHospitalFilter = () => {
 
   // Verificar se usuário tem acesso a uma view
   const hasAccessToView = (viewName: string): boolean => {
+    if (usuario?.email?.toLowerCase() === 'auditoria.foz@medagenda.com') {
+      if (viewName === 'calendar' || viewName === 'anestesista') return false;
+      return true;
+    }
     if (!userRole) return false;
     const emailLower = usuario?.email?.toLowerCase();
     if (emailLower === 'cc.frg@medagenda.com' || emailLower === 'cf.frg@medagenda.com') {
