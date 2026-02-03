@@ -374,6 +374,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           cnpj: '14.736.446/0010-84',
           role: 'admin'
         },
+        'auditoria.gua@medagenda.com': {
+          id: '09ab26a8-8c2c-4a67-94f7-d450a1be328e',
+          nome: 'Hospital Regional Centro Oeste',
+          cidade: 'Guarapuava',
+          cnpj: '76416866000140',
+          role: 'admin'
+        },
         'cc.frg@medagenda.com': {
           id: '933de4fb-ebfd-4838-bb43-153a7354d333',
           nome: 'Hospital Maternidade Nossa Senhora Aparecida',
