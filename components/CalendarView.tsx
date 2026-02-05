@@ -393,9 +393,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     // Estrutura para armazenar especialidades e seus procedimentos (com pacientes reais)
     const especialidadesComProcedimentos: Record<string, {
       nome: string;
-      totalProcedimentos: number;
+      comPaciente: number;
+      totalAgendados: number;
       especialidadeId: string;
-      meta?: number; // Meta configurada para esta especialidade neste dia
+      meta?: number; // Meta configurada (mantida para possível uso futuro)
     }> = {};
 
     // IMPORTANTE: Filtrar apenas agendamentos com procedimentos preenchido (não vazio)
@@ -474,17 +475,25 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         
         especialidadesComProcedimentos[especialidadeId] = {
           nome: especialidadeNome,
-          totalProcedimentos: 0,
+          comPaciente: 0,
+          totalAgendados: 0,
           especialidadeId: especialidadeId,
           meta: meta?.quantidadeAgendamentos
         };
       }
       
-      // Contar apenas procedimentos com pacientes reais (nome_paciente preenchido)
-      // Isso mostra o progresso real em relação à meta
-      const temPaciente = agendamento.nome_paciente && agendamento.nome_paciente.trim() !== '';
+      // Contar apenas procedimentos com paciente associado (compatível com diferentes campos)
+      const nomePaciente = (
+        (agendamento as any).nome_paciente ||
+        (agendamento as any).nome ||
+        (agendamento as any).paciente_nome ||
+        ((agendamento as any).paciente && (agendamento as any).paciente.nome) ||
+        ''
+      ).trim();
+      const temPaciente = nomePaciente !== '';
+      especialidadesComProcedimentos[especialidadeId].totalAgendados++;
       if (temPaciente) {
-        especialidadesComProcedimentos[especialidadeId].totalProcedimentos++;
+        especialidadesComProcedimentos[especialidadeId].comPaciente++;
       }
     });
 
@@ -513,22 +522,20 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         <div className="mt-1 space-y-0.5">
           {(dateString === '2025-12-01' || (isFebruary2025 && isMonday)) && console.log(`🔍 DEBUG ${dateString} - Especialidades para barras:`, Object.keys(especialidadesComProcedimentos).length, Object.values(especialidadesComProcedimentos))}
           {(() => {
-            const espList = Object.values(especialidadesComProcedimentos);
+            const espList = Object.values(especialidadesComProcedimentos).filter((e: any) => (e.comPaciente || 0) > 0);
             const bars = calendarDensity === 'compact' ? espList.slice(0, 8) : espList;
             return bars.map((esp) => {
-              // Usar meta configurada ou padrão de 10 se não houver meta
-              const metaProcedimentos = esp.meta || 10;
-              const percentual = metaProcedimentos > 0 
-                ? Math.min((esp.totalProcedimentos / metaProcedimentos) * 100, 100)
-                : 0;
-              const atingiuMeta = metaProcedimentos > 0 && esp.totalProcedimentos >= metaProcedimentos;
-              const faltam = Math.max(0, metaProcedimentos - esp.totalProcedimentos);
+              // Percentual = pacientes associados / procedimentos agendados
+              const totalSlots = Math.max(esp.totalAgendados, 1);
+              const percentual = Math.min((esp.comPaciente / totalSlots) * 100, 100);
+              const atingiuMeta = esp.comPaciente >= totalSlots;
+              const faltam = Math.max(0, totalSlots - esp.comPaciente);
 
               return (
                 <div
                   key={esp.especialidadeId}
                   className="text-[9px] leading-tight"
-                  title={`${esp.nome} - ${esp.totalProcedimentos} de ${metaProcedimentos} procedimento(s)${faltam > 0 ? ` (faltam ${faltam})` : ' - Meta atingida!'}`}
+                  title={`${esp.nome} - ${esp.comPaciente} de ${totalSlots} procedimento(s)${faltam > 0 ? ` (faltam ${faltam})` : ' - Completo!'}`}
                 >
                   <div className="truncate font-medium text-slate-700">
                     {esp.nome}
@@ -540,20 +547,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     ></div>
                   </div>
                   <div className={`text-[8px] text-center font-medium ${atingiuMeta ? 'text-green-700 font-bold' : 'text-slate-600'}`}>
-                    {esp.totalProcedimentos}/{metaProcedimentos}
+                    {esp.comPaciente}/{totalSlots}
                   </div>
                 </div>
               );
             });
           })()}
-          {calendarDensity === 'compact' && (() => {
-            const total = Object.values(especialidadesComProcedimentos).length;
-            const shown = Math.min(8, total);
-            const hidden = Math.max(0, total - shown);
-            return hidden > 0 ? (
-              <div className="text-[8px] text-slate-500">{`+${hidden} especialidade(s)`}</div>
-            ) : null;
-          })()}
+          
         </div>
       </div>
     );
