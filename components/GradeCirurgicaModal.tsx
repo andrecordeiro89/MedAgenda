@@ -4391,6 +4391,7 @@ ${carimboLinha}`
       isOpen={modalVagasAberto}
       onClose={() => setModalVagasAberto(false)}
       title={"Buscar Vaga (procedimentos sem paciente)"}
+      size="xlarge"
     >
       <div className="p-4">
         {vagasLista.length === 0 ? (
