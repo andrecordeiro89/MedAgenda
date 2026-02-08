@@ -652,6 +652,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   // ETAPA 1: Iniciar adição de especialidade (abre o dropdown)
   const handleAddEspecialidadeClick = (gradeIndex: number) => {
+    setCollapsedGrades(prev => ({ ...prev, [gradeIndex]: false }));
     setAddingEspecialidade(gradeIndex);
     setEtapaAtual(1);
     setEspecialidadeSelecionada('');
@@ -672,6 +673,9 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     
     // Salvar nome da especialidade
     setEspecialidadeNome(especialidade.nome);
+    // Resetar vínculo de médico por especialidade até o usuário decidir
+    setMedicoVemDaEspecialidade(false);
+    setMedicoSelecionadoParaProc('');
     
     // Avançar para etapa 2 (Médico) - pode ser pulado depois
     setEtapaAtual(2);
@@ -692,6 +696,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     // Limpar médico selecionado
     setMedicoSelecionado('');
     setMedicoNomeSelecionado('');
+    setMedicoSelecionadoParaProc('');
+    setMedicoVemDaEspecialidade(false);
     
     // Avançar direto para etapa 3 (Procedimentos)
     setEtapaAtual(3);
@@ -707,14 +713,21 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       if (medico) {
         // Armazenar o nome do médico para usar depois mesmo se a lista for limpa
         setMedicoNomeSelecionado(medico.nome);
+        // Vincular médico fixo para procedimentos: bloqueia dropdown
+        setMedicoSelecionadoParaProc(medico.id);
+        setMedicoVemDaEspecialidade(true);
         console.log('✅ Etapa 2 concluída - Médico:', medico.nome);
       } else {
         console.warn('⚠️ Médico selecionado não encontrado, continuando sem médico');
         setMedicoNomeSelecionado('');
+        setMedicoSelecionadoParaProc('');
+        setMedicoVemDaEspecialidade(false);
       }
     } else {
       // Sem médico selecionado - permitir continuar
       setMedicoNomeSelecionado('');
+      setMedicoSelecionadoParaProc('');
+      setMedicoVemDaEspecialidade(false);
       console.log('✅ Etapa 2 concluída - Sem médico (equipe médica)');
     }
     
@@ -836,70 +849,62 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       const agendamentos = await agendamentoService.getAll(hospitalId);
       const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
       
-      // Reagrupar itens (SEM USAR SET - mantém duplicatas de procedimentos)
+      // Reagrupar itens garantindo agendamentoId nos procedimentos e cabeçalhos
       const itens: GradeCirurgicaItem[] = [];
-      const gruposPorEspecialidade = new Map<string, {
-        especialidade: string;
-        medico: string;
-        procedimentos: string[]; // Array ao invés de Set
-      }>();
+      const gruposAdicionados = new Set<string>();
+      const headerIdMap = new Map<string, string>();
       
+      // Primeiro, coletar IDs de cabeçalho (registros sem procedimentos)
       agendamentosDoDia.forEach(agendamento => {
-        if (agendamento.especialidade) {
-          // Chave inclui médico se existir, senão usa apenas especialidade
-          const medicoKey = agendamento.medico || '(sem médico)';
-          const chave = `${agendamento.especialidade}|||${medicoKey}`;
-          
-          if (!gruposPorEspecialidade.has(chave)) {
-            gruposPorEspecialidade.set(chave, {
-              especialidade: agendamento.especialidade,
-              medico: agendamento.medico || null, // Pode ser null
-              procedimentos: []
-            });
-          }
-          
-          // Adicionar procedimento ao array (permite duplicatas)
-          if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
-            gruposPorEspecialidade.get(chave)!.procedimentos.push(agendamento.procedimentos);
-          }
+        if (!agendamento.especialidade) return;
+        const medicoKey = agendamento.medico || '(sem médico)';
+        const chave = `${agendamento.especialidade}|||${medicoKey}`;
+        if ((!agendamento.procedimentos || !String(agendamento.procedimentos).trim()) && !headerIdMap.has(chave)) {
+          headerIdMap.set(chave, String(agendamento.id));
+        }
+      });
+
+      // Em seguida, construir itens
+      agendamentosDoDia.forEach(agendamento => {
+        if (!agendamento.especialidade) return;
+        const medicoKey = agendamento.medico || '(sem médico)';
+        const chave = `${agendamento.especialidade}|||${medicoKey}`;
+        if (!gruposAdicionados.has(chave)) {
+          const textoEspecialidade = agendamento.medico 
+            ? `${agendamento.especialidade} - ${agendamento.medico}`
+            : agendamento.especialidade;
+          itens.push({
+            id: `esp-${Date.now()}-${Math.random()}`,
+            tipo: 'especialidade',
+            texto: textoEspecialidade,
+            ordem: itens.length,
+            pacientes: [],
+            agendamentoId: headerIdMap.get(chave) || undefined
+          });
+          gruposAdicionados.add(chave);
+        }
+        if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+          itens.push({
+            id: `proc-${agendamento.id}-${Math.random()}`,
+            tipo: 'procedimento',
+            texto: agendamento.procedimentos,
+            ordem: itens.length,
+            pacientes: [],
+            agendamentoId: String(agendamento.id),
+            medicoNome: agendamento.medico || undefined
+          });
         }
       });
       
-      gruposPorEspecialidade.forEach((grupo) => {
-        // Exibir apenas especialidade se não houver médico
-        const textoEspecialidade = grupo.medico 
-          ? `${grupo.especialidade} - ${grupo.medico}`
-          : grupo.especialidade;
-        
-        itens.push({
-          id: `esp-${Date.now()}-${Math.random()}`,
-          tipo: 'especialidade',
-          texto: textoEspecialidade,
-          ordem: itens.length,
-          pacientes: []
-        });
-        
-        // Adicionar cada procedimento (inclusive duplicatas)
-        grupo.procedimentos.forEach((proc, idx) => {
-          itens.push({
-            id: `proc-${Date.now()}-${Math.random()}-${idx}`,
-            tipo: 'procedimento',
-            texto: proc,
-            ordem: itens.length,
-            pacientes: []
-          });
-        });
-      });
-      
       // Atualizar grade
-      const updatedGrades = grades.map((grade, i) => {
+      const updatedGrades2 = grades.map((grade, i) => {
         if (i === addingEspecialidade) {
-          return { ...grade, itens };
+          return { ...grade, itens: itens2 };
         }
         return grade;
       });
       
-      setGrades(updatedGrades);
+      setGrades(updatedGrades2);
       // Recarregar do banco para garantir persistência (inclui n_prontuario)
       try {
         await recarregarGradesDoSupabase();
@@ -980,66 +985,60 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       }
       
       // 3. Recarregar dados do banco
-      const agendamentos = await agendamentoService.getAll(hospitalId);
-      const agendamentosDoDia = agendamentos.filter(a => a.data_agendamento === dataFormatada);
+      const agendamentos2 = await agendamentoService.getAll(hospitalId);
+      const agendamentosDoDia2 = agendamentos2.filter(a => a.data_agendamento === dataFormatada);
       
-      // Reagrupar itens
-      const itens: GradeCirurgicaItem[] = [];
-      const gruposPorEspecialidade = new Map<string, {
-        especialidade: string;
-        medico: string;
-        procedimentos: string[];
-      }>();
+      // Reagrupar itens garantindo agendamentoId nos procedimentos e cabeçalhos
+      const itens2: GradeCirurgicaItem[] = [];
+      const gruposAdicionados2 = new Set<string>();
+      const headerIdMap2 = new Map<string, string>();
       
-      agendamentosDoDia.forEach(agendamento => {
-        if (agendamento.especialidade) {
-          // Chave inclui médico se existir, senão usa apenas especialidade
-          const medicoKey = agendamento.medico || '(sem médico)';
-          const chave = `${agendamento.especialidade}|||${medicoKey}`;
-          
-          if (!gruposPorEspecialidade.has(chave)) {
-            gruposPorEspecialidade.set(chave, {
-              especialidade: agendamento.especialidade,
-              medico: agendamento.medico || null, // Pode ser null
-              procedimentos: []
-            });
-          }
-          
-          if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
-            gruposPorEspecialidade.get(chave)!.procedimentos.push(agendamento.procedimentos);
-          }
+      // Coletar IDs de cabeçalho (registros sem procedimentos)
+      agendamentosDoDia2.forEach(agendamento => {
+        if (!agendamento.especialidade) return;
+        const medicoKey = agendamento.medico || '(sem médico)';
+        const chave = `${agendamento.especialidade}|||${medicoKey}`;
+        if ((!agendamento.procedimentos || !String(agendamento.procedimentos).trim()) && !headerIdMap2.has(chave)) {
+          headerIdMap2.set(chave, String(agendamento.id));
+        }
+      });
+
+      // Construir itens
+      agendamentosDoDia2.forEach(agendamento => {
+        if (!agendamento.especialidade) return;
+        const medicoKey = agendamento.medico || '(sem médico)';
+        const chave = `${agendamento.especialidade}|||${medicoKey}`;
+        if (!gruposAdicionados2.has(chave)) {
+          const textoEspecialidade = agendamento.medico 
+            ? `${agendamento.especialidade} - ${agendamento.medico}`
+            : agendamento.especialidade;
+          itens2.push({
+            id: `esp-${Date.now()}-${Math.random()}`,
+            tipo: 'especialidade',
+            texto: textoEspecialidade,
+            ordem: itens2.length,
+            pacientes: [],
+            agendamentoId: headerIdMap2.get(chave) || undefined
+          });
+          gruposAdicionados2.add(chave);
+        }
+        if (agendamento.procedimentos && agendamento.procedimentos.trim()) {
+          itens2.push({
+            id: `proc-${agendamento.id}-${Math.random()}`,
+            tipo: 'procedimento',
+            texto: agendamento.procedimentos,
+            ordem: itens2.length,
+            pacientes: [],
+            agendamentoId: String(agendamento.id),
+            medicoNome: agendamento.medico || undefined
+          });
         }
       });
       
-      gruposPorEspecialidade.forEach((grupo) => {
-        // Exibir apenas especialidade se não houver médico
-        const textoEspecialidade = grupo.medico 
-          ? `${grupo.especialidade} - ${grupo.medico}`
-          : grupo.especialidade;
-        
-        itens.push({
-          id: `esp-${Date.now()}-${Math.random()}`,
-          tipo: 'especialidade',
-          texto: textoEspecialidade,
-          ordem: itens.length,
-          pacientes: []
-        });
-        
-        grupo.procedimentos.forEach((proc, idx) => {
-          itens.push({
-            id: `proc-${Date.now()}-${Math.random()}-${idx}`,
-            tipo: 'procedimento',
-            texto: proc,
-            ordem: itens.length,
-            pacientes: []
-          });
-        });
-      });
-      
-      // Atualizar grade
+      // Atualizar grade usando itens2
       const updatedGrades = grades.map((grade, i) => {
         if (i === addingEspecialidade) {
-          return { ...grade, itens };
+          return { ...grade, itens: itens2 };
         }
         return grade;
       });
@@ -1056,6 +1055,12 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       setNovoProcedimentoNome('');
       
       console.log('✨ Especialidade salva e formulário fechado!');
+      // Recarregar do banco para refletir médico fixo e vínculos
+      try {
+        await recarregarGradesDoSupabase();
+      } catch (e) {
+        console.warn('⚠️ Falha ao recarregar grades após salvar e fechar', e);
+      }
       
     } catch (error) {
       console.error('❌ Erro ao salvar:', error);
@@ -1615,59 +1620,73 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     
     if (!item) return;
     
-    // Se o item tem agendamentoId, deletar do banco
-    if (item.agendamentoId) {
-      // Abrir modal de confirmação
-      const itemNome = item.tipo === 'especialidade' ? 'especialidade' : 'procedimento';
-      setConfirmacaoData({
-        titulo: '🗑️ Remover Item',
-        mensagem: `Deseja realmente remover este ${itemNome}? Esta ação não pode ser desfeita.`,
-        onConfirm: async () => {
-          setModalConfirmacao(false);
-          
-          try {
-            console.log('🗑️ Deletando agendamento do banco...', { agendamentoId: item.agendamentoId });
-            await agendamentoService.delete(item.agendamentoId);
-            console.log('✅ Item deletado do banco com sucesso!');
-            
-            // Atualizar UI removendo o item
-            setGrades(prev => prev.map((grade, i) => {
-              if (i === gradeIndex) {
-                const novosItens = grade.itens.filter(item => item.id !== itemId);
-                // Reordenar
-                return {
-                  ...grade,
-                  itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
-                };
+    // Confirmar remoção sempre (com e sem agendamentoId)
+    const itemNome = item.tipo === 'especialidade' ? 'especialidade' : 'procedimento';
+    setConfirmacaoData({
+      titulo: `🗑️ Remover ${itemNome.charAt(0).toUpperCase() + itemNome.slice(1)}`,
+      mensagem: `Deseja realmente remover este ${itemNome}? Esta ação não pode ser desfeita.`,
+      onConfirm: async () => {
+        setModalConfirmacao(false);
+        try {
+          const dataFormatada = proximasDatas[gradeIndex].toISOString().split('T')[0];
+          const deletadosIds: string[] = [];
+
+          if (item.tipo === 'especialidade') {
+            // Remover todo o grupo (cabeçalho e procedimentos) dessa especialidade/médico na data
+            const todosAgendamentos = await agendamentoService.getAll(hospitalId);
+            const [espNome, medicoNome] = (() => {
+              const t = String(item.texto || '');
+              if (t.includes(' - ')) {
+                const partes = t.split(' - ');
+                return [partes[0], partes[1]];
               }
-              return grade;
-            }));
-          } catch (error) {
-            console.error('❌ Erro ao deletar item:', error);
-            setConfirmacaoData({
-              titulo: '❌ Erro',
-              mensagem: `Erro ao deletar item: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-              onConfirm: () => setModalConfirmacao(false)
+              return [t, ''];
+            })();
+            const candidatos = todosAgendamentos.filter((a: any) => {
+              const mesmoDia = String(a.data_agendamento) === dataFormatada;
+              const mesmaEsp = String(a.especialidade || '') === espNome;
+              const mesmoMed = String(a.medico || '') === (medicoNome || '');
+              return mesmoDia && mesmaEsp && mesmoMed;
             });
-            setModalConfirmacao(true);
+            for (const a of candidatos) {
+              await agendamentoService.delete(String(a.id));
+              deletadosIds.push(String(a.id));
+            }
+          } else {
+            // Procedimento individual
+            if (item.agendamentoId) {
+              await agendamentoService.delete(item.agendamentoId);
+              deletadosIds.push(String(item.agendamentoId));
+            }
           }
+
+          // Atualizar UI removendo cabeçalho/itens do grupo e procedimentos deletados
+          setGrades(prev => prev.map((grade, i) => {
+            if (i === gradeIndex) {
+              const novosItens = grade.itens.filter(it => {
+                if (it.id === itemId) return false; // remove item acionado
+                if (it.agendamentoId && deletadosIds.includes(String(it.agendamentoId))) return false; // remove procedimentos do grupo
+                return true;
+              });
+              return {
+                ...grade,
+                itens: novosItens.map((it, idx) => ({ ...it, ordem: idx + 1 }))
+              };
+            }
+            return grade;
+          }));
+        } catch (error) {
+          console.error('❌ Erro ao deletar item:', error);
+          setConfirmacaoData({
+            titulo: '❌ Erro',
+            mensagem: `Erro ao deletar item: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+            onConfirm: () => setModalConfirmacao(false)
+          });
+          setModalConfirmacao(true);
         }
-      });
-      setModalConfirmacao(true);
-    } else {
-      // Se não tem agendamentoId, apenas remover da UI (item temporário)
-      setGrades(prev => prev.map((grade, i) => {
-        if (i === gradeIndex) {
-          const novosItens = grade.itens.filter(item => item.id !== itemId);
-          // Reordenar
-          return {
-            ...grade,
-            itens: novosItens.map((item, idx) => ({ ...item, ordem: idx + 1 }))
-          };
-        }
-        return grade;
-      }));
-    }
+      }
+    });
+    setModalConfirmacao(true);
   };
 
   // Limpar Grade: Deletar todos os itens do banco
@@ -3759,7 +3778,7 @@ ${carimboLinha}`
                               <button
                                 onClick={() => handleRemoveItem(index, grupo.especialidade!.id)}
                                 className="opacity-0 group-hover:opacity-100 p-1 text-gray-800 hover:bg-gray-200 rounded transition-all"
-                                title="✕"
+                                title="Remover Especialidade"
                               >
                                 <TrashIcon className="w-4 h-4" />
                               </button>
@@ -3859,7 +3878,7 @@ ${carimboLinha}`
                                               
                                               {/* Coluna Médico */}
                                               <td className="px-3 py-2 border-r border-slate-200 w-36 overflow-hidden">
-                                                {isFirstPaciente ? (
+                                                {!proc.medicoNome ? (
                                                   <select
                                                     value={proc.medicoId || ''}
                                                     onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
@@ -3878,7 +3897,7 @@ ${carimboLinha}`
                                                     )}
                                                   </select>
                                                 ) : (
-                                                  <span className="text-sm text-slate-500 truncate block">{proc.medicoNome || '-'}</span>
+                                                  <span className="text-sm text-slate-500 truncate block">{proc.medicoNome}</span>
                                                 )}
                                               </td>
                                               
