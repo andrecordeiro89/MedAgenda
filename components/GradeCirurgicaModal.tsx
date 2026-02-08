@@ -215,6 +215,47 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [novaEspecificacaoTexto, setNovaEspecificacaoTexto] = useState('');
   const [medicoSelecionadoParaProc, setMedicoSelecionadoParaProc] = useState('');
   const [medicoVemDaEspecialidade, setMedicoVemDaEspecialidade] = useState(false); // Se true, campo fica bloqueado
+  const [pacientesHistorico, setPacientesHistorico] = useState<Array<{ nome: string; data_nascimento?: string; cidade_natal?: string | null; telefone?: string | null; n_prontuario?: string | null }>>([]);
+  const [modalPacienteAberto, setModalPacienteAberto] = useState(false);
+  // Modal de vagas
+  const [modalVagasAberto, setModalVagasAberto] = useState(false);
+  const [vagasLista, setVagasLista] = useState<Array<{ gradeIndex: number; data: string; esp: string; medico: string; itemId: string; procedimento: string; especificacao?: string }>>([]);
+
+  const computeVagasLista = () => {
+    const lista: Array<{ gradeIndex: number; data: string; esp: string; medico: string; itemId: string; procedimento: string; especificacao?: string }> = [];
+    grades.forEach((grade, gi) => {
+      let currentEspText = '';
+      let currentEspNome = '';
+      let currentMedicoHeader = '';
+      grade.itens.forEach(it => {
+        if (it.tipo === 'especialidade') {
+          currentEspText = String(it.texto || '');
+          if (currentEspText.includes(' - ')) {
+            const partes = currentEspText.split(' - ');
+            currentEspNome = partes[0];
+            currentMedicoHeader = partes[1] || '';
+          } else {
+            currentEspNome = currentEspText;
+            currentMedicoHeader = '';
+          }
+        } else if (it.tipo === 'procedimento') {
+          const hasPaciente = (it.pacientes && it.pacientes.length > 0);
+          if (!hasPaciente) {
+            lista.push({
+              gradeIndex: gi,
+              data: grade.data,
+              esp: currentEspNome,
+              medico: (it as any).medicoNome || currentMedicoHeader || '',
+              itemId: it.id,
+              procedimento: String(it.texto || ''),
+              especificacao: (it as any).especificacao || undefined
+            });
+          }
+        }
+      });
+    });
+    setVagasLista(lista);
+  };
 
   // Carregar médicos do hospital ao abrir o modal
   useEffect(() => {
@@ -239,6 +280,27 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       loadMedicos();
     }
   }, [isOpen, hospitalId]);
+
+  // Carregar histórico de pacientes do hospital quando abrir modal de paciente
+  useEffect(() => {
+    const loadPacientes = async () => {
+      if (!modalPacienteAberto || !hospitalId) return;
+      try {
+        const ags = await agendamentoService.getAll(hospitalId);
+        const uniq = new Map<string, { nome: string; data_nascimento?: string; cidade_natal?: string | null; telefone?: string | null; n_prontuario?: string | null }>();
+        (ags || []).forEach((a: any) => {
+          const nome = (a.nome_paciente || '').trim();
+          if (!nome) return;
+          const key = `${nome}|${a.data_nascimento || ''}`;
+          if (!uniq.has(key)) uniq.set(key, { nome, data_nascimento: a.data_nascimento, cidade_natal: a.cidade_natal, telefone: a.telefone, n_prontuario: (a as any).n_prontuario || null });
+        });
+        setPacientesHistorico(Array.from(uniq.values()));
+      } catch (e) {
+        setPacientesHistorico([]);
+      }
+    };
+    loadPacientes();
+  }, [modalPacienteAberto, hospitalId]);
 
   // Função para recarregar grades do banco (reutilizável)
   const recarregarGradesDoSupabase = async () => {
@@ -496,7 +558,6 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [expandedProcedimentos, setExpandedProcedimentos] = useState<Record<string, boolean>>({});
 
   // Estado para controlar qual procedimento está adicionando paciente (MODAL)
-  const [modalPacienteAberto, setModalPacienteAberto] = useState(false);
   const [modoEdicao, setModoEdicao] = useState(false); // Novo: true = editando, false = criando
   const [procedimentoSelecionado, setProcedimentoSelecionado] = useState<{
     gradeIndex: number;
@@ -2387,6 +2448,8 @@ ${carimboLinha}`
       });
       
       setGrades(updatedGrades);
+      // Atualizar lista de vagas, se modal estiver aberto
+      if (modalVagasAberto) computeVagasLista();
       
       // Fechar modal
       setModalPacienteAberto(false);
@@ -3208,6 +3271,17 @@ ${carimboLinha}`
             )}
           </button>
 
+          {/* Botão Buscar Vaga */}
+          <button
+            onClick={() => { computeVagasLista(); setModalVagasAberto(true); }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg border border-green-300 transition-colors font-medium text-[12px] whitespace-nowrap"
+            title="Buscar vagas (procedimentos sem paciente)"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 5a6 6 0 100 12 6 6 0 000-12z"/></svg>
+            <span>Buscar Vaga</span>
+            <span className="ml-1 text-[11px] text-green-700">({grades.reduce((acc,g)=>acc+g.itens.filter(it=>it.tipo==='procedimento' && (!it.pacientes || it.pacientes.length===0)).length,0)})</span>
+          </button>
+
           <div className="flex items-center gap-1">
             <button
               onClick={() => setViewMode('sameWeekday')}
@@ -3348,13 +3422,8 @@ ${carimboLinha}`
                         {DAY_NUMBER_NAMES[data.getDay()]}
                       </span>
                       {grade.itens.length > 0 && (
-                        <span className="text-xs font-bold bg-green-600 text-white px-2 py-0.5 rounded-full shadow-sm ml-2">
-                          {(() => {
-                            const totalPacientes = grade.itens
-                              .filter(item => item.tipo === 'procedimento')
-                              .reduce((sum, item) => sum + (item.pacientes?.length || 0), 0);
-                            return totalPacientes > 0 ? totalPacientes : grade.itens.length;
-                          })()}
+                        <span className="text-xs font-bold bg-green-600 text-white px-2 py-0.5 rounded-full shadow-sm ml-2" title="Quantidade de procedimentos do dia">
+                          {grade.itens.filter(item => item.tipo === 'procedimento').length}
                         </span>
                       )}
                     </div>
@@ -3754,15 +3823,18 @@ ${carimboLinha}`
                                 </button>
                               )}
 
-                              {/* Badge com contador */}
-                              <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs font-semibold">
-                                {(() => {
-                                  const totalPacientes = grupo.procedimentos.reduce((sum, proc) => 
-                                    sum + (proc.pacientes?.length || 0), 0
-                                  );
-                                  return totalPacientes > 0 ? totalPacientes : grupo.procedimentos.length;
-                                })()}
-                              </span>
+                              {/* Indicadores: Ocupadas e Vagas */}
+                              {(() => {
+                                const totalSlots = grupo.procedimentos.length;
+                                const ocupadas = grupo.procedimentos.reduce((sum, p) => sum + (p.pacientes?.length || 0), 0);
+                                const vagas = Math.max(0, totalSlots - ocupadas);
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-[11px] font-semibold" title="Procedimentos ocupados">{ocupadas} ocupadas</span>
+                                    <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[11px] font-semibold" title="Vagas (sem paciente)">{vagas} vagas</span>
+                                  </div>
+                                );
+                              })()}
 
                               {/* Botão adicionar procedimento */}
                               <button
@@ -4313,6 +4385,47 @@ ${carimboLinha}`
       </div>
     </Modal>
 
+  {/* MODAL DE BUSCAR VAGA */}
+  {modalVagasAberto && (
+    <Modal
+      isOpen={modalVagasAberto}
+      onClose={() => setModalVagasAberto(false)}
+      title={"Buscar Vaga (procedimentos sem paciente)"}
+    >
+      <div className="p-4">
+        {vagasLista.length === 0 ? (
+          <div className="text-sm text-gray-600">Não há vagas disponíveis nas datas listadas.</div>
+        ) : (
+          <div className="space-y-3">
+            {vagasLista.map((v, idx) => (
+              <div key={`${v.itemId}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded px-3 py-2">
+                <div className="text-sm text-slate-800">
+                  <span className="font-semibold">{formatDate(v.data)}</span>
+                  <span className="mx-2">•</span>
+                  <span>{v.esp}</span>
+                  {v.medico ? (<><span className="mx-2">•</span><span>{v.medico}</span></>) : null}
+                  <div className="mt-1 text-[12px] text-slate-600">
+                    <span className="font-medium">Procedimento:</span> {v.procedimento}
+                    {v.especificacao ? (<span className="ml-2 italic">({v.especificacao})</span>) : null}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleAddPacienteClick(v.gradeIndex, v.itemId)}
+                    className="px-2 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-1"
+                    title="Adicionar paciente nesta vaga"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )}
     {/* MODAL DE ADICIONAR/EDITAR PACIENTE */}
     <Modal
       isOpen={modalPacienteAberto}
@@ -4320,18 +4433,48 @@ ${carimboLinha}`
       title={modoEdicao ? "Editar Dados do Paciente" : "Adicionar Paciente ao Procedimento"}
     >
       <div className="p-6 space-y-4">
-        {/* Nome do Paciente */}
+        {/* Nome do Paciente com busca rápida */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Nome do Paciente <span className="text-red-500">*</span>
           </label>
-          <Input
-            value={pacienteNome}
-            onChange={(e) => setPacienteNome(e.target.value)}
-            placeholder="Digite o nome completo"
-            className="w-full"
-            autoFocus
-          />
+          <div className="relative">
+            <Input
+              value={pacienteNome}
+              onChange={(e) => setPacienteNome(e.target.value)}
+              placeholder="Digite para buscar e associar"
+              className="w-full"
+              autoFocus
+            />
+            {pacienteNome.trim().length >= 2 && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded shadow max-h-36 overflow-auto">
+                {pacientesHistorico
+                  .filter(p => p.nome.toLowerCase().includes(pacienteNome.trim().toLowerCase()))
+                  .slice(0, 8)
+                  .map((p, idx) => (
+                    <button
+                      key={`${p.nome}-${p.data_nascimento}-${idx}`}
+                      type="button"
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
+                      onClick={() => {
+                        setPacienteNome(p.nome);
+                        setPacienteDataNascimento(p.data_nascimento || '');
+                        setPacienteCidade(p.cidade_natal || '');
+                        setPacienteTelefone(p.telefone || '');
+                        setPacienteProntuario(p.n_prontuario || '');
+                      }}
+                    >
+                      <span className="font-medium">{p.nome}</span>
+                      <span className="text-gray-500 ml-2">{p.data_nascimento || ''}</span>
+                      {p.n_prontuario ? <span className="text-gray-400 ml-2">Pront.: {p.n_prontuario}</span> : null}
+                    </button>
+                  ))}
+                {pacientesHistorico.filter(p => p.nome.toLowerCase().includes(pacienteNome.trim().toLowerCase())).length === 0 && (
+                  <div className="px-3 py-2 text-sm text-gray-500">Nenhum paciente encontrado</div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Nº Prontuário */}
