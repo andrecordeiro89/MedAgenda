@@ -220,6 +220,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   // Modal de vagas
   const [modalVagasAberto, setModalVagasAberto] = useState(false);
   const [vagasLista, setVagasLista] = useState<Array<{ gradeIndex: number; data: string; esp: string; medico: string; itemId: string; procedimento: string; especificacao?: string }>>([]);
+  const [groupVagasByMedico, setGroupVagasByMedico] = useState(true);
 
   const computeVagasLista = () => {
     const lista: Array<{ gradeIndex: number; data: string; esp: string; medico: string; itemId: string; procedimento: string; especificacao?: string }> = [];
@@ -4398,30 +4399,81 @@ ${carimboLinha}`
           <div className="text-sm text-gray-600">Não há vagas disponíveis nas datas listadas.</div>
         ) : (
           <div className="space-y-3">
-            {vagasLista.map((v, idx) => (
-              <div key={`${v.itemId}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded px-3 py-2">
-                <div className="text-sm text-slate-800">
-                  <span className="font-semibold">{formatDate(v.data)}</span>
-                  <span className="mx-2">•</span>
-                  <span>{v.esp}</span>
-                  {v.medico ? (<><span className="mx-2">•</span><span>{v.medico}</span></>) : null}
-                  <div className="mt-1 text-[12px] text-slate-600">
-                    <span className="font-medium">Procedimento:</span> {v.procedimento}
-                    {v.especificacao ? (<span className="ml-2 italic">({v.especificacao})</span>) : null}
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs text-slate-600">Total de vagas: {vagasLista.length}</div>
+              <label className="flex items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={groupVagasByMedico} onChange={() => setGroupVagasByMedico(v => !v)} />
+                Agrupar por médico
+              </label>
+            </div>
+            {groupVagasByMedico ? (
+              (() => {
+                const groups: Record<string, typeof vagasLista> = {};
+                vagasLista.forEach(v => {
+                  const key = v.medico || 'Sem médico';
+                  if (!groups[key]) groups[key] = [];
+                  groups[key].push(v);
+                });
+                return Object.keys(groups).sort().map((medicoKey) => (
+                  <div key={`grupo-${medicoKey}`} className="border border-slate-200 rounded">
+                    <div className="px-3 py-2 bg-slate-100 text-sm font-semibold text-slate-800 flex items-center justify-between">
+                      <span>{medicoKey}</span>
+                      <span className="text-xs text-slate-600">{groups[medicoKey].length} vaga(s)</span>
+                    </div>
+                    <div className="divide-y divide-slate-200">
+                      {groups[medicoKey].map((v, idx) => (
+                        <div key={`${v.itemId}-${idx}`} className="flex items-center justify-between bg-white px-3 py-2">
+                          <div className="text-sm text-slate-800">
+                            <span className="font-semibold">{formatDate(v.data)}</span>
+                            <span className="mx-2">•</span>
+                            <span>{v.esp}</span>
+                            <div className="mt-1 text-[12px] text-slate-600">
+                              <span className="font-medium">Procedimento:</span> {v.procedimento}
+                              {v.especificacao ? (<span className="ml-2 italic">({v.especificacao})</span>) : null}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleAddPacienteClick(v.gradeIndex, v.itemId)}
+                              className="px-2 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-1"
+                              title="Adicionar paciente nesta vaga"
+                            >
+                              <PlusIcon className="w-4 h-4" />
+                              Adicionar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()
+            ) : (
+              vagasLista.map((v, idx) => (
+                <div key={`${v.itemId}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded px-3 py-2">
+                  <div className="text-sm text-slate-800">
+                    <span className="font-semibold">{formatDate(v.data)}</span>
+                    <span className="mx-2">•</span>
+                    <span>{v.esp}</span>
+                    {v.medico ? (<><span className="mx-2">•</span><span>{v.medico}</span></>) : null}
+                    <div className="mt-1 text-[12px] text-slate-600">
+                      <span className="font-medium">Procedimento:</span> {v.procedimento}
+                      {v.especificacao ? (<span className="ml-2 italic">({v.especificacao})</span>) : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleAddPacienteClick(v.gradeIndex, v.itemId)}
+                      className="px-2 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-1"
+                      title="Adicionar paciente nesta vaga"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      Adicionar
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleAddPacienteClick(v.gradeIndex, v.itemId)}
-                    className="px-2 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-1"
-                    title="Adicionar paciente nesta vaga"
-                  >
-                    <PlusIcon className="w-4 h-4" />
-                    Adicionar
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
