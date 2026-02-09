@@ -663,6 +663,9 @@ export const agendamentoService = {
     if (agendamento.ficha_pre_anestesica_ok !== undefined) updateData.ficha_pre_anestesica_ok = agendamento.ficha_pre_anestesica_ok
     if (agendamento.ficha_pre_anestesica_url !== undefined) updateData.ficha_pre_anestesica_url = agendamento.ficha_pre_anestesica_url
     if (agendamento.ficha_pre_anestesica_data !== undefined) updateData.ficha_pre_anestesica_data = agendamento.ficha_pre_anestesica_data
+    if ((agendamento as any).triagem_pre_anestesica_ok !== undefined) updateData.triagem_pre_anestesica_ok = (agendamento as any).triagem_pre_anestesica_ok
+    if ((agendamento as any).triagem_pre_anestesica_url !== undefined) updateData.triagem_pre_anestesica_url = (agendamento as any).triagem_pre_anestesica_url
+    if ((agendamento as any).triagem_pre_anestesica_data !== undefined) updateData.triagem_pre_anestesica_data = (agendamento as any).triagem_pre_anestesica_data
     if (agendamento.observacoes !== undefined) updateData.observacoes = agendamento.observacoes
 
     // Campos de avaliação do anestesista
@@ -879,6 +882,24 @@ export const usuarioHospitaisService = {
 }
 
 export const triagemPreAnestesicaService = {
+  _normalizeNome(nome?: string | null) {
+    return String(nome || '').trim();
+  },
+  _normalizeNascimento(nascimento?: string | null) {
+    const s = String(nascimento || '').trim();
+    if (!s) return '';
+    if (s.includes('/')) {
+      const [dd, mm, yyyy] = s.split('/');
+      if (dd && mm && yyyy && yyyy.length === 4) {
+        const d = dd.padStart(2, '0');
+        const m = mm.padStart(2, '0');
+        return `${yyyy}-${m}-${d}`;
+      }
+      return s;
+    }
+    const base = s.includes('T') ? s.split('T')[0] : (s.includes(' ') ? s.split(' ')[0] : s);
+    return base;
+  },
   async create(payload: Record<string, string>): Promise<any> {
     const { data, error } = await supabase
       .from('triagem_pre_anestesica')
@@ -889,11 +910,31 @@ export const triagemPreAnestesicaService = {
     return data
   }
   ,
+  async getByNomeNascimento(nomePaciente: string, dataNascimento: string): Promise<any | null> {
+    const nome = this._normalizeNome(nomePaciente)
+    const nascimento = this._normalizeNascimento(dataNascimento)
+    if (!nome || !nascimento) return null
+
+    const { data, error } = await supabase
+      .from('triagem_pre_anestesica')
+      .select('*')
+      .eq('nome_paciente', nome)
+      .eq('data_nascimento', nascimento)
+      .limit(1)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data || null
+  },
   async saveOrUpdate(payload: Record<string, string>): Promise<any> {
-    const nome = payload['nome_paciente']
-    const nascimento = payload['data_nascimento']
+    const nome = this._normalizeNome(payload['nome_paciente'])
+    const nascimento = this._normalizeNascimento(payload['data_nascimento'])
+    const normalizedPayload = {
+      ...payload,
+      nome_paciente: nome,
+      data_nascimento: nascimento
+    }
     if (!nome || !nascimento) {
-      return await this.create(payload)
+      return await this.create(normalizedPayload)
     }
     const { data: existing, error: selectError } = await supabase
       .from('triagem_pre_anestesica')
@@ -906,14 +947,14 @@ export const triagemPreAnestesicaService = {
     if (existing?.id) {
       const { data, error } = await supabase
         .from('triagem_pre_anestesica')
-        .update(payload)
+        .update(normalizedPayload)
         .eq('id', existing.id)
         .select()
         .single()
       if (error) throw new Error(error.message)
       return data
     } else {
-      return await this.create(payload)
+      return await this.create(normalizedPayload)
     }
   }
 }

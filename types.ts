@@ -32,6 +32,10 @@ export interface Agendamento {
   ficha_pre_anestesica_ok?: boolean; // Indica se ficha pré-operatória foi anexada
   ficha_pre_anestesica_url?: string | null; // URL da ficha pré-operatória
   ficha_pre_anestesica_data?: string | null; // Data/hora do upload da ficha
+
+  triagem_pre_anestesica_ok?: boolean | null;
+  triagem_pre_anestesica_url?: string | null;
+  triagem_pre_anestesica_data?: string | null;
   complementares_ok?: boolean; // NOVO: Indica se documentos complementares foram anexados
   complementares_urls?: string | null; // NOVO: JSON com URLs dos complementares
   complementares_data?: string | null; // NOVO: Data/hora do upload dos complementares

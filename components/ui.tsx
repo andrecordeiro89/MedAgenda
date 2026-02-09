@@ -144,7 +144,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-0">
-      <div className={`bg-white shadow-xl w-full flex flex-col animate-scale-in ${sizeClasses[size]} max-h-[90vh] rounded-lg m-4`}>
+      <div className={`bg-white shadow-xl w-full flex flex-col animate-scale-in ${sizeClasses[size]} ${size === 'full' ? 'max-h-[99vh] m-1' : 'max-h-[90vh] m-4'} rounded-lg`}>
         {title && (
           <div className="flex justify-between items-center border-b p-4">
             <h3 className={`font-semibold ${titleClassName || 'text-slate-700'} text-xl`}>{title}</h3>
@@ -158,7 +158,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             </div>
           </div>
         )}
-        <div className="p-6 overflow-y-auto">
+        <div className={`${size === 'full' ? 'p-4' : 'p-6'} overflow-y-auto`}>
           {children}
         </div>
         {footer && (

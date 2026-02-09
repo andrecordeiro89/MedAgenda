@@ -50,6 +50,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
   // Estados para Ficha Pré-Operatória (Anestesista)
   const [arquivoFichaSelecionado, setArquivoFichaSelecionado] = useState<File | null>(null);
   const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
+  const [triagemAnexada, setTriagemAnexada] = useState<string | null>(null);
   const fileInputFichaRef = useRef<HTMLInputElement>(null);
 
   // Estados para Avaliação do Anestesista
@@ -66,7 +67,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
 
   // ALTERAÇÃO PARA MODAL COMPLETO (Tipo Documentação)
   const [modalDocumentosAberto, setModalDocumentosAberto] = useState(false);
-  const [abaAtivaDocs, setAbaAtivaDocs] = useState<'exames' | 'preop' | 'complementares'>('exames');
+  const [abaAtivaDocs, setAbaAtivaDocs] = useState<'exames' | 'preop' | 'triagem' | 'complementares'>('exames');
 
   const [uploading, setUploading] = useState(false);
 
@@ -84,6 +85,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
     }
 
     // Ficha Pré-Op já vem no objeto (ag.ficha_pre_anestesica_url)
+
+    setTriagemAnexada((ag as any).triagem_pre_anestesica_url || null);
 
     // Carregar complementares
     try {
@@ -2001,7 +2004,7 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           setFichaAnexada(null);
         }}
         title={`📄 Documentos - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
-        size="large"
+        size="full"
       >
         <div className="space-y-4">
           {/* Informações do Paciente */}
@@ -2138,6 +2141,8 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
           setAgendamentoSelecionado(null);
           setDocumentosExames([]);
           setDocumentosComplementares([]);
+          setFichaAnexada(null);
+          setTriagemAnexada(null);
         }}
         title={`📄 Documentos - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
         size="large"
@@ -2172,6 +2177,15 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                 }`}
             >
               Ficha Pré-Op
+            </button>
+            <button
+              onClick={() => setAbaAtivaDocs('triagem')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${abaAtivaDocs === 'triagem'
+                ? 'border-b-2 border-teal-500 text-teal-600'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              Triagem Pré Anestésica
             </button>
             <button
               onClick={() => setAbaAtivaDocs('complementares')}
@@ -2255,6 +2269,44 @@ export const AnestesiaView: React.FC<{ hospitalId: string }> = ({ hospitalId }) 
                 ) : (
                   <div className="text-center py-6 bg-gray-50 rounded-lg dashed border-2 border-gray-200">
                     <p className="text-sm text-gray-400">Nenhuma ficha pré-anestésica anexada.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {abaAtivaDocs === 'triagem' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-gray-700">Triagem Pré Anestésica</h4>
+                </div>
+
+                {triagemAnexada ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-teal-50 border border-teal-100 rounded-lg hover:bg-teal-100 transition-colors">
+                      <a
+                        href={triagemAnexada}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 text-blue-600 hover:underline"
+                      >
+                        <div className="bg-white p-2 rounded shadow-sm">
+                          <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-sm text-gray-900">{triagemAnexada.split('/').pop()}</div>
+                          <div className="text-xs text-gray-500">Clique para visualizar</div>
+                        </div>
+                      </a>
+                    </div>
+                    <div className="border rounded overflow-hidden bg-white">
+                      <iframe title="Triagem Pré Anestésica" src={triagemAnexada} className="w-full h-[70vh]" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-lg dashed border-2 border-gray-200">
+                    <p className="text-sm text-gray-400">Nenhuma triagem anexada.</p>
                   </div>
                 )}
               </div>

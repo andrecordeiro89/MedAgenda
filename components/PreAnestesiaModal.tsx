@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui';
 import { formatDate } from '../utils';
-import { triagemPreAnestesicaService } from '../services/supabase';
+import { agendamentoService, supabase, triagemPreAnestesicaService } from '../services/supabase';
 import { useAuth } from './PremiumLogin';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -64,65 +64,67 @@ type PreAnestesiaDados = {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  initial: Partial<PreAnestesiaDados>;
+  initial: Partial<PreAnestesiaDados> & { agendamento_id?: string };
 }
+
+const DEFAULT_DADOS: PreAnestesiaDados = {
+  municipio: '',
+  unidade_hospitalar: '',
+  nome_paciente: '',
+  data_nascimento: '',
+  idade: '',
+  sexo: '',
+  procedimento_s: '',
+  cirurgiao: '',
+  cirurgias_previas: '',
+  intercorrencias_anestesicas: 'Não',
+  alergias: 'Não',
+  tabagismo: 'Não',
+  etilismo: 'Não',
+  peso_kg: '',
+  altura_cm: '',
+  imc_kg_m2: '',
+  hipertensao_arterial: 'Não',
+  precordialgia: 'Não',
+  palpitacao: 'Não',
+  dispneia: 'Não',
+  doenca_renal: 'Não',
+  iam_previo: 'Não',
+  cateterismo_previo: 'Não',
+  avc_previo: 'Não',
+  hipotireoidismo: 'Não',
+  hipertireoidismo: 'Não',
+  diabetes_melitus: 'Não',
+  observacoes_outras_comorbidades: '',
+  uso_anticoagulante_antiagregante: 'Não',
+  medicamentos_uso_continuo: '',
+  hb: '',
+  ht: '',
+  plaq: '',
+  na: '',
+  k: '',
+  ur: '',
+  cr: '',
+  glicemia: '',
+  hba1c: '',
+  tap: '',
+  inr: '',
+  kptt: '',
+  outros_exames: '',
+  ecg_eco: '',
+  risco_cardiologico: 'Não',
+  liberado_para_cirurgia: 'Não',
+  avaliacao_com_anestesiologista: 'Não',
+  avaliacao_exames_complementares: 'Não',
+  avaliacoes_exames_complementares_texto: '',
+  observacoes_finais: '',
+  anestesiologista_assinatura: '',
+  data_parecer: ''
+};
 
 export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
   const { hospitalSelecionado } = useAuth();
-  const [dados, setDados] = useState<PreAnestesiaDados>({
-    municipio: '',
-    unidade_hospitalar: '',
-    nome_paciente: '',
-    data_nascimento: '',
-    idade: '',
-    sexo: '',
-    procedimento_s: '',
-    cirurgiao: '',
-    cirurgias_previas: '',
-    intercorrencias_anestesicas: 'Não',
-    alergias: 'Não',
-    tabagismo: 'Não',
-    etilismo: 'Não',
-    peso_kg: '',
-    altura_cm: '',
-    imc_kg_m2: '',
-    hipertensao_arterial: 'Não',
-    precordialgia: 'Não',
-    palpitacao: 'Não',
-    dispneia: 'Não',
-    doenca_renal: 'Não',
-    iam_previo: 'Não',
-    cateterismo_previo: 'Não',
-    avc_previo: 'Não',
-    hipotireoidismo: 'Não',
-    hipertireoidismo: 'Não',
-    diabetes_melitus: 'Não',
-    observacoes_outras_comorbidades: '',
-    uso_anticoagulante_antiagregante: 'Não',
-    medicamentos_uso_continuo: '',
-    hb: '',
-    ht: '',
-    plaq: '',
-    na: '',
-    k: '',
-    ur: '',
-    cr: '',
-    glicemia: '',
-    hba1c: '',
-    tap: '',
-    inr: '',
-    kptt: '',
-    outros_exames: '',
-    ecg_eco: '',
-    risco_cardiologico: 'Não',
-    liberado_para_cirurgia: 'Não',
-    avaliacao_com_anestesiologista: 'Não',
-    avaliacao_exames_complementares: 'Não',
-    avaliacoes_exames_complementares_texto: '',
-    observacoes_finais: '',
-    anestesiologista_assinatura: '',
-    data_parecer: ''
-  });
+  const [dados, setDados] = useState<PreAnestesiaDados>(DEFAULT_DADOS);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [gerandoPDF, setGerandoPDF] = useState(false);
@@ -130,47 +132,110 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
     Array.from({ length: 4 }).map(() => ({ nome: '', m: false, t: false, n: false }))
   );
 
-  useEffect(() => {
-    const d: Partial<PreAnestesiaDados> = { ...initial };
-    if (d.data_nascimento) d.data_nascimento = formatDate(String(d.data_nascimento));
-    if (d.idade && !String(d.idade).includes('anos')) d.idade = `${d.idade} anos`;
-    const filtered: Partial<PreAnestesiaDados> = {};
-    Object.entries(d).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v).trim() !== '') {
-        (filtered as any)[k] = v;
+  const normalizeDateToIso = (input?: string | null) => {
+    const s = String(input || '').trim();
+    if (!s) return '';
+    if (s.includes('/')) {
+      const [dd, mm, yyyy] = s.split('/');
+      if (dd && mm && yyyy && yyyy.length === 4) {
+        const d = dd.padStart(2, '0');
+        const m = mm.padStart(2, '0');
+        return `${yyyy}-${m}-${d}`;
       }
-    });
-    setDados(prev => ({ ...prev, ...filtered }));
-    if (filtered.medicamentos_uso_continuo) {
-      const arr = String(filtered.medicamentos_uso_continuo).split('\n').slice(0, 4);
-      const parsed = Array.from({ length: 4 }).map((_, i) => {
-        const line = arr[i] || '';
-        const [nome, m, t, n] = line.split('|');
-        return {
-          nome: nome || '',
-          m: m === '1',
-          t: t === '1',
-          n: n === '1'
-        };
-      });
-      setMeds(parsed);
+      return s;
     }
-  }, [initial]);
+    const base = s.includes('T') ? s.split('T')[0] : (s.includes(' ') ? s.split(' ')[0] : s);
+    return base;
+  };
+
+  const parseMeds = (joined: string) => {
+    const arr = String(joined || '').split('\n').slice(0, 4);
+    return Array.from({ length: 4 }).map((_, i) => {
+      const line = arr[i] || '';
+      const [nome, m, t, n] = line.split('|');
+      return {
+        nome: nome || '',
+        m: m === '1',
+        t: t === '1',
+        n: n === '1'
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const run = async () => {
+      const init: Partial<PreAnestesiaDados> = { ...initial };
+      if (init.data_nascimento) init.data_nascimento = normalizeDateToIso(String(init.data_nascimento));
+      if (init.data_parecer) init.data_parecer = normalizeDateToIso(String(init.data_parecer));
+      if (init.idade && !String(init.idade).includes('anos')) init.idade = `${init.idade} anos`;
+
+      const nomeKey = String(init.nome_paciente || '').trim();
+      const nascKey = String(init.data_nascimento || '').trim();
+
+      let existing: any | null = null;
+      if (nomeKey && nascKey) {
+        try {
+          existing = await triagemPreAnestesicaService.getByNomeNascimento(nomeKey, nascKey);
+        } catch {
+          existing = null;
+        }
+      }
+
+      const overrideKeys: Array<keyof PreAnestesiaDados> = [
+        'municipio',
+        'unidade_hospitalar',
+        'nome_paciente',
+        'data_nascimento',
+        'idade',
+        'procedimento_s',
+        'cirurgiao'
+      ];
+      const overrides = overrideKeys.reduce((acc, k) => {
+        const v = (init as any)[k];
+        if (v !== undefined && v !== null && String(v).trim() !== '') {
+          (acc as any)[k] = v;
+        }
+        return acc;
+      }, {} as Partial<PreAnestesiaDados>);
+
+      const unidade = hospitalSelecionado?.nome ? hospitalSelecionado.nome : String(overrides.unidade_hospitalar || existing?.unidade_hospitalar || '');
+      const merged: PreAnestesiaDados = {
+        ...DEFAULT_DADOS,
+        ...(existing || {}),
+        ...overrides,
+        unidade_hospitalar: unidade
+      };
+
+      const medsJoined = String(merged.medicamentos_uso_continuo || '');
+      const nextMeds = parseMeds(medsJoined);
+      if (!cancelled) {
+        setDados(merged);
+        setMeds(nextMeds);
+        setErro(null);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, initial, hospitalSelecionado?.nome]);
   const syncMedsToDados = (mm: Array<{ nome: string; m: boolean; t: boolean; n: boolean }>) => {
     const joined = mm.map(m => `${m.nome}|${m.m ? 1 : 0}|${m.t ? 1 : 0}|${m.n ? 1 : 0}`).join('\n');
     setDados(prev => ({ ...prev, medicamentos_uso_continuo: joined }));
   };
 
   useEffect(() => {
-    if (hospitalSelecionado?.nome) {
+    if (isOpen && hospitalSelecionado?.nome) {
       setDados(prev => ({
         ...prev,
         unidade_hospitalar: hospitalSelecionado.nome
       }));
     }
-  }, [hospitalSelecionado]);
+  }, [isOpen, hospitalSelecionado?.nome]);
 
-  const gerarPDF = async () => {
+  const gerarPDF = async (mode: 'download' | 'blob' = 'download'): Promise<void | Blob> => {
     setGerandoPDF(true);
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -338,7 +403,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       drawCheck(interBoxesX, y + (rowH - cbSizeSimNao) / 2, dados.intercorrencias_anestesicas === 'Sim', cbSizeSimNao);
       doc.text('Sim', interBoxesX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       const interNaoX = interBoxesX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
-      drawCheck(interNaoX, y + (rowH - cbSizeSimNao) / 2, false, cbSizeSimNao);
+      drawCheck(interNaoX, y + (rowH - cbSizeSimNao) / 2, dados.intercorrencias_anestesicas === 'Não', cbSizeSimNao);
       doc.text('Não', interNaoX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       y += rowH + 2;
       doc.rect(startX, y, halfW, rowH);
@@ -349,7 +414,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       drawCheck(alergBoxesX, y + (rowH - cbSizeSimNao) / 2, dados.alergias === 'Sim', cbSizeSimNao);
       doc.text('Sim', alergBoxesX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       const alergNaoX = alergBoxesX + cbSizeSimNao + 2 + doc.getTextWidth('Sim') + 8;
-      drawCheck(alergNaoX, y + (rowH - cbSizeSimNao) / 2, false, cbSizeSimNao);
+      drawCheck(alergNaoX, y + (rowH - cbSizeSimNao) / 2, dados.alergias === 'Não', cbSizeSimNao);
       doc.text('Não', alergNaoX + cbSizeSimNao + 2, y + rowH / 2 + 1);
       doc.rect(startX + halfW + gap, y, halfW, rowH);
       const tabLabel = 'Tabagismo';
@@ -604,7 +669,8 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
       y += rowH * 2.5 + 6;
       doc.text('Anestesiologista', startX, y);
       doc.text('Carimbo e assinatura', startX, y + 4);
-      doc.text('Data: ____/____/______', pageW - margin - 50, y + 2);
+      const dataParecer = dados.data_parecer ? formatDate(String(dados.data_parecer)) : '';
+      doc.text(`Data: ${dataParecer || '____/____/______'}`, pageW - margin - 50, y + 2);
       const pageCount = (doc as any).getNumberOfPages ? (doc as any).getNumberOfPages() : (doc as any).internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -612,7 +678,11 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
         doc.text(`Página ${i}/${pageCount}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' });
       }
       const nomePaciente = (dados.nome_paciente || 'Paciente').replace(/\s+/g, '_');
-      doc.save(`Triagem_Pre_Anestesica_${nomePaciente}.pdf`);
+      const nomeArquivo = `Triagem_Pre_Anestesica_${nomePaciente}.pdf`;
+      if (mode === 'blob') {
+        return doc.output('blob');
+      }
+      doc.save(nomeArquivo);
     } finally {
       setGerandoPDF(false);
     }
@@ -624,9 +694,55 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
 
   const save = async () => {
     setErro(null);
+    const nome = String(dados.nome_paciente || '').trim();
+    const nascimento = String(dados.data_nascimento || '').trim();
+    if (!nome || !nascimento) {
+      setErro('Informe nome e data de nascimento para salvar');
+      return;
+    }
     setSalvando(true);
     try {
-      await triagemPreAnestesicaService.saveOrUpdate(dados as any);
+      const agendamentoId = String((initial as any)?.agendamento_id || '').trim();
+      const payload = {
+        ...dados,
+        nome_paciente: nome,
+        data_nascimento: normalizeDateToIso(nascimento),
+        data_parecer: normalizeDateToIso(dados.data_parecer)
+      } as any;
+      await triagemPreAnestesicaService.saveOrUpdate(payload);
+
+      if (agendamentoId) {
+        const pdfBlob = await gerarPDF('blob');
+        if (!(pdfBlob instanceof Blob)) {
+          throw new Error('Falha ao gerar PDF da triagem');
+        }
+
+        const folder = `triagem_pre_anestesica/${agendamentoId}`;
+        const filePath = `${folder}/triagem_pre_anestesica.pdf`;
+        const { error: uploadError } = await supabase.storage
+          .from('Documentos')
+          .upload(filePath, pdfBlob, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: 'application/pdf'
+          } as any);
+        if (uploadError) {
+          throw new Error(`Erro ao anexar PDF: ${uploadError.message}`);
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('Documentos')
+          .getPublicUrl(filePath);
+        if (!urlData?.publicUrl) {
+          throw new Error('Erro ao obter URL do PDF');
+        }
+
+        await agendamentoService.update(agendamentoId, {
+          triagem_pre_anestesica_url: urlData.publicUrl,
+          triagem_pre_anestesica_ok: true,
+          triagem_pre_anestesica_data: new Date().toISOString()
+        } as any);
+      }
       onClose();
     } catch (e: any) {
       setErro(e.message || 'Erro ao salvar');
@@ -669,7 +785,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
                 </div>
                 <div className="col-span-4">
                   <label className="text-xs text-slate-600">Data de nascimento</label>
-                  <input className="w-full px-2 py-1 text-sm border rounded" value={dados.data_nascimento} onChange={e => setField('data_nascimento', e.target.value)} />
+                  <input type="date" className="w-full px-2 py-1 text-sm border rounded" value={dados.data_nascimento} onChange={e => setField('data_nascimento', e.target.value)} />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-slate-600">Idade</label>
@@ -897,7 +1013,7 @@ export default function PreAnestesiaModal({ isOpen, onClose, initial }: Props) {
               </div>
               <div className="col-span-4">
                 <label className="text-xs text-slate-600">Data</label>
-                <input className="w-full px-2 py-1 text-sm border rounded" value={dados.data_parecer} onChange={e => setField('data_parecer', e.target.value)} />
+                <input type="date" className="w-full px-2 py-1 text-sm border rounded" value={dados.data_parecer} onChange={e => setField('data_parecer', e.target.value)} />
               </div>
             </div>
           </div>

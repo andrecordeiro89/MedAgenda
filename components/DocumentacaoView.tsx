@@ -70,7 +70,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   const [cancelAgendamento, setCancelAgendamento] = useState<Agendamento | null>(null);
   const [cancelObservacao, setCancelObservacao] = useState<string>('');
   const [salvandoCancel, setSalvandoCancel] = useState<boolean>(false);
-  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'complementares'>('documentos');
+  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'triagem' | 'complementares'>('documentos');
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
   const [preModalOpen, setPreModalOpen] = useState(false);
   const [preModalInitial, setPreModalInitial] = useState<any>({});
@@ -83,6 +83,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   // Estados para Ficha Pré-Operatória (Anestesista)
   const [arquivoFichaSelecionado, setArquivoFichaSelecionado] = useState<File | null>(null);
   const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
+  const [triagemAnexada, setTriagemAnexada] = useState<string | null>(null);
   const fileInputFichaRef = useRef<HTMLInputElement>(null);
   
   // Estados para Complementares (NOVO)
@@ -481,7 +482,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
   }, [debouncedProntuario, hospitalId]);
   // Status do paciente - NOVA LÓGICA (Exames e Pré-Op separados)
   const getStatusPaciente = (ag: Agendamento) => {
-    const temAlgumAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || ag.complementares_ok === true;
+    const temAlgumAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || (ag as any).triagem_pre_anestesica_ok === true || ag.complementares_ok === true;
     if (temAlgumAnexo) return { texto: 'COM EXAMES', cor: 'bg-green-100 text-green-800', grupo: 'com_exames' };
     return { texto: 'SEM EXAMES', cor: 'bg-red-100 text-red-800', grupo: 'sem_exames' };
   };
@@ -1213,6 +1214,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     
     // Carregar ficha pré-operatória já anexada
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    setTriagemAnexada((ag as any).triagem_pre_anestesica_url || null);
     
     // Carregar complementares já anexados (NOVO)
     if (ag.complementares_urls) {
@@ -1777,6 +1779,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     
     // Carregar ficha pré-operatória
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    setTriagemAnexada((ag as any).triagem_pre_anestesica_url || null);
     
     // Carregar documentos complementares
     if (ag.complementares_urls) {
@@ -2304,7 +2307,8 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 docsUrls = !!(ag.documentos_urls && ag.documentos_urls.trim() !== '');
               }
               const fichaUrl = !!(ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '');
-              const hasAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || docsUrls || fichaUrl;
+              const triagemUrl = !!((ag as any).triagem_pre_anestesica_url && String((ag as any).triagem_pre_anestesica_url).trim() !== '');
+              const hasAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || (ag as any).triagem_pre_anestesica_ok === true || docsUrls || fichaUrl || triagemUrl;
               return (
                 <div className="flex items-center gap-2">
                   <span
@@ -3717,11 +3721,12 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
           setModalUploadAberto(false);
           setArquivosDocumentosSelecionados([]);
           setArquivoFichaSelecionado(null);
+          setTriagemAnexada(null);
           setAgendamentoSelecionado(null);
           setTipoDeExame('');
         }}
         title={`Agendamento - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
-        size="large"
+        size="full"
       >
         <div className="space-y-4">
           {/* Informações do Paciente */}
@@ -3759,6 +3764,16 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                 }`}
               >
                 📋 Pré-Operatório {agendamentoSelecionado?.ficha_pre_anestesica_ok && '✓'}
+              </button>
+              <button
+                onClick={() => setAbaAtiva('triagem')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  abaAtiva === 'triagem'
+                    ? 'border-teal-600 text-teal-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Triagem Pré Anestésica {(agendamentoSelecionado as any)?.triagem_pre_anestesica_ok && '✓'}
               </button>
               {/* Complementares removidos */}
             </nav>
@@ -4040,6 +4055,35 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
                   )}
                 </button>
               </div>
+            </div>
+          )}
+
+          {abaAtiva === 'triagem' && (
+            <div className="space-y-4">
+              {triagemAnexada ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <a
+                      href={triagemAnexada}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      {triagemAnexada.split('/').pop() || 'Triagem Pré Anestésica'}
+                    </a>
+                  </div>
+                  <div className="border rounded overflow-hidden bg-white">
+                    <iframe title="Triagem Pré Anestésica" src={triagemAnexada} className="w-full h-[70vh]" />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-gray-50 rounded text-sm text-gray-700">
+                  Nenhuma triagem anexada para este paciente. Gere e salve pela Grade Cirúrgica.
+                </div>
+              )}
             </div>
           )}
           

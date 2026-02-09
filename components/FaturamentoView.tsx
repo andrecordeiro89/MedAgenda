@@ -1492,13 +1492,14 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
   // Estados e funções de Documentação (upload/visualização)
   const [modalUploadAberto, setModalUploadAberto] = useState(false);
   const [modalVisualizacaoAberto, setModalVisualizacaoAberto] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'complementares'>('documentos');
+  const [abaAtiva, setAbaAtiva] = useState<'documentos' | 'ficha' | 'triagem' | 'complementares'>('documentos');
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
   const [arquivosDocumentosSelecionados, setArquivosDocumentosSelecionados] = useState<File[]>([]);
   const [documentosAnexados, setDocumentosAnexados] = useState<string[]>([]);
   const fileInputDocumentosRef = useRef<HTMLInputElement>(null);
   const [arquivoFichaSelecionado, setArquivoFichaSelecionado] = useState<File | null>(null);
   const [fichaAnexada, setFichaAnexada] = useState<string | null>(null);
+  const [triagemAnexada, setTriagemAnexada] = useState<string | null>(null);
   const fileInputFichaRef = useRef<HTMLInputElement>(null);
   const [arquivosComplementaresSelecionados, setArquivosComplementaresSelecionados] = useState<File[]>([]);
   const [complementaresAnexados, setComplementaresAnexados] = useState<string[]>([]);
@@ -1522,6 +1523,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     if (typeof rawMeta === 'string') { try { const parsed = JSON.parse(rawMeta); setExamesMeta(Array.isArray(parsed) ? parsed : []); } catch { setExamesMeta([]); } }
     else if (Array.isArray(rawMeta)) { setExamesMeta(rawMeta); } else { setExamesMeta([]); }
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    setTriagemAnexada((ag as any).triagem_pre_anestesica_url || null);
     if (ag.complementares_urls) {
       try { const urls = JSON.parse(ag.complementares_urls); setComplementaresAnexados(Array.isArray(urls) ? urls : []); } catch { setComplementaresAnexados([]); }
     } else { setComplementaresAnexados([]); }
@@ -1535,6 +1537,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     if (typeof rawMeta2 === 'string') { try { const parsed = JSON.parse(rawMeta2); setExamesMeta(Array.isArray(parsed) ? parsed : []); } catch { setExamesMeta([]); } }
     else if (Array.isArray(rawMeta2)) { setExamesMeta(rawMeta2); } else { setExamesMeta([]); }
     setFichaAnexada(ag.ficha_pre_anestesica_url || null);
+    setTriagemAnexada((ag as any).triagem_pre_anestesica_url || null);
     if (ag.complementares_urls) {
       try { const urls = JSON.parse(ag.complementares_urls); setComplementaresAnexados(Array.isArray(urls) ? urls : []); } catch { setComplementaresAnexados([]); }
     } else { setComplementaresAnexados([]); }
@@ -2207,7 +2210,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 docsUrls = !!(ag.documentos_urls && (ag.documentos_urls as any)?.trim?.() !== '');
               }
               const fichaUrl = !!(ag.ficha_pre_anestesica_url && ag.ficha_pre_anestesica_url.trim() !== '');
-              const hasAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || docsUrls || fichaUrl;
+              const triagemUrl = !!((ag as any).triagem_pre_anestesica_url && String((ag as any).triagem_pre_anestesica_url).trim() !== '');
+              const hasAnexo = ag.documentos_ok === true || ag.ficha_pre_anestesica_ok === true || (ag as any).triagem_pre_anestesica_ok === true || docsUrls || fichaUrl || triagemUrl;
               return (
                 <div className="flex items-center gap-2">
                   <span className={`inline-block w-2.5 h-2.5 rounded-full ${hasAnexo ? 'bg-green-500' : 'bg-gray-300'}`} title={hasAnexo ? 'Possui algum anexo' : 'Sem anexos'} />
@@ -3563,11 +3567,12 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               setModalUploadAberto(false);
               setArquivosDocumentosSelecionados([]);
               setArquivoFichaSelecionado(null);
+              setTriagemAnexada(null);
               setAgendamentoSelecionado(null);
               setTipoDeExame('');
             }}
             title={`Agendamento - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
-            size="large"
+            size="full"
           >
             <div className="space-y-4">
               <div className="bg-blue-50 p-3 rounded-lg">
@@ -3579,6 +3584,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 <nav className="flex gap-4">
                   <button onClick={() => setAbaAtiva('documentos')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${abaAtiva === 'documentos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Anexos {agendamentoSelecionado?.documentos_ok && '✓'}</button>
                   <button onClick={() => setAbaAtiva('ficha')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${abaAtiva === 'ficha' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>📋 Pré-Operatório {agendamentoSelecionado?.ficha_pre_anestesica_ok && '✓'}</button>
+                  <button onClick={() => setAbaAtiva('triagem')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${abaAtiva === 'triagem' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Triagem Pré Anestésica {(agendamentoSelecionado as any)?.triagem_pre_anestesica_ok && '✓'}</button>
                 </nav>
               </div>
               {abaAtiva === 'documentos' && (
@@ -3715,6 +3721,26 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                   )}
                 </div>
               )}
+
+              {abaAtiva === 'triagem' && (
+                <div className="space-y-4">
+                  {triagemAnexada ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <a href={triagemAnexada} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          {triagemAnexada.split('/').pop() || 'Triagem Pré Anestésica'}
+                        </a>
+                      </div>
+                      <div className="border rounded overflow-hidden bg-white">
+                        <iframe title="Triagem Pré Anestésica" src={triagemAnexada} className="w-full h-[70vh]" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded text-sm text-gray-700">Nenhuma triagem anexada para este paciente.</div>
+                  )}
+                </div>
+              )}
             </div>
           </Modal>
           <Modal
@@ -3725,9 +3751,10 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
               setDocumentosAnexados([]);
               setComplementaresAnexados([]);
               setFichaAnexada(null);
+              setTriagemAnexada(null);
             }}
             title={`📄 Documentos - ${agendamentoSelecionado?.nome_paciente || 'Paciente'}`}
-            size="large"
+            size="full"
           >
             <div className="space-y-4">
               <div className="bg-blue-50 p-3 rounded-lg">
@@ -3765,6 +3792,17 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 ) : (<p className="text-sm text-gray-500 italic">Nenhuma ficha anexada</p>)}
               </div>
               <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>Triagem Pré Anestésica</h3>
+                {triagemAnexada ? (
+                  <div className="flex items-center justify-between p-2 bg-teal-50 rounded hover:bg-teal-100 transition-colors">
+                    <a href={triagemAnexada} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline flex-1">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      <span className="truncate">{triagemAnexada.split('/').pop() || 'Triagem Pré Anestésica'}</span>
+                    </a>
+                  </div>
+                ) : (<p className="text-sm text-gray-500 italic">Nenhuma triagem anexada</p>)}
+              </div>
+              <div className="border-t pt-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>📁 Documentos Complementares</h3>
                 {complementaresAnexados.length > 0 ? (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -3783,7 +3821,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 ) : (<p className="text-sm text-gray-500 italic">Nenhum documento complementar anexado</p>)}
               </div>
               <div className="flex justify-end pt-4 border-t">
-                <button onClick={() => { setModalVisualizacaoAberto(false); setAgendamentoSelecionado(null); setDocumentosAnexados([]); setComplementaresAnexados([]); setFichaAnexada(null); }} className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Fechar</button>
+                <button onClick={() => { setModalVisualizacaoAberto(false); setAgendamentoSelecionado(null); setDocumentosAnexados([]); setComplementaresAnexados([]); setFichaAnexada(null); setTriagemAnexada(null); }} className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Fechar</button>
               </div>
             </div>
           </Modal>
@@ -3969,4 +4007,3 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
 };
 
 export default FaturamentoView;
-

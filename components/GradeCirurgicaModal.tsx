@@ -4075,10 +4075,11 @@ ${carimboLinha}`
                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
                                                   </button>
-                                                  {paciente.nome && (
+                                                  {paciente.nome && paciente.dataNascimento && (
                                                     <button
                                                       onClick={() => {
                                                         setPreModalInitial({
+                                                          agendamento_id: proc.agendamentoId,
                                                           municipio: paciente.cidade || '',
                                                           unidade_hospitalar: getHospitalName(hospitalId) || '',
                                                           nome_paciente: paciente.nome || '',
