@@ -309,7 +309,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           nome: 'Hospital Maternidade Nossa Senhora Aparecida',
           cidade: 'Fazenda Rio Grande',
           cnpj: '14.736.446/0010-84',
-          role: 'agendamento_local'
+          role: 'admin'
         },
         'agendamento.rbs@medagenda.com': {
           id: '4a2527c1-df09-4a36-a08f-adc63f555123',
@@ -765,13 +765,20 @@ export const useHospitalFilter = () => {
 
   // Verificar se usuário tem acesso a uma view
   const hasAccessToView = (viewName: string): boolean => {
+    const emailLower = usuario?.email?.toLowerCase();
+    if (emailLower === 'agendamento.frg@medagenda.com') {
+      return viewName !== 'faturamento';
+    }
+    if (emailLower === 'cc.frg@medagenda.com') {
+      return viewName !== 'faturamento';
+    }
     if (usuario?.email?.toLowerCase() === 'auditoria.foz@medagenda.com') {
       if (viewName === 'calendar' || viewName === 'anestesista') return false;
       return true;
     }
     if (!userRole) return false;
-    const emailLower = usuario?.email?.toLowerCase();
-    if (emailLower === 'cc.frg@medagenda.com' || emailLower === 'cf.frg@medagenda.com') {
+    
+    if (emailLower === 'cf.frg@medagenda.com') {
       return viewName === 'dashboard' || viewName === 'calendar';
     }
     
