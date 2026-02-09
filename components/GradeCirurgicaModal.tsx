@@ -961,7 +961,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
       // Atualizar grade
       const updatedGrades2 = grades.map((grade, i) => {
         if (i === addingEspecialidade) {
-          return { ...grade, itens: itens2 };
+          return { ...grade, itens };
         }
         return grade;
       });

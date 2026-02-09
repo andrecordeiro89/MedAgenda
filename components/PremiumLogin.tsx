@@ -260,7 +260,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           nome: 'Hospital Nossa Senhora Aparecida',
           cidade: 'Foz do Iguaçu',
           cnpj: '14.736.446/0009-40',
-          role: 'triagem'
+          role: 'admin'
         },
         'foz.marcia@medagenda.com': {
           id: 'ece028c8-3c6d-4d0a-98aa-efaa3565b55f',
