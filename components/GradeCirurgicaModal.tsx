@@ -216,6 +216,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [medicoSelecionadoParaProc, setMedicoSelecionadoParaProc] = useState('');
   const [medicoVemDaEspecialidade, setMedicoVemDaEspecialidade] = useState(false); // Se true, campo fica bloqueado
   const [pacientesHistorico, setPacientesHistorico] = useState<Array<{ nome: string; data_nascimento?: string; cidade_natal?: string | null; telefone?: string | null; n_prontuario?: string | null }>>([]);
+  const [carregandoPacientesHistorico, setCarregandoPacientesHistorico] = useState(false);
   const [modalPacienteAberto, setModalPacienteAberto] = useState(false);
   // Modal de vagas
   const [modalVagasAberto, setModalVagasAberto] = useState(false);
@@ -287,6 +288,7 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     const loadPacientes = async () => {
       if (!modalPacienteAberto || !hospitalId) return;
       try {
+        setCarregandoPacientesHistorico(true);
         const ags = await agendamentoService.getAll(hospitalId);
         const uniq = new Map<string, { nome: string; data_nascimento?: string; cidade_natal?: string | null; telefone?: string | null; n_prontuario?: string | null }>();
         (ags || []).forEach((a: any) => {
@@ -298,6 +300,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
         setPacientesHistorico(Array.from(uniq.values()));
       } catch (e) {
         setPacientesHistorico([]);
+      } finally {
+        setCarregandoPacientesHistorico(false);
       }
     };
     loadPacientes();
@@ -4609,34 +4613,55 @@ ${carimboLinha}`
               className="w-full"
               autoFocus
             />
-            {pacienteNome.trim().length >= 2 && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded shadow max-h-36 overflow-auto">
-                {pacientesHistorico
-                  .filter(p => p.nome.toLowerCase().includes(pacienteNome.trim().toLowerCase()))
+            {(() => {
+              const q = pacienteNome.trim().toLowerCase();
+              const filtrados = q.length >= 2
+                ? pacientesHistorico
+                  .filter(p => {
+                    const nome = String(p.nome || '').toLowerCase();
+                    const pront = String(p.n_prontuario || '').toLowerCase();
+                    return nome.includes(q) || pront.includes(q);
+                  })
                   .slice(0, 8)
-                  .map((p, idx) => (
-                    <button
-                      key={`${p.nome}-${p.data_nascimento}-${idx}`}
-                      type="button"
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
-                      onClick={() => {
-                        setPacienteNome(p.nome);
-                        setPacienteDataNascimento(p.data_nascimento || '');
-                        setPacienteCidade(p.cidade_natal || '');
-                        setPacienteTelefone(p.telefone || '');
-                        setPacienteProntuario(p.n_prontuario || '');
-                      }}
-                    >
-                      <span className="font-medium">{p.nome}</span>
-                      <span className="text-gray-500 ml-2">{p.data_nascimento || ''}</span>
-                      {p.n_prontuario ? <span className="text-gray-400 ml-2">Pront.: {p.n_prontuario}</span> : null}
-                    </button>
-                  ))}
-                {pacientesHistorico.filter(p => p.nome.toLowerCase().includes(pacienteNome.trim().toLowerCase())).length === 0 && (
-                  <div className="px-3 py-2 text-sm text-gray-500">Nenhum paciente encontrado</div>
-                )}
-              </div>
-            )}
+                : [];
+              const showDropdown = q.length >= 2 && (carregandoPacientesHistorico || filtrados.length > 0);
+              return (
+                <>
+                  {showDropdown && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded shadow max-h-36 overflow-auto">
+                      {carregandoPacientesHistorico ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">Carregando pacientes...</div>
+                      ) : (
+                        filtrados.map((p, idx) => (
+                          <button
+                            key={`${p.nome}-${p.data_nascimento}-${idx}`}
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
+                            onClick={() => {
+                              setPacienteNome(p.nome);
+                              setPacienteDataNascimento(p.data_nascimento || '');
+                              setPacienteCidade(p.cidade_natal || '');
+                              setPacienteTelefone(p.telefone || '');
+                              setPacienteProntuario(p.n_prontuario || '');
+                            }}
+                          >
+                            <span className="font-medium">{p.nome}</span>
+                            <span className="text-gray-500 ml-2">{p.data_nascimento || ''}</span>
+                            {p.n_prontuario ? <span className="text-gray-400 ml-2">Pront.: {p.n_prontuario}</span> : null}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {q.length >= 2 && !carregandoPacientesHistorico && pacientesHistorico.length === 0 && (
+                    <div className="mt-1 text-xs text-gray-500">Nenhum paciente cadastrado ainda.</div>
+                  )}
+                  {q.length >= 2 && !carregandoPacientesHistorico && pacientesHistorico.length > 0 && filtrados.length === 0 && (
+                    <div className="mt-1 text-xs text-gray-500">Nenhum paciente encontrado no histórico.</div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
         
