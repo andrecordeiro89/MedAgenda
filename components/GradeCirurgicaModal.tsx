@@ -1222,6 +1222,58 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
     }
   };
 
+  const handleUpdateMedicoGrupo = async (gradeIndex: number, especialidadeItemId: string, medicoId: string) => {
+    const grade = grades[gradeIndex];
+    const startIndex = grade.itens.findIndex(i => i.id === especialidadeItemId);
+    if (startIndex < 0) return;
+
+    const medico = medicosParaProcedimentos.find(m => m.id === medicoId);
+    const medicoNome = medico ? medico.nome : null;
+
+    const agendamentoIds: string[] = [];
+    for (let i = startIndex + 1; i < grade.itens.length; i++) {
+      const it = grade.itens[i];
+      if (it.tipo === 'especialidade') break;
+      if (it.tipo === 'procedimento' && it.agendamentoId) {
+        agendamentoIds.push(String(it.agendamentoId));
+      }
+    }
+
+    setGrades(prev => prev.map((g, gi) => {
+      if (gi !== gradeIndex) return g;
+      return {
+        ...g,
+        itens: g.itens.map((it, idx) => {
+          if (idx === startIndex && it.tipo === 'especialidade') {
+            const textoAtual = String(it.texto || '');
+            const partes = textoAtual.includes(' - ') ? textoAtual.split(' - ') : [textoAtual];
+            const novoTexto = medicoNome ? `${partes[0]} - ${medicoNome}` : partes[0];
+            return { ...it, texto: novoTexto };
+          }
+          if (idx > startIndex) {
+            if (it.tipo === 'especialidade') return it;
+            if (it.tipo === 'procedimento') {
+              return {
+                ...it,
+                medicoId: medicoId || undefined,
+                medicoNome: medicoNome || undefined
+              };
+            }
+          }
+          return it;
+        })
+      };
+    }));
+
+    try {
+      await Promise.all(agendamentoIds.map(id => agendamentoService.update(id, { medico: medicoNome || null })));
+    } catch (error) {
+      console.error('❌ Erro ao atualizar médico do grupo:', error);
+      mostrarAlerta('❌ Erro', `Erro ao atualizar médico do grupo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      return;
+    }
+  };
+
   // Atualizar texto de um item (APENAS ESPECIALIDADE - PROCEDIMENTO NÃO É MAIS EDITÁVEL DIRETO)
   const handleUpdateItem = (gradeIndex: number, itemId: string, novoTexto: string) => {
     const novasGrades = grades.map((grade, i) => {
@@ -1349,6 +1401,8 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
 
   const [edicaoEspecialidade, setEdicaoEspecialidade] = useState<{ gradeIndex: number; itemId: string } | null>(null);
   const [novaEspecialidadeId, setNovaEspecialidadeId] = useState<string>('');
+  const [edicaoMedicoGrupo, setEdicaoMedicoGrupo] = useState<{ gradeIndex: number; itemId: string } | null>(null);
+  const [novoMedicoGrupoId, setNovoMedicoGrupoId] = useState<string>('');
 
   // NOVA FUNÇÃO: Salvar alteração de procedimento (UPDATE ou INSERT no banco)
   const handleSalvarAlteracaoProcedimento = async () => {
@@ -3824,6 +3878,59 @@ ${carimboLinha}`
                                 </button>
                               )}
 
+                              {edicaoMedicoGrupo && edicaoMedicoGrupo.gradeIndex === index && edicaoMedicoGrupo.itemId === grupo.especialidade!.id ? (
+                                <div className="flex items-center gap-1">
+                                  <select
+                                    value={novoMedicoGrupoId}
+                                    onChange={(e) => setNovoMedicoGrupoId(e.target.value)}
+                                    className="text-xs px-2 py-1 border border-slate-300 rounded bg-white"
+                                    title="Selecionar novo médico"
+                                  >
+                                    <option value="">Sem médico</option>
+                                    {carregandoMedicosParaProcedimentos ? (
+                                      <option disabled>Carregando...</option>
+                                    ) : (
+                                      medicosParaProcedimentos.map(m => (
+                                        <option key={m.id} value={m.id}>{m.nome}</option>
+                                      ))
+                                    )}
+                                  </select>
+                                  <button
+                                    onClick={async () => {
+                                      await handleUpdateMedicoGrupo(index, grupo.especialidade!.id, novoMedicoGrupoId);
+                                      setEdicaoMedicoGrupo(null);
+                                      setNovoMedicoGrupoId('');
+                                    }}
+                                    className="px-2 py-1 bg-emerald-600 text-white rounded text-xs"
+                                    title="Salvar"
+                                  >
+                                    Salvar
+                                  </button>
+                                  <button
+                                    onClick={() => { setEdicaoMedicoGrupo(null); setNovoMedicoGrupoId(''); }}
+                                    className="px-2 py-1 bg-gray-200 text-gray-800 rounded text-xs"
+                                    title="Cancelar"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const textoAtual = String(grupo.especialidade!.texto || '');
+                                    const partes = textoAtual.includes(' - ') ? textoAtual.split(' - ') : [textoAtual];
+                                    const medicoNomeAtual = partes.length > 1 ? partes[1] : '';
+                                    const medicoAtual = medicoNomeAtual ? medicosParaProcedimentos.find(m => m.nome === medicoNomeAtual) : undefined;
+                                    setNovoMedicoGrupoId(medicoAtual?.id || '');
+                                    setEdicaoMedicoGrupo({ gradeIndex: index, itemId: grupo.especialidade!.id });
+                                  }}
+                                  className="ml-1 px-2 py-1 bg-emerald-500 text-white rounded text-xs"
+                                  title="Alterar médico deste grupo (atualiza todos os procedimentos)"
+                                >
+                                  Alterar Médico
+                                </button>
+                              )}
+
                               {/* Indicadores: Ocupadas e Vagas */}
                               {(() => {
                                 const totalSlots = grupo.procedimentos.length;
@@ -3951,27 +4058,29 @@ ${carimboLinha}`
                                               
                                               {/* Coluna Médico */}
                                               <td className="px-3 py-2 border-r border-slate-200 w-36 overflow-hidden">
-                                                {!proc.medicoNome ? (
-                                                  <select
-                                                    value={proc.medicoId || ''}
-                                                    onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
-                                                    className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full truncate"
-                                                    title="Selecione o médico para este procedimento"
-                                                  >
-                                                    <option value="">Sem médico</option>
-                                                    {carregandoMedicosParaProcedimentos ? (
-                                                      <option disabled>Carregando...</option>
-                                                    ) : (
-                                                      medicosParaProcedimentos.map((medico) => (
-                                                        <option key={medico.id} value={medico.id}>
-                                                          {medico.nome}
-                                                        </option>
-                                                      ))
-                                                    )}
-                                                  </select>
-                                                ) : (
-                                                  <span className="text-sm text-slate-500 truncate block">{proc.medicoNome}</span>
-                                                )}
+                                                {(() => {
+                                                  const fallbackId = proc.medicoNome ? (medicosParaProcedimentos.find(m => m.nome === proc.medicoNome)?.id || '') : '';
+                                                  const value = proc.medicoId || fallbackId || '';
+                                                  return (
+                                                    <select
+                                                      value={value}
+                                                      onChange={(e) => handleUpdateMedicoProcedimento(index, proc.id, e.target.value)}
+                                                      className="text-sm px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full truncate"
+                                                      title="Selecione o médico para este procedimento"
+                                                    >
+                                                      <option value="">Sem médico</option>
+                                                      {carregandoMedicosParaProcedimentos ? (
+                                                        <option disabled>Carregando...</option>
+                                                      ) : (
+                                                        medicosParaProcedimentos.map((medico) => (
+                                                          <option key={medico.id} value={medico.id}>
+                                                            {medico.nome}
+                                                          </option>
+                                                        ))
+                                                      )}
+                                                    </select>
+                                                  );
+                                                })()}
                                               </td>
                                               
                                               {/* Coluna Nome do Paciente */}
