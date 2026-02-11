@@ -5,7 +5,7 @@ import { GradeCirurgicaDia, GradeCirurgicaItem, DiaSemana, Especialidade } from 
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import autoTable from 'jspdf-autotable';
-import { formatDate, formatDateLocal } from '../utils';
+import { calculateAge, formatDate, formatDateLocal } from '../utils';
 // MODO MOCK
 // import { simpleGradeCirurgicaService } from '../services/api-simple';
 import { mockServices } from '../services/mock-storage';
@@ -29,6 +29,23 @@ const HOSPITAL_NAMES: Record<string, string> = {
   'ece028c8-3c6d-4d0a-98aa-efaa3565b55f': 'Hospital Nossa Senhora Aparecida',
 };
 const getHospitalName = (id?: string) => (id && HOSPITAL_NAMES[id]) ? HOSPITAL_NAMES[id] : '';
+
+const HOSPITAL_PHONES: Record<string, string> = {
+  'ece028c8-3c6d-4d0a-98aa-efaa3565b55f': '(43) 9 9160-7042'
+};
+const getHospitalPhone = (id?: string) => (id && HOSPITAL_PHONES[id]) ? HOSPITAL_PHONES[id] : '(43) 9 9160-7042';
+
+const isoMinusDays = (isoDate: string, days: number) => {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+  const [y, m, d] = isoDate.split('-').map(n => Number(n));
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  if (Number.isNaN(dt.getTime())) return isoDate;
+  dt.setDate(dt.getDate() - days);
+  const yyyy = String(dt.getFullYear());
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 
 interface GradeCirurgicaModalProps {
@@ -218,6 +235,22 @@ const GradeCirurgicaModal: React.FC<GradeCirurgicaModalProps> = ({
   const [pacientesHistorico, setPacientesHistorico] = useState<Array<{ nome: string; data_nascimento?: string; cidade_natal?: string | null; telefone?: string | null; n_prontuario?: string | null }>>([]);
   const [carregandoPacientesHistorico, setCarregandoPacientesHistorico] = useState(false);
   const [modalPacienteAberto, setModalPacienteAberto] = useState(false);
+
+  const [comprovanteModalAberto, setComprovanteModalAberto] = useState(false);
+  const [comprovanteStep, setComprovanteStep] = useState<'confirm' | 'viewer'>('confirm');
+  const [comprovanteData, setComprovanteData] = useState<{
+    nomePaciente: string;
+    dataNascimento: string;
+    dataCirurgia: string;
+    dataInternamento: string;
+    horaInternamento: string;
+    cirurgiaProposta: string;
+    cirurgiao: string;
+    telefone: string;
+    hospitalNome: string;
+  } | null>(null);
+  const [gerandoComprovante, setGerandoComprovante] = useState(false);
+  const [comprovantePdfUrl, setComprovantePdfUrl] = useState<string | null>(null);
   // Modal de vagas
   const [modalVagasAberto, setModalVagasAberto] = useState(false);
   const [vagasLista, setVagasLista] = useState<Array<{ gradeIndex: number; data: string; esp: string; medico: string; itemId: string; procedimento: string; especificacao?: string }>>([]);
@@ -2509,6 +2542,43 @@ ${carimboLinha}`
       setGrades(updatedGrades);
       // Atualizar lista de vagas, se modal estiver aberto
       if (modalVagasAberto) computeVagasLista();
+
+      try {
+        const gradeAtual = grades[procedimentoSelecionado.gradeIndex];
+        const dataCirurgia = gradeAtual?.data || '';
+        const idxItem = gradeAtual?.itens?.findIndex((i: any) => i.id === procedimentoSelecionado.itemId) ?? -1;
+        const itemAtual: any = idxItem >= 0 ? gradeAtual.itens[idxItem] : null;
+        let headerMedico = '';
+        if (idxItem >= 0) {
+          for (let i = idxItem; i >= 0; i--) {
+            const it: any = gradeAtual.itens[i];
+            if (it?.tipo === 'especialidade') {
+              const texto = String(it.texto || '');
+              const partes = texto.includes(' - ') ? texto.split(' - ') : [texto];
+              headerMedico = partes.length > 1 ? String(partes[1] || '') : '';
+              break;
+            }
+          }
+        }
+        const cirurgiaProposta = itemAtual
+          ? `${String(itemAtual.texto || '')}${itemAtual.especificacao ? ` - ${String(itemAtual.especificacao)}` : ''}`
+          : '';
+        const cirurgiao = String(itemAtual?.medicoNome || headerMedico || '');
+
+        setComprovanteData({
+          nomePaciente: pacienteNome,
+          dataNascimento: pacienteDataNascimento,
+          dataCirurgia,
+          dataInternamento: isoMinusDays(dataCirurgia, 1),
+          horaInternamento: '20:00 HORAS',
+          cirurgiaProposta,
+          cirurgiao,
+          telefone: getHospitalPhone(hospitalId),
+          hospitalNome: getHospitalName(hospitalId) || ''
+        });
+        setComprovanteStep('confirm');
+        setComprovanteModalAberto(true);
+      } catch { }
       
       // Fechar modal
       setModalPacienteAberto(false);
@@ -2527,6 +2597,195 @@ ${carimboLinha}`
   const handleCancelarPaciente = () => {
     setModalPacienteAberto(false);
     setProcedimentoSelecionado(null);
+  };
+
+  const closeComprovanteModal = () => {
+    if (comprovantePdfUrl) {
+      try { URL.revokeObjectURL(comprovantePdfUrl); } catch { }
+    }
+    setComprovantePdfUrl(null);
+    setComprovanteData(null);
+    setComprovanteStep('confirm');
+    setComprovanteModalAberto(false);
+    setGerandoComprovante(false);
+  };
+
+  const blobToObjectUrl = (blob: Blob) => {
+    return URL.createObjectURL(blob);
+  };
+
+  const loadImageToDataUrl = (url: string): Promise<{ data: string; width: number; height: number; type: 'JPEG' | 'PNG' }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas context error'));
+        ctx.drawImage(img, 0, 0);
+        const isPng = url.toLowerCase().endsWith('.png');
+        const mime = isPng ? 'image/png' : 'image/jpeg';
+        resolve({ data: canvas.toDataURL(mime), width: img.width, height: img.height, type: isPng ? 'PNG' : 'JPEG' });
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const gerarComprovantePdfBlob = async (data: NonNullable<typeof comprovanteData>) => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    let y = 14;
+
+    let logoInfo: { data: string; width: number; height: number; type: 'JPEG' | 'PNG' } | null = null;
+    try {
+      logoInfo = await loadImageToDataUrl(encodeURI('/CIS Sem fundo.jpg'));
+    } catch {
+      try {
+        logoInfo = await loadImageToDataUrl(encodeURI('/CIS Sem Fundo.jpg'));
+      } catch {
+        logoInfo = null;
+      }
+    }
+
+    if (logoInfo) {
+      const maxW = 40;
+      const ratio = logoInfo.height / logoInfo.width;
+      const h = maxW * ratio;
+      doc.addImage(logoInfo.data, logoInfo.type, margin, y - 2, maxW, h, undefined, 'FAST');
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('AGENDAMENTO CIRÚRGICO', pageW / 2, y + 6, { align: 'center' });
+    y += 14;
+    doc.setFontSize(12);
+    doc.text('TELEFONE', pageW / 2, y, { align: 'center' });
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    doc.text(data.telefone, pageW / 2, y, { align: 'center' });
+    y += 10;
+
+    const tableX = margin;
+    const tableW = pageW - margin * 2;
+    const labelW = 62;
+    const valueW = tableW - labelW;
+    const rowH = 10;
+
+    const drawRow = (label: string, value: string) => {
+      doc.rect(tableX, y, labelW, rowH);
+      doc.rect(tableX + labelW, y, valueW, rowH);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(label, tableX + 2, y + 3.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(value || '-', valueW - 4);
+      const textY = y + 6.5;
+      doc.text(lines, tableX + labelW + 2, textY);
+      y += rowH;
+    };
+
+    const dobBR = formatDate(data.dataNascimento);
+    const idade = calculateAge(data.dataNascimento);
+    const dobValue = idade > 0 ? `${dobBR} (${idade} anos)` : dobBR;
+    drawRow('NOME DO PACIENTE:', data.nomePaciente);
+    drawRow('DATA DE NASCIMENTO:', dobValue);
+    const internamentoValue = `${formatDate(data.dataInternamento)}${data.horaInternamento ? ` - ${data.horaInternamento}` : ''}`;
+    drawRow('DATA DO INTERNAMENTO:', internamentoValue);
+    drawRow('DATA DA CIRURGIA:', formatDate(data.dataCirurgia));
+    drawRow('CIRURGIA PROPOSTA:', data.cirurgiaProposta);
+    drawRow('CIRURGIÃO:', data.cirurgiao);
+
+    y += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('ORIENTAÇÕES PARA CIRURGIA', margin, y);
+    y += 8;
+    doc.setFontSize(11);
+    doc.text('TRAZER NO DIA DO INTERNAMENTO:', margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    const addParagraph = (text: string) => {
+      const lines = doc.splitTextToSize(text, pageW - margin * 2);
+      lines.forEach((line: string) => {
+        if (y > pageH - 14) {
+          doc.addPage();
+          y = 14;
+        }
+        doc.text(line, margin, y);
+        y += 5;
+      });
+      y += 1;
+    };
+
+    addParagraph('Documento pessoal e cartão SUS');
+    addParagraph('Trazer os Exames pré operatórios (todos os exames solicitados na consulta) ex. Ultrassom, exames de imagem.');
+    addParagraph('Medicações de uso contínuo');
+    addParagraph('Objetos pessoais: toalha de banho, escova de dente e creme dental, roupas confortáveis e roupas íntimas, cobertor, travesseiro, garrafa de água.');
+
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('IMPORTANTE:', margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    addParagraph('Retirar piercings, anéis, brincos, jóias e quaisquer outros objeto do corpo');
+    addParagraph('Não usar maquiagem, unhas postiças e alongamentos, esmaltes com cores forte e decorações, extensão e cílios postiços, mega hair e/ou apliques que utilizem material sintético, nem qualquer outro tipo de adorno');
+    addParagraph('Horário de visita 15:00 horas às 15:30 horas.');
+    addParagraph('Acompanhante para paciente menores de 18 anos e acima de 60 anos se possível que seja do mesmo sexo.');
+    addParagraph('Não é permitido a entrada no hospital com alimentos e bebidas, exceto com orientação médica.');
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    addParagraph('MANDAREMOS UMA MENSAGEM (VIA WHATSAPP) CONFIRMANDO A SUA CIRURGIA, DEPOIS DA AVALIAÇÃO DOS SEUS EXAMES PRÉ-OPERATÓRIOS.');
+
+    return doc.output('blob');
+  };
+
+  const openComprovanteFromPaciente = (gradeIndex: number, procId: string, paciente: any) => {
+    const gradeAtual = grades[gradeIndex];
+    const dataCirurgia = gradeAtual?.data || '';
+    const idxItem = gradeAtual?.itens?.findIndex((i: any) => i.id === procId) ?? -1;
+    const itemAtual: any = idxItem >= 0 ? gradeAtual.itens[idxItem] : null;
+    let headerMedico = '';
+    if (idxItem >= 0) {
+      for (let i = idxItem; i >= 0; i--) {
+        const it: any = gradeAtual.itens[i];
+        if (it?.tipo === 'especialidade') {
+          const texto = String(it.texto || '');
+          const partes = texto.includes(' - ') ? texto.split(' - ') : [texto];
+          headerMedico = partes.length > 1 ? String(partes[1] || '') : '';
+          break;
+        }
+      }
+    }
+    const cirurgiaProposta = itemAtual
+      ? `${String(itemAtual.texto || '')}${itemAtual.especificacao ? ` - ${String(itemAtual.especificacao)}` : ''}`
+      : '';
+    const cirurgiao = String(itemAtual?.medicoNome || headerMedico || '');
+
+    setComprovanteData({
+      nomePaciente: String(paciente?.nome || ''),
+      dataNascimento: String(paciente?.dataNascimento || ''),
+      dataCirurgia,
+      dataInternamento: isoMinusDays(dataCirurgia, 1),
+      horaInternamento: '20:00 HORAS',
+      cirurgiaProposta,
+      cirurgiao,
+      telefone: getHospitalPhone(hospitalId),
+      hospitalNome: getHospitalName(hospitalId) || ''
+    });
+    setComprovanteStep('confirm');
+    setComprovanteModalAberto(true);
   };
 
   // Remover paciente de um procedimento (LIMPAR DADOS NO BANCO)
@@ -4190,6 +4449,18 @@ ${carimboLinha}`
                                                   </button>
                                                   {paciente.nome && paciente.dataNascimento && (
                                                     <button
+                                                      onClick={() => openComprovanteFromPaciente(index, proc.id, paciente)}
+                                                      className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition-all"
+                                                      title="Comprovante de Agendamento"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-6 4h6" />
+                                                      </svg>
+                                                    </button>
+                                                  )}
+                                                  {paciente.nome && paciente.dataNascimento && (
+                                                    <button
                                                       onClick={() => {
                                                         setPreModalInitial({
                                                           agendamento_id: proc.agendamentoId,
@@ -4754,6 +5025,121 @@ ${carimboLinha}`
         </div>
       </div>
     </Modal>
+
+    {comprovanteData && (
+      <Modal
+        isOpen={comprovanteModalAberto}
+        onClose={closeComprovanteModal}
+        title={`Comprovante de Agendamento - ${comprovanteData.nomePaciente || 'Paciente'}`}
+        size="full"
+      >
+        <div className="space-y-4">
+          {comprovanteStep === 'confirm' ? (
+            <>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded">
+                <div className="text-sm text-slate-800 font-semibold">Gerar comprovante de agendamento cirúrgico agora?</div>
+                <div className="text-xs text-slate-600 mt-1">O comprovante será gerado em PDF para visualizar, baixar ou imprimir.</div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+                  <Input
+                    value={comprovanteData.telefone}
+                    onChange={(e) => setComprovanteData(prev => prev ? ({ ...prev, telefone: e.target.value }) : prev)}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data do Internamento</label>
+                  <Input
+                    type="date"
+                    value={comprovanteData.dataInternamento}
+                    onChange={(e) => setComprovanteData(prev => prev ? ({ ...prev, dataInternamento: e.target.value }) : prev)}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hora do Internamento</label>
+                  <Input
+                    value={comprovanteData.horaInternamento}
+                    onChange={(e) => setComprovanteData(prev => prev ? ({ ...prev, horaInternamento: e.target.value }) : prev)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="secondary" onClick={closeComprovanteModal} disabled={gerandoComprovante}>Agora não</Button>
+                <Button
+                  onClick={async () => {
+                    if (!comprovanteData.nomePaciente?.trim() || !comprovanteData.dataNascimento || !comprovanteData.dataCirurgia) {
+                      mostrarAlerta('⚠️ Campos Obrigatórios', 'Preencha nome, data de nascimento e data da cirurgia para gerar o comprovante');
+                      return;
+                    }
+                    setGerandoComprovante(true);
+                    try {
+                      const blob = await gerarComprovantePdfBlob(comprovanteData);
+                      const url = blobToObjectUrl(blob);
+                      if (comprovantePdfUrl) {
+                        try { URL.revokeObjectURL(comprovantePdfUrl); } catch { }
+                      }
+                      setComprovantePdfUrl(url);
+                      setComprovanteStep('viewer');
+                    } catch (e: any) {
+                      mostrarAlerta('❌ Erro', e?.message || 'Erro ao gerar comprovante');
+                    } finally {
+                      setGerandoComprovante(false);
+                    }
+                  }}
+                  disabled={gerandoComprovante}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {gerandoComprovante ? 'Gerando...' : 'Gerar Comprovante'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setComprovanteStep('confirm');
+                  }}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (!comprovantePdfUrl) return;
+                    const fileName = `Comprovante_Agendamento_${(comprovanteData.nomePaciente || 'Paciente').replace(/\s+/g, '_')}.pdf`;
+                    const a = document.createElement('a');
+                    a.href = comprovantePdfUrl;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  disabled={!comprovantePdfUrl}
+                >
+                  Baixar PDF
+                </Button>
+              </div>
+
+              {comprovantePdfUrl ? (
+                <div className="border rounded overflow-hidden bg-white">
+                  <iframe title="Comprovante de Agendamento" src={comprovantePdfUrl} className="w-full h-[86vh]" />
+                </div>
+              ) : (
+                <div className="p-3 bg-gray-50 rounded text-sm text-gray-700">Nenhum PDF gerado.</div>
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
+    )}
 
     {/* MODAL DE CONFIRMAÇÃO ELEGANTE */}
     {confirmacaoData && (
