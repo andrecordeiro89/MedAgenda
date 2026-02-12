@@ -2438,7 +2438,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-stretch">
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg md:row-span-3 md:h-full md:min-h-[28rem] xl:min-h-[32rem] flex flex-col">
                   <div className="flex items-center gap-2 mb-2"><span className="text-amber-600">📝</span><label className="text-sm font-semibold text-gray-700">Observação do Faturamento</label></div>
                   <textarea
                     defaultValue={ag.observacao_faturamento ?? ag.faturamento_observacao ?? ''}
@@ -2449,8 +2449,8 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                       setObservacaoDirty(prev => ({ ...prev, [ag.id!]: val !== original }));
                     }}
                     placeholder="Digite uma observação sobre este paciente..."
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none transition-colors"
-                    rows={2}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors bg-white flex-1"
+                    rows={8}
                     disabled={salvandoObservacao === ag.id}
                   />
                   <div className="flex items-center justify-between mt-2">
@@ -2600,58 +2600,61 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
                     </div>
                   );
                 })()}
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-blue-600">📄</span>
-                  <label className="text-sm font-semibold text-gray-700">Observação (Documentação)</label>
-                </div>
-                <div className="text-sm text-gray-700 max-w-md">
-                  {(() => {
-                    const texto = (ag.observacao_agendamento || '').trim();
-                    if (!texto) return <span>-</span>;
-                    const linhas = texto.split('\n');
-                    return (
-                      <div className="space-y-1 whitespace-pre-wrap">
-                        {linhas.map((ln, idx) => {
-                          const isGrade = ln.startsWith('[GRADE]');
-                          const cleanRaw = isGrade ? ln.replace(/^\[GRADE\]\s*/, '') : ln;
-                          const clean = cleanRaw.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_m, y, m, d) => `${d}/${m}/${y}`);
-                          return (
-                            <div key={idx} className={isGrade ? 'font-bold' : ''}>
-                              {clean}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-indigo-600">🩺</span>
-                  <label className="text-sm font-semibold text-gray-700">Observação (Anestesista)</label>
-                </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap max-w-md">
-                  {(() => {
-                    const status = (ag.avaliacao_anestesista || '').toLowerCase();
-                    if (status === 'aprovado') {
-                      return (ag.avaliacao_anestesista_observacao || '').trim() || '-';
-                    }
-                    if (status === 'reprovado') {
-                      return (ag.avaliacao_anestesista_motivo_reprovacao || '').trim() || '-';
-                    }
-                    if (status === 'complementares') {
-                      return (ag.avaliacao_anestesista_complementares || '').trim() || '-';
-                    }
-                    return '-';
-                  })()}
-                </div>
-                {ag.avaliacao_anestesista_data && (
-                  <div className="text-xs text-gray-500 mt-2">
-                    Marcado em: {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-stretch">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex flex-col">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-blue-600">📄</span>
+                    <label className="text-sm font-semibold text-gray-700">Observação (Documentação)</label>
                   </div>
-                )}
+                  <div className="text-sm text-gray-700 flex-1">
+                    {(() => {
+                      const texto = (ag.observacao_agendamento || '').trim();
+                      if (!texto) return <span>-</span>;
+                      const linhas = texto.split('\n');
+                      return (
+                        <div className="space-y-1 whitespace-pre-wrap">
+                          {linhas.map((ln, idx) => {
+                            const isGrade = ln.startsWith('[GRADE]');
+                            const cleanRaw = isGrade ? ln.replace(/^\[GRADE\]\s*/, '') : ln;
+                            const clean = cleanRaw.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_m, y, m, d) => `${d}/${m}/${y}`);
+                            return (
+                              <div key={idx} className={isGrade ? 'font-bold' : ''}>
+                                {clean}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex flex-col">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-indigo-600">🩺</span>
+                    <label className="text-sm font-semibold text-gray-700">Observação (Anestesista)</label>
+                  </div>
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap flex-1">
+                    {(() => {
+                      const status = (ag.avaliacao_anestesista || '').toLowerCase();
+                      if (status === 'aprovado') {
+                        return (ag.avaliacao_anestesista_observacao || '').trim() || '-';
+                      }
+                      if (status === 'reprovado') {
+                        return (ag.avaliacao_anestesista_motivo_reprovacao || '').trim() || '-';
+                      }
+                      if (status === 'complementares') {
+                        return (ag.avaliacao_anestesista_complementares || '').trim() || '-';
+                      }
+                      return '-';
+                    })()}
+                  </div>
+                  {ag.avaliacao_anestesista_data && (
+                    <div className="text-xs text-gray-500 mt-2">
+                      Marcado em: {formatarData(ag.avaliacao_anestesista_data.split('T')[0])} às {new Date(ag.avaliacao_anestesista_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  )}
+                </div>
               </div>
               </div>
               {ag.faturamento_liberado === false && ag.faturamento_observacao && (
