@@ -9,6 +9,7 @@ import JSZip from 'jszip';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
 import { useDebounce } from '../hooks/useDebounce';
+import { sanitizeStorageFileName } from '../utils';
 
 export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }) => {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -1566,12 +1567,13 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const urlsUploaded: string[] = [];
     try {
       const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const safeOriginalName = sanitizeStorageFileName(originalName);
         const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
         const existing = new Set((data || []).map(f => f.name));
-        if (!existing.has(originalName)) return originalName;
-        const dot = originalName.lastIndexOf('.');
-        const ext = dot >= 0 ? originalName.slice(dot) : '';
-        const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        if (!existing.has(safeOriginalName)) return safeOriginalName;
+        const dot = safeOriginalName.lastIndexOf('.');
+        const ext = dot >= 0 ? safeOriginalName.slice(dot) : '';
+        const base = dot >= 0 ? safeOriginalName.slice(0, dot) : safeOriginalName;
         let i = 1; let candidate = `${base} (${i})${ext}`;
         while (existing.has(candidate)) { i++; candidate = `${base} (${i})${ext}`; }
         return candidate;
@@ -1614,10 +1616,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     setUploading(true);
     try {
       const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const safeOriginalName = sanitizeStorageFileName(originalName);
         const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
         const existing = new Set((data || []).map(f => f.name));
-        if (!existing.has(originalName)) return originalName;
-        const dot = originalName.lastIndexOf('.'); const ext = dot >= 0 ? originalName.slice(dot) : ''; const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        if (!existing.has(safeOriginalName)) return safeOriginalName;
+        const dot = safeOriginalName.lastIndexOf('.'); const ext = dot >= 0 ? safeOriginalName.slice(dot) : ''; const base = dot >= 0 ? safeOriginalName.slice(0, dot) : safeOriginalName;
         let i = 1; let candidate = `${base} (${i})${ext}`; while (existing.has(candidate)) { i++; candidate = `${base} (${i})${ext}`; } return candidate;
       };
       const folder = `fichas/${agendamentoSelecionado.id}`;
@@ -1680,10 +1683,11 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const urlsUploaded: string[] = [];
     try {
       const getUniqueFileName = async (folder: string, originalName: string): Promise<string> => {
+        const safeOriginalName = sanitizeStorageFileName(originalName);
         const { data } = await supabase.storage.from('Documentos').list(folder, { limit: 1000 });
         const existing = new Set((data || []).map(f => f.name));
-        if (!existing.has(originalName)) return originalName;
-        const dot = originalName.lastIndexOf('.'); const ext = dot >= 0 ? originalName.slice(dot) : ''; const base = dot >= 0 ? originalName.slice(0, dot) : originalName;
+        if (!existing.has(safeOriginalName)) return safeOriginalName;
+        const dot = safeOriginalName.lastIndexOf('.'); const ext = dot >= 0 ? safeOriginalName.slice(dot) : ''; const base = dot >= 0 ? safeOriginalName.slice(0, dot) : safeOriginalName;
         let i = 1; let candidate = `${base} (${i})${ext}`; while (existing.has(candidate)) { i++; candidate = `${base} (${i})${ext}`; } return candidate;
       };
       const folder = `complementares/${agendamentoSelecionado.id}`;

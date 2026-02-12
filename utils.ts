@@ -82,3 +82,31 @@ export const compareDates = (date1: string, date2: string): boolean => {
     
     return normalize(date1) === normalize(date2);
 };
+
+export const sanitizeStorageFileName = (fileName: string): string => {
+    const input = String(fileName || '').trim();
+    if (!input) return 'arquivo';
+
+    const normalized = input.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const lastDot = normalized.lastIndexOf('.');
+    const hasExt = lastDot > 0 && lastDot < normalized.length - 1;
+    const baseRaw = hasExt ? normalized.slice(0, lastDot) : normalized;
+    const extRaw = hasExt ? normalized.slice(lastDot + 1) : '';
+
+    const base = baseRaw
+        .replace(/[^a-zA-Z0-9()_-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+    const ext = extRaw
+        .replace(/[^a-zA-Z0-9]+/g, '')
+        .slice(0, 10);
+
+    const safeBase = base || 'arquivo';
+
+    const maxTotal = 120;
+    const suffix = ext ? `.${ext}` : '';
+    const maxBaseLen = Math.max(1, maxTotal - suffix.length);
+    const clippedBase = safeBase.slice(0, maxBaseLen);
+    return `${clippedBase}${suffix}`;
+};
