@@ -1080,7 +1080,10 @@ export const cidadeService = {
 // ============================================
 export const testSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.from('especialidades').select('count').limit(1)
+    const { error } = await supabase
+      .from('especialidades')
+      .select('*', { count: 'exact', head: true })
+
     return !error
   } catch {
     return false

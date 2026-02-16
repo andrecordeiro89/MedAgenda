@@ -782,6 +782,10 @@ export const useHospitalFilter = () => {
     if (emailLower === 'radiologia.foz@medagenda.com') {
       return viewName === 'dashboard' || viewName === 'documentacao' || viewName === 'anestesista';
     }
+
+    if (emailLower === 'anestesista.gua@medagenda.com') {
+      return viewName === 'dashboard' || viewName === 'calendar' || viewName === 'anestesista';
+    }
     if (!userRole) return false;
     
     if (emailLower === 'cf.frg@medagenda.com') {
