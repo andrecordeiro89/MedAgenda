@@ -12,7 +12,7 @@ import { mockServices } from '../services/mock-storage';
 const simpleGradeCirurgicaService = mockServices.gradeCirurgica;
 
 // Importar service real de agendamentos e médicos do Supabase
-import { agendamentoService, medicoService } from '../services/supabase';
+import { agendamentoService, medicoService, supabase } from '../services/supabase';
 import PreAnestesiaModal from './PreAnestesiaModal';
 import { Medico } from '../types';
 import { useToast } from '../contexts/ToastContext';
@@ -2898,7 +2898,6 @@ ${carimboLinha}`
       todosAgendamentos.forEach(ag => {
         if (
           ag.data_agendamento &&
-          ag.data_agendamento !== grade.data &&
           ag.especialidade &&
           ag.procedimentos &&
           (!ag.nome_paciente || ag.nome_paciente.trim() === '')
@@ -3080,10 +3079,10 @@ ${carimboLinha}`
 
   // Função para executar a mudança de data
   const handleMoverPaciente = async () => {
-    if (!agendamentoParaMover || !novaDataSelecionada) {
+    if (!agendamentoParaMover || !novaDataSelecionada || !procedimentoSelecionadoDestino) {
       setConfirmacaoData({
         titulo: '⚠️ Atenção',
-        mensagem: 'Por favor, selecione a nova data.',
+        mensagem: 'Por favor, selecione a nova data e o procedimento de destino.',
         onConfirm: () => setModalConfirmacao(false)
       });
       setModalConfirmacao(true);
@@ -3091,15 +3090,151 @@ ${carimboLinha}`
     }
     setMovendoPaciente(true);
     try {
-      await agendamentoService.update(agendamentoParaMover.id, {
-        data_agendamento: novaDataSelecionada
+      const origemId = agendamentoParaMover.id;
+      const destinoId = procedimentoSelecionadoDestino;
+
+      const [origem, destino] = await Promise.all([
+        agendamentoService.getById(origemId),
+        agendamentoService.getById(destinoId)
+      ]);
+
+      const destinoTemPaciente = Boolean(destino?.nome_paciente && String(destino.nome_paciente).trim() !== '');
+      if (destinoTemPaciente) {
+        throw new Error('O procedimento de destino já possui um paciente. Selecione um slot vazio.');
+      }
+
+      const replaceAgendamentoIdInText = (value: any, fromId: string, toId: string) => {
+        if (value === null || value === undefined) return value;
+        if (typeof value === 'string') {
+          return value.replaceAll(fromId, toId);
+        }
+        return value;
+      };
+
+      const deepReplaceAgendamentoId = (value: any, fromId: string, toId: string): any => {
+        if (value === null || value === undefined) return value;
+        if (typeof value === 'string') return value.replaceAll(fromId, toId);
+        if (Array.isArray(value)) return value.map(v => deepReplaceAgendamentoId(v, fromId, toId));
+        if (typeof value === 'object') {
+          const out: any = {};
+          Object.keys(value).forEach((k) => {
+            out[k] = deepReplaceAgendamentoId((value as any)[k], fromId, toId);
+          });
+          return out;
+        }
+        return value;
+      };
+
+      const moveFolderIfAny = async (bucket: string, fromFolder: string, toFolder: string) => {
+        const { data: files, error: listError } = await supabase.storage
+          .from(bucket)
+          .list(fromFolder, { limit: 1000, offset: 0 });
+
+        if (listError) {
+          throw new Error(listError.message);
+        }
+
+        const entries = Array.isArray(files) ? files : [];
+        for (const f of entries) {
+          if (!f?.name) continue;
+          if (f.name === '.emptyFolderPlaceholder') continue;
+          const fromPath = `${fromFolder}/${f.name}`;
+          const toPath = `${toFolder}/${f.name}`;
+          const { error: moveError } = await supabase.storage
+            .from(bucket)
+            .move(fromPath, toPath);
+          if (moveError) {
+            throw new Error(moveError.message);
+          }
+        }
+      };
+
+      const bucket = 'Documentos';
+      await moveFolderIfAny(bucket, `documentos/${origemId}`, `documentos/${destinoId}`);
+      await moveFolderIfAny(bucket, `fichas/${origemId}`, `fichas/${destinoId}`);
+      await moveFolderIfAny(bucket, `complementares/${origemId}`, `complementares/${destinoId}`);
+      await moveFolderIfAny(bucket, `triagem_pre_anestesica/${origemId}`, `triagem_pre_anestesica/${destinoId}`);
+
+      const systemKeys = new Set(['id', 'created_at', 'updated_at']);
+      const structuralKeys = new Set([
+        'hospital_id',
+        'data_agendamento',
+        'especialidade',
+        'medico',
+        'procedimentos',
+        'medico_id',
+        'procedimento_id',
+        'is_grade_cirurgica'
+      ]);
+
+      const preserveFromDestino: any = {};
+      structuralKeys.forEach((k) => {
+        if ((destino as any)[k] !== undefined) preserveFromDestino[k] = (destino as any)[k];
       });
+
+      const payloadDestino: any = deepReplaceAgendamentoId(origem, origemId, destinoId);
+      Object.keys(payloadDestino).forEach((k) => {
+        if (systemKeys.has(k) || structuralKeys.has(k)) {
+          delete payloadDestino[k];
+        }
+      });
+      Object.assign(payloadDestino, preserveFromDestino);
+
+      const payloadOrigem: any = {};
+      Object.keys(origem as any).forEach((k) => {
+        if (systemKeys.has(k) || structuralKeys.has(k)) return;
+        payloadOrigem[k] = null;
+      });
+      if ((origem as any).nome_paciente !== undefined) payloadOrigem.nome_paciente = '';
+      if ((origem as any).data_nascimento !== undefined) payloadOrigem.data_nascimento = '2000-01-01';
+      if ((origem as any).status_liberacao !== undefined) payloadOrigem.status_liberacao = 'pendente';
+      if ((origem as any).status_de_liberacao !== undefined) payloadOrigem.status_de_liberacao = null;
+
+      if ((origem as any).documentos_urls !== undefined) payloadOrigem.documentos_urls = null;
+      if ((origem as any).ficha_pre_anestesica_url !== undefined) payloadOrigem.ficha_pre_anestesica_url = null;
+      if ((origem as any).triagem_pre_anestesica_url !== undefined) payloadOrigem.triagem_pre_anestesica_url = null;
+      if ((origem as any).complementares_urls !== undefined) payloadOrigem.complementares_urls = null;
+
+      if ((payloadDestino as any).documentos_urls !== undefined) {
+        (payloadDestino as any).documentos_urls = replaceAgendamentoIdInText((payloadDestino as any).documentos_urls, origemId, destinoId);
+      }
+      if ((payloadDestino as any).ficha_pre_anestesica_url !== undefined) {
+        (payloadDestino as any).ficha_pre_anestesica_url = replaceAgendamentoIdInText((payloadDestino as any).ficha_pre_anestesica_url, origemId, destinoId);
+      }
+      if ((payloadDestino as any).triagem_pre_anestesica_url !== undefined) {
+        (payloadDestino as any).triagem_pre_anestesica_url = replaceAgendamentoIdInText((payloadDestino as any).triagem_pre_anestesica_url, origemId, destinoId);
+      }
+      if ((payloadDestino as any).complementares_urls !== undefined) {
+        (payloadDestino as any).complementares_urls = replaceAgendamentoIdInText((payloadDestino as any).complementares_urls, origemId, destinoId);
+      }
+
+      await agendamentoService.update(destinoId, payloadDestino);
+
+      try {
+        await agendamentoService.update(origemId, payloadOrigem);
+      } catch (clearError) {
+        try {
+          await agendamentoService.update(destinoId, payloadOrigem);
+        } catch {
+          // Ignorar rollback falho: o erro principal será exibido
+        }
+        throw clearError;
+      }
+
       setModalMoverPaciente(false);
       setAgendamentoParaMover(null);
       await recarregarGradesDoSupabase();
+
+      const destinoEspecialidade = especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino);
+      const destinoProcedimento = (() => {
+        const esp = especialidadesDisponiveis.find(e => e.id === especialidadeSelecionadaDestino);
+        const p = (esp?.agendamentos as any[] || []).find((a: any) => String(a.id) === String(procedimentoSelecionadoDestino))?.procedimentos;
+        return p || '-';
+      })();
+
       setConfirmacaoData({
-        titulo: '✅ Data alterada com sucesso',
-        mensagem: `O paciente "${agendamentoParaMover.nome}" foi reagendado para ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}.`,
+        titulo: '✅ Transferência realizada com sucesso',
+        mensagem: `O paciente "${agendamentoParaMover.nome}" foi transferido para ${new Date(novaDataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} (${destinoEspecialidade?.nome || 'Especialidade'}${destinoEspecialidade?.medicoNome ? ` - ${destinoEspecialidade.medicoNome}` : ''} / ${destinoProcedimento}).`,
         onConfirm: () => {
           setModalConfirmacao(false);
         }
@@ -3108,7 +3243,7 @@ ${carimboLinha}`
     } catch (error) {
       setConfirmacaoData({
         titulo: '❌ Erro',
-        mensagem: `Erro ao alterar a data: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        mensagem: `Erro ao transferir paciente: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         onConfirm: () => setModalConfirmacao(false)
       });
       setModalConfirmacao(true);
