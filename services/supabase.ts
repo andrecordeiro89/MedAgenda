@@ -18,6 +18,76 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+type AuditAction = 'LOGIN' | 'LOGOUT' | 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'DOWNLOAD' | 'VIEW';
+
+const safeJsonParse = (value: string | null): any => {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const getAuditActor = (): {
+  usuario_id?: string | null;
+  usuario_email?: string | null;
+  hospital_id?: string | null;
+  role?: string | null;
+  session_id?: string | null;
+  view?: string | null;
+} => {
+  try {
+    const auth = safeJsonParse(typeof localStorage !== 'undefined' ? localStorage.getItem('medagenda-auth') : null) || {};
+    const usuario = auth.usuario || {};
+    const hospital = auth.hospital || {};
+    const sessionId = auth.sessionId || null;
+    const view = typeof localStorage !== 'undefined' ? (localStorage.getItem('medagenda-current-view') || null) : null;
+    return {
+      usuario_id: usuario.id ?? null,
+      usuario_email: usuario.email ?? null,
+      hospital_id: hospital.id ?? usuario.hospital_id ?? null,
+      role: usuario.role ?? null,
+      session_id: sessionId,
+      view
+    };
+  } catch {
+    return {};
+  }
+};
+
+export const auditService = {
+  async log(params: {
+    action: AuditAction;
+    entity: string;
+    entity_id?: string | null;
+    hospital_id?: string | null;
+    payload?: any;
+    meta?: any;
+  }): Promise<void> {
+    try {
+      const actor = getAuditActor();
+      const row: any = {
+        action: params.action,
+        entity: params.entity,
+        entity_id: params.entity_id ?? null,
+        hospital_id: params.hospital_id ?? actor.hospital_id ?? null,
+        usuario_id: actor.usuario_id ?? null,
+        usuario_email: actor.usuario_email ?? null,
+        role: actor.role ?? null,
+        session_id: actor.session_id ?? null,
+        view: actor.view ?? null,
+        payload: params.payload ?? null,
+        meta: params.meta ?? null,
+        user_agent: typeof navigator !== 'undefined' ? (navigator.userAgent || null) : null,
+        client_ts: new Date().toISOString()
+      };
+      await supabase.from('auditoria_eventos').insert([row]);
+    } catch {
+    }
+  }
+};
+
 // ============================================
 // TIPOS PARA O SUPABASE
 // ============================================
@@ -100,11 +170,11 @@ export async function getAllRecordsWithPagination<T>(
       query = options.filter(query);
     }
 
-    // Aplicar ordenação se fornecida
-    if (options?.orderBy) {
-      query = query.order(options.orderBy, { ascending: options?.ascending ?? true });
-    } else {
-      // Ordenação padrão por id se não especificada
+    // Aplicar ordenação determinística (evitar "pular" registros quando o campo não é único)
+    const primaryOrder = options?.orderBy || 'id';
+    const primaryAsc = options?.ascending ?? true;
+    query = query.order(primaryOrder, { ascending: primaryAsc });
+    if (primaryOrder !== 'id') {
       query = query.order('id', { ascending: true });
     }
 
@@ -621,6 +691,13 @@ export const agendamentoService = {
     }
 
     console.log('✅ Agendamento salvo com sucesso!', data);
+    auditService.log({
+      action: 'CREATE',
+      entity: 'agendamentos',
+      entity_id: (data as any)?.id ?? null,
+      hospital_id: insertData.hospital_id ?? null,
+      payload: insertData
+    });
     return data as Agendamento;
   },
 
@@ -757,6 +834,13 @@ export const agendamentoService = {
           // Mesmo com erro no SELECT, o UPDATE funcionou
           // Retornar os dados que tínhamos + o que foi atualizado
           console.log('✅ UPDATE foi bem-sucedido mesmo sem conseguir ler os dados de volta');
+          auditService.log({
+            action: 'UPDATE',
+            entity: 'agendamentos',
+            entity_id: id,
+            hospital_id: (updateData as any)?.hospital_id ?? (agendamento as any)?.hospital_id ?? null,
+            payload: updateData
+          });
           return { id, ...updateData } as Agendamento;
         }
 
@@ -765,6 +849,13 @@ export const agendamentoService = {
           nome_paciente: agendamentoAtualizado?.nome_paciente
         });
 
+        auditService.log({
+          action: 'UPDATE',
+          entity: 'agendamentos',
+          entity_id: id,
+          hospital_id: (agendamentoAtualizado as any)?.hospital_id ?? (updateData as any)?.hospital_id ?? (agendamento as any)?.hospital_id ?? null,
+          payload: updateData
+        });
         return agendamentoAtualizado as Agendamento;
       }
 
@@ -812,6 +903,13 @@ export const agendamentoService = {
         if (error2) throw new Error(error2.message);
         if (!data || data.length === 0) throw new Error('Agendamento não encontrado')
 
+        auditService.log({
+          action: 'UPDATE',
+          entity: 'agendamentos',
+          entity_id: id,
+          hospital_id: (data[0] as any)?.hospital_id ?? (updateData as any)?.hospital_id ?? (agendamento as any)?.hospital_id ?? null,
+          payload: updateData
+        });
         return data[0] as Agendamento;
       }
       throw error;
@@ -825,6 +923,7 @@ export const agendamentoService = {
       .eq('id', id)
 
     if (error) throw new Error(error.message)
+    auditService.log({ action: 'DELETE', entity: 'agendamentos', entity_id: id });
   },
 
   async checkConflict(medicoId: string, dataAgendamento: string, excludeId?: string): Promise<boolean> {

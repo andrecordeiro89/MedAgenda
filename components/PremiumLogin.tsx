@@ -1,5 +1,5 @@
 import React, { useState, createContext, useContext, ReactNode, useEffect } from 'react';
-import { usuarioService, usuarioHospitaisService, supabase } from '../services/supabase';
+import { usuarioService, usuarioHospitaisService, supabase, auditService } from '../services/supabase';
 import ImageWithFallback from './ImageWithFallback';
 import { Button, Input, Card } from './ui';
 
@@ -140,6 +140,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             hospital: hospitalInicial,
             role: roleInicial
           };
+          const sessionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
           setUsuario(usuarioSupabase);
           setHospitalSelecionado(hospitalInicial);
           setHospitaisDisponiveis(hospitais);
@@ -148,8 +151,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             usuario: usuarioSupabase,
             hospital: hospitalInicial,
             hospitais,
-            roles: rolesMap
+            roles: rolesMap,
+            sessionId
           }));
+          auditService.log({
+            action: 'LOGIN',
+            entity: 'auth',
+            entity_id: usuarioDb.id,
+            hospital_id: hospitalInicial.id,
+            meta: { source: 'usuarios/usuario_hospitais' }
+          });
           setIsLoading(false);
           return;
         }
@@ -318,7 +329,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           nome: 'Hospital Maternidade Rio Branco do Sul',
           cidade: 'Rio Branco do Sul',
           cnpj: '14.736.446/0012-46',
-          role: 'admin'
+          role: 'agendamento_local'
         },
         'faturamento.rbs@medagenda.com': {
           id: '4a2527c1-df09-4a36-a08f-adc63f555123',
@@ -723,6 +734,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    if (usuario || hospitalSelecionado) {
+      auditService.log({
+        action: 'LOGOUT',
+        entity: 'auth',
+        entity_id: usuario?.id ?? null,
+        hospital_id: hospitalSelecionado?.id ?? usuario?.hospital_id ?? null,
+        meta: { source: 'frontend' }
+      });
+    }
     setUsuario(null);
     setHospitalSelecionado(null);
     setIsAuthenticated(false);
@@ -773,6 +793,9 @@ export const useHospitalFilter = () => {
     }
     if (emailLower === 'cc.frg@medagenda.com') {
       return viewName !== 'faturamento';
+    }
+    if (emailLower === 'agendamento.rbs@medagenda.com') {
+      return viewName === 'dashboard' || viewName === 'calendar' || viewName === 'documentacao';
     }
     if (usuario?.email?.toLowerCase() === 'auditoria.foz@medagenda.com') {
       if (viewName === 'calendar' || viewName === 'anestesista') return false;

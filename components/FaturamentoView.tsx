@@ -110,6 +110,18 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
+
+  const extractDateIso = (ts?: string | null) => {
+    const v = String(ts || '').trim();
+    if (!v) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    const dt = new Date(v);
+    if (!Number.isFinite(dt.getTime())) {
+      const base = v.includes('T') ? v.split('T')[0] : v.substring(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(base) ? base : '';
+    }
+    return dt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  };
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const anyOpen = Object.values(aihDropdownOpen).some(Boolean);
@@ -225,15 +237,13 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
       setAgendamentos(agendamentosFiltrados);
       const hoje = hojeLocalStr();
       const countHoje = agendamentosFiltrados.filter(a => {
-        const hora = a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '';
-        const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+        const d = extractDateIso(a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '');
         const temJust = !!((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim());
         return temJust && d === hoje;
       }).length;
       setJustificadosHoje(countHoje);
       const listaHoje = agendamentosFiltrados.filter(a => {
-        const hora = a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '';
-        const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+        const d = extractDateIso(a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '');
         const temJust = !!((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim());
         return temJust && d === hoje;
       });
@@ -420,15 +430,13 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
           } : a);
           const hoje = hojeLocalStr();
           const countHoje = atualizados.filter(ax => {
-            const hora = ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '';
-            const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+            const d = extractDateIso(ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '');
             const temJust = !!((ax.justificativa_alteracao_agendamento || '').trim() || (ax.justificativa_alteracao_agendamento_nome || '').trim());
             return temJust && d === hoje;
           }).length;
           setJustificadosHoje(countHoje);
           const listaHoje = atualizados.filter(ax => {
-            const hora = ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '';
-            const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+            const d = extractDateIso(ax.justificativa_alteracao_agendamento_nome_hora || ax.updated_at || '');
             const temJust = !!((ax.justificativa_alteracao_agendamento || '').trim() || (ax.justificativa_alteracao_agendamento_nome || '').trim());
             return temJust && d === hoje;
           });
@@ -3865,8 +3873,7 @@ export const FaturamentoView: React.FC<{ hospitalId: string }> = ({ hospitalId }
             const rows = (agendamentos || []).filter(a => {
               const tem = ((a.justificativa_alteracao_agendamento || '').trim() || (a.justificativa_alteracao_agendamento_nome || '').trim());
               if (!tem) return false;
-              const hora = a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '';
-              const d = hora ? (hora.includes('T') ? hora.split('T')[0] : hora.substring(0, 10)) : '';
+              const d = extractDateIso(a.justificativa_alteracao_agendamento_nome_hora || a.updated_at || '');
               return bellDate ? d === bellDate : true;
             });
             if (rows.length === 0) {

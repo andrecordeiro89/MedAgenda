@@ -1153,7 +1153,7 @@ export const DocumentacaoView: React.FC<{ hospitalId: string }> = ({ hospitalId 
     try {
       setSalvandoJustificativaId(ag.id);
       await agendamentoService.update(ag.id, payload);
-      setAgendamentos(prev => prev.map(a => a.id === ag.id ? { ...a, ...payload } : a));
+      applyUpdateEverywhere(ag.id, payload);
       if (justificativaTextoRefs.current[ag.id!]) {
         justificativaTextoRefs.current[ag.id!]!.value = '';
       }
