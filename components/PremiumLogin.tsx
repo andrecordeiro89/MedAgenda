@@ -795,7 +795,7 @@ export const useHospitalFilter = () => {
       return viewName !== 'faturamento';
     }
     if (emailLower === 'agendamento.rbs@medagenda.com') {
-      return viewName === 'dashboard' || viewName === 'calendar' || viewName === 'documentacao';
+      return viewName === 'dashboard' || viewName === 'calendar' || viewName === 'documentacao' || viewName === 'faturamento';
     }
     if (usuario?.email?.toLowerCase() === 'auditoria.foz@medagenda.com') {
       if (viewName === 'calendar' || viewName === 'anestesista') return false;
