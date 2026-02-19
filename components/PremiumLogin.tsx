@@ -116,6 +116,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba','4111b99d-8b4a-4b51-9561-a2fbd14e776e','4a2527c1-df09-4a36-a08f-adc63f555123','54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7','8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a','933de4fb-ebfd-4838-bb43-153a7354d333','bbe11a40-2689-48af-9aa8-5c6e7f2e48da','ece028c8-3c6d-4d0a-98aa-efaa3565b55f','09ab26a8-8c2c-4a67-94f7-d450a1be328e' ], role: 'faturamento' },
             'faturamento01@medagenda.com': { ids: [
               '3ea8c82a-02dd-41c3-9247-1ae07a1ecaba','4111b99d-8b4a-4b51-9561-a2fbd14e776e','4a2527c1-df09-4a36-a08f-adc63f555123','54ccade1-9f7a-47c7-9bba-7fe02bfa9eb7','8c4ddaaf-33cf-47e4-8c42-9ca31b244d4a','933de4fb-ebfd-4838-bb43-153a7354d333','bbe11a40-2689-48af-9aa8-5c6e7f2e48da','ece028c8-3c6d-4d0a-98aa-efaa3565b55f','09ab26a8-8c2c-4a67-94f7-d450a1be328e' ], role: 'faturamento' },
+            'cc.gua@medagenda.com': { ids: [
+              '09ab26a8-8c2c-4a67-94f7-d450a1be328e'
+            ], role: 'admin' },
           };
           const fallback = MULTI_EMAIL_HOSPITAL_IDS[email.toLowerCase()];
           if (fallback) {
@@ -792,6 +795,9 @@ export const useHospitalFilter = () => {
       return viewName !== 'faturamento';
     }
     if (emailLower === 'cc.frg@medagenda.com') {
+      return viewName !== 'faturamento';
+    }
+    if (emailLower === 'cc.gua@medagenda.com') {
       return viewName !== 'faturamento';
     }
     if (emailLower === 'agendamento.rbs@medagenda.com') {
